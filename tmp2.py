@@ -1,8 +1,7 @@
 import xarray as xr
 import numpy as np
 import matplotlib.pyplot as plt
-from scipy.interpolate import LinearNDInterpolator
-
+import xesmf as xe
 
 HR_data_file = ('cmems_mod_nws_phy_anfc_0.027deg-2D_PT15M-i_'
                 'uo-vo_4.23E-7.78E_56.81N-58.70N_2023-01-01-2023-02-01.nc')
@@ -28,6 +27,8 @@ def build_grid(ds):
 
 grid_HR = build_grid(ds_HR)
 grid_LR = build_grid(ds_LR)
+
+plt.scatter(grid_HR['lon'], grid_HR['lat'], s=0.01)
 
 tstep=400
 ufield_HR = ds_HR.uo[tstep,:,:]

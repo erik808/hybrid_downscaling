@@ -6,7 +6,8 @@ import time
 from xmovie import Movie
 from multiprocess import Pool
 from dask.diagnostics import ProgressBar
-from ESN import ESN
+from importlib import reload
+from ESN.ESN import ESN
 
 HR_data_file = ('cmems_mod_nws_phy_anfc_0.027deg-2D_PT15M-i_'
                 'uo-vo_4.23E-7.78E_56.81N-58.70N_2023-01-01-2023-02-01.nc')
@@ -47,89 +48,132 @@ interp_HR_LR = xe.Regridder(grid_HR, grid_LR, "bilinear",
 interp_LR_HR = xe.Regridder(grid_LR, grid_HR, "bilinear",
                             extrap_method="inverse_dist")
 
-ufield_HR = ds_HR.uo.rename({'longitude':'lon',
-                             'latitude':'lat'})
+da_HR = ds_HR.uo.rename({'longitude':'lon',
+                         'latitude':'lat'}).fillna(0.0)
 
-u_HR_LR = interp_HR_LR(ufield_HR.values)
-u_HR_LR_HR = interp_LR_HR(u_HR_LR)
+da_HR_LR = interp_HR_LR(da_HR.values)
+da_HR_LR_HR_tmp = interp_LR_HR(da_HR_LR)
 
-da_HR_LR = xr.DataArray(u_HR_LR, dims=['time','lat','lon'],
+da_HR_LR = xr.DataArray(da_HR_LR, dims=['time','lat','lon'],
                         coords={'time':ds_HR.time,
                                 'lat':ds_LR.latitude.values,
                                 'lon':ds_LR.longitude.values})
 
-da_HR_LR_HR = xr.zeros_like(ufield_HR)
-da_HR_LR_HR[:,:,:] = u_HR_LR_HR
+da_HR_LR_HR = xr.zeros_like(da_HR)
+da_HR_LR_HR[:,:,:] = da_HR_LR_HR_tmp
 
+Nt, Nlat, Nlon = da_HR_LR_HR.shape
+T = int(Nt * 3 /4.)
+train_range = range(0,T)
+train_range_p = range(1,T+1)
+init_idx = train_range[-1]
+test_range = range(init_idx+1, Nt)
 
+X_HR = da_HR.fillna(0.0).values.reshape(Nt,-1, order='C')
+X_LR = da_HR_LR_HR.fillna(0.0).values.reshape(Nt,-1, order='C')
 
+feedThrough = True
+if feedThrough:
+    trainU = np.hstack((X_HR[train_range,:], X_LR[train_range_p,:]))
+else:
+    trainU = X_HR[train_range,:]
+    
+trainY = X_HR[train_range_p,:]
 
+esn_pars = {}
+esn_pars['Nr'] = 100
+esn_pars['dmdMode'] = True
+esn_pars['feedThrough'] = True
+esn_pars['tikhonov_lambda'] = 1e-10
 
+esn = ESN(esn_pars['Nr'], trainU.shape[1], trainY.shape[1])
+esn.setPars(esn_pars)
+esn.initialize()
+esn.train(trainU, trainY)
 
+Npred = Nt-T
+N = Nlat * Nlon
+predY = np.zeros((Npred, N))
+esn_state = esn.X[-1,:].copy()
+# initial state for the predictions
 
+yk = X_HR[init_idx, :]
+for i in range(4*24*4):
+    
+    if feedThrough:
+        Pyk  = X_LR[init_idx+i+1,:]
+        u_in = np.append(yk.squeeze(), Pyk.squeeze())
+    else:
+        u_in = yk.squeeze()
+        
+    u_in       = np.expand_dims(u_in, axis=0)
+    u_in       = esn.scaleInput(u_in)
+    esn_state  = esn.update(esn_state, u_in)
+    u_out      = esn.apply(esn_state, u_in)
+    u_out      = np.expand_dims(u_out, axis=0)
+    yk         = esn.unscaleOutput(u_out)
+    predY[i,:] = yk
+    print(f'{i}')
 
+# pDMD = xr.zeros_like(da_HR[test_range,:,:])
+# pDMD[:,:,:] = np.reshape(predY[:,:], (-1, Nlat, Nlon))
 
+pDMDc = xr.zeros_like(da_HR[test_range,:,:])
+pDMDc[:,:,:] = np.reshape(predY[:,:], (-1, Nlat, Nlon))
 
+dsX_HR = xr.zeros_like(da_HR[test_range,:,:])
+dsX_HR[:,:,:] = np.reshape(X_HR[test_range,:], (-1, Nlat, Nlon))
 
-raise Exception('exceptional')
+dsX_LR = xr.zeros_like(da_HR[test_range,:,:])
+dsX_LR[:,:,:] = np.reshape(X_LR[test_range,:], (-1, Nlat, Nlon))
 
+dDMD = dsX_HR-pDMD
+dDMDc = dsX_HR-pDMDc
+
+ds = {}
+ds['1'] = dsX_HR.rename('X_HR')
+ds['2'] = dsX_LR.rename('X_LR')
+ds['3'] = pDMD.rename('pDMD')
+ds['4'] = pDMDc.rename('pDMDc')
+ds['5'] = dDMD.rename('dDMD')
+ds['6'] = dDMDc.rename('dDMDc')
+
+ds['1']['vmin'] = -1; ds['1']['vmax'] = 1
+ds['2']['vmin'] = -1; ds['2']['vmax'] = 1
+ds['3']['vmin'] = -1; ds['3']['vmax'] = 1
+ds['4']['vmin'] = -1; ds['4']['vmax'] = 1
+ds['5']['vmin'] = -1/3.; ds['5']['vmax'] = 1/3.
+ds['6']['vmin'] = -1/3.; ds['6']['vmax'] = 1/3.
 
 def plot_frame(i):
 
     def plot_wrapper(ds, i):
         ds[i,:,:].plot.pcolormesh(vmin=ds.vmin, vmax=ds.vmax,
                                   center=0, cmap='RdBu',
-                                  extend='both')
-        plt.gca().set_title('')
-
+                                  extend='both',
+                                  cbar_kwargs={'label':''})
+        plt.gca().set_title(ds.name)
+        plt.gca().set_xlabel('')
+        plt.gca().set_ylabel('')
+        
     plt.clf()
-    plt.subplot(2,2,1)
-    plot_wrapper(ds1, i)
-    plt.subplot(2,2,2)
-    plot_wrapper(ds2, i)
-    plt.subplot(2,2,3)
-    plot_wrapper(ds3, i)
-    plt.subplot(2,2,4)
-    plot_wrapper(ds4, i)
-    # plt.tight_layout()
+    for p in range(0,6):
+        plt.subplot(3,2,p+1)
+        plot_wrapper(ds[f'{p+1}'], i)
+
     plt.suptitle(f"{np.datetime64(ds1.time[i].values, 'h')}")
     frame_name = f'output/frame-{i:06d}.png'
     plt.savefig(frame_name)
 
-# xmovie parallel movie creation is about 5 times slower than
-
-# timeslice=slice('2023-01-01','2023-01-08',2)
-# tic = time.time()    
-# mov = Movie(ufield_HR.chunk({'time':1})\
-#             .sel(time=timeslice),
-#             vmin=-1, vmax=1)
-
-# mov.save('movie.mov',
-#          overwrite_existing=True,
-#          parallel=True)
-
-# toc = time.time()
-# print(f'elapsed: {toc-tic:02f}')
-
 fig, axs = plt.subplots(2, 2, figsize=(16, 12),
                         sharex=True, sharey=True)
-
 tic = time.time()
-timeslice=slice('2023-01-01','2023-01-08',2)
-ds1 = ufield_HR.sel(time=timeslice)
-ds1['vmin'] = -1; ds1['vmax'] = 1
-ds2 = da_HR_LR.sel(time=timeslice)
-ds2['vmin'] = -1; ds2['vmax'] = 1
-ds3 = da_HR_LR_HR.sel(time=timeslice)
-ds3['vmin'] = -1; ds3['vmax'] = 1
-ds4 = (da_HR_LR_HR-ufield_HR).sel(time=timeslice)
-ds4['vmin'] = -1/3.; ds4['vmax'] = 1/3.
 
 with Pool(8) as p:
-    p.map(plot_frame, range(len(ds1.time)))
+    p.map(plot_frame, range(0,4*24*4,1))
 
-movie_name = 'movie.mov'
-framerate=24
+movie_name = 'movie_dmd.mov'
+framerate = 12
 sys_cmd = ( f"ffmpeg -r {framerate} -f image2 -pattern_type glob -i "
             f"'output/frame-*.png' "
             f"-vcodec libx264 -crf 25  -pix_fmt yuv420p -y "

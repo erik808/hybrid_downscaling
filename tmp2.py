@@ -63,6 +63,7 @@ da_HR_LR_HR = xr.zeros_like(da_HR)
 da_HR_LR_HR[:,:,:] = da_HR_LR_HR_tmp
 
 Nt, Nlat, Nlon = da_HR_LR_HR.shape
+Nt, Nlat_LR, Nlon_LR = da_HR_LR.shape
 T = int(Nt * 3 /4.)
 train_range = range(0,T)
 train_range_p = range(1,T+1)
@@ -72,19 +73,49 @@ test_range = range(init_idx+1, Nt)
 X_HR = da_HR.fillna(0.0).values.reshape(Nt,-1, order='C')
 X_LR = da_HR_LR_HR.fillna(0.0).values.reshape(Nt,-1, order='C')
 
-feedThrough = True
-if feedThrough:
-    trainU = np.hstack((X_HR[train_range,:], X_LR[train_range_p,:]))
-else:
+model_type = 'DMDc'
+control_scaling = 1
+if (model_type == 'DMDc' or
+    model_type == 'ESNc'):
+    trainU = np.hstack((X_HR[train_range,:],
+                        X_LR[train_range_p,:] * control_scaling))
+elif (model_type == 'DMD' or
+      model_type == 'ESN'):
     trainU = X_HR[train_range,:]
-    
+elif model_type == 'corr_only':
+    trainU = X_LR[train_range_p,:]
+
 trainY = X_HR[train_range_p,:]
 
 esn_pars = {}
-esn_pars['Nr'] = 100
-esn_pars['dmdMode'] = True
-esn_pars['feedThrough'] = True
-esn_pars['tikhonov_lambda'] = 1e-10
+if (model_type == 'DMD' or
+    model_type == 'DMDc' or
+    model_type == 'corr_only'):
+    esn_pars['dmdMode'] = True
+else:
+    esn_pars['dmdMode'] = False
+    
+if (model_type == 'DMD' or
+    model_type == 'DMDc' or
+    model_type == 'corr_only' or
+    model_type == 'ESNc'):
+    esn_pars['feedThrough'] = True
+else:
+    esn_pars['feedThrough'] = False
+
+if model_type == 'ESNc':
+    esn_pars['ftRange'] = range(X_HR.shape[1],
+                                X_HR.shape[1] + X_LR.shape[1])
+    
+esn_pars['scalingType']        = 'standardize'
+esn_pars['Nr']                 = 20000
+esn_pars['rhoMax']             = 0.4
+esn_pars['alpha']              = 0.2
+esn_pars['entriesPerRow']      = 3
+esn_pars['tikhonov_lambda']    = 1
+esn_pars['squaredStates']      = 'disabled'
+esn_pars['inputMatrixType']    = 'balancedSparse'
+esn_pars['fCutoff']            = 0.01
 
 esn = ESN(esn_pars['Nr'], trainU.shape[1], trainY.shape[1])
 esn.setPars(esn_pars)
@@ -95,17 +126,20 @@ Npred = Nt-T
 N = Nlat * Nlon
 predY = np.zeros((Npred, N))
 esn_state = esn.X[-1,:].copy()
-# initial state for the predictions
 
+# initial state for the predictions
 yk = X_HR[init_idx, :]
+
 for i in range(4*24*4):
-    
-    if feedThrough:
-        Pyk  = X_LR[init_idx+i+1,:]
+    Pyk  = X_LR[init_idx+i+1,:] * control_scaling
+    if (model_type == 'DMDc' or
+        model_type == 'ESNc' ):
         u_in = np.append(yk.squeeze(), Pyk.squeeze())
-    else:
+    elif model_type == 'DMD':
         u_in = yk.squeeze()
-        
+    elif model_type == 'corr_only':
+        u_in = Pyk.squeeze()
+
     u_in       = np.expand_dims(u_in, axis=0)
     u_in       = esn.scaleInput(u_in)
     esn_state  = esn.update(esn_state, u_in)
@@ -115,7 +149,7 @@ for i in range(4*24*4):
     predY[i,:] = yk
     print(f'{i}')
 
-# pDMD = xr.zeros_like(da_HR[test_range,:,:])
+pDMD = xr.zeros_like(da_HR[test_range,:,:])
 # pDMD[:,:,:] = np.reshape(predY[:,:], (-1, Nlat, Nlon))
 
 pDMDc = xr.zeros_like(da_HR[test_range,:,:])
@@ -127,16 +161,16 @@ dsX_HR[:,:,:] = np.reshape(X_HR[test_range,:], (-1, Nlat, Nlon))
 dsX_LR = xr.zeros_like(da_HR[test_range,:,:])
 dsX_LR[:,:,:] = np.reshape(X_LR[test_range,:], (-1, Nlat, Nlon))
 
-dDMD = dsX_HR-pDMD
-dDMDc = dsX_HR-pDMDc
+dDMD  = dsX_HR - pDMD
+dDMDc = dsX_HR - pDMDc
 
 ds = {}
 ds['1'] = dsX_HR.rename('X_HR')
 ds['2'] = dsX_LR.rename('X_LR')
-ds['3'] = pDMD.rename('pDMD')
-ds['4'] = pDMDc.rename('pDMDc')
-ds['5'] = dDMD.rename('dDMD')
-ds['6'] = dDMDc.rename('dDMDc')
+ds['3'] = pDMD.rename(f'pDMD')
+ds['4'] = pDMDc.rename(f'p{model_type}')
+ds['5'] = dDMD.rename(f'dDMD')
+ds['6'] = dDMDc.rename(f'd{model_type}')
 
 ds['1']['vmin'] = -1; ds['1']['vmax'] = 1
 ds['2']['vmin'] = -1; ds['2']['vmax'] = 1
@@ -155,7 +189,7 @@ def plot_frame(i):
         plt.gca().set_title(ds.name)
         plt.gca().set_xlabel('')
         plt.gca().set_ylabel('')
-        
+
     plt.clf()
     for p in range(0,6):
         plt.subplot(3,2,p+1)
@@ -172,7 +206,7 @@ tic = time.time()
 with Pool(8) as p:
     p.map(plot_frame, range(0,4*24*4,1))
 
-movie_name = 'movie_dmd.mov'
+movie_name = f'movie_{model_type}.mov'
 framerate = 12
 sys_cmd = ( f"ffmpeg -r {framerate} -f image2 -pattern_type glob -i "
             f"'output/frame-*.png' "
@@ -187,3 +221,4 @@ os.system(sys_cmd)
 
 toc = time.time()
 print(f'elapsed: {toc-tic:02f}')
+print('\a')

@@ -15,11 +15,11 @@ import matplotlib.colors as mcolors
 import matplotlib.pyplot as plt
 
 # hyperparameters
-
 random_seed = 49
+torch.manual_seed(49)
 learning_rate = 0.0005
 batch_size = 256
-num_epochs = 30
+num_epochs = 1
 num_classes = 10
 
 def get_dataloaders_mnist(batch_size, num_workers=0,
@@ -62,68 +62,159 @@ def get_dataloaders_mnist(batch_size, num_workers=0,
 
     return train_loader, valid_loader, test_loader
 
+
 train_loader, valid_loader, test_loader = \
     get_dataloaders_mnist(batch_size=batch_size,
                           num_workers=2)
 
-# visualize data
-# train_iter = iter(train_loader)
-# images, labels = next(train_iter)
 
-# plt.close('all')
+# visualize data
+train_iter = iter(train_loader)
+images, labels = next(train_iter)
+
+plt.close('all')
 # plt.pcolormesh(images[0,0,:,:], cmap='Greys')
 # print(labels[0].numpy())
 # plt.gca().invert_yaxis()
 # plt.pause(1)
 
+
 class AutoEncoder(nn.Module):
     def __init__(self):
-        super().__init__()
-        self.encoder = nn.Sequential(
-            nn.Conv2d(1, 32, stride=(1,1),
-                      kernel_size=(3,3),
-                      padding=1),
-            nn.LeakyReLU(),
-            nn.MaxPool2d(kernel_size=(2,2), stride=(2,2)),
-            nn.Conv2d(32,64, stride=(2,2),
-                      kernel_size=(3,3),
-                      padding=1),
-            nn.LeakyReLU(),
-            nn.MaxPool2d(kernel_size=(2,2), stride=(2,2)),
-            nn.Conv2d(64,64, stride=(2,2),
-                      kernel_size=(3,3),
-                      padding=1),
-            nn.LeakyReLU(),
-            nn.MaxPool2d(kernel_size=2, stride=2),
-        )
+        super(AutoEncoder, self).__init__()
 
-        self.decoder = nn.Sequential(
-            nn.ConvTranspose2d(64,64, stride=(2,2),
-                               kernel_size=(3,3),
-                               padding=1),
-            nn.LeakyReLU(),
-            nn.ConvTranspose2d(64,32,stride=(2,2),
-                               kernel_size=(3,3),
-                               padding=1),
-            nn.LeakyReLU(),
-            nn.ConvTranspose2d(32, 1, stride=(1,1),
-                               kernel_size=(3,3),
-                               padding=1),
-            nn.Sigmoid()
-            )
+        self.relu = nn.LeakyReLU(0.01)
+        self.kernel_size = (3,3)
+
+        self.conv1 = nn.Conv2d(1, 32, stride=(1,1),
+                               kernel_size=self.kernel_size,
+                               padding=1)
+
+        self.conv2 = nn.Conv2d(32,64, stride=(2,2),
+                               kernel_size=self.kernel_size,
+                               padding=1)
+
+        self.conv3 = nn.Conv2d(64,64, stride=(2,2),
+                               kernel_size=self.kernel_size,
+                               padding=1)
+
+        self.conv4 = nn.Conv2d(64,64, stride=(1,1),
+                               kernel_size=self.kernel_size,
+                               padding=1)
+
+        self.flatten = nn.Flatten()
+        self.linear1 = nn.Linear(3136, 2)
+        self.linear2 = nn.Linear(2, 3136)
+
+        self.convTrans1 = nn.ConvTranspose2d(64,64, stride=(1,1),
+                                             kernel_size=self.kernel_size,
+                                             padding=1)
+
+        self.convTrans2 = nn.ConvTranspose2d(64,64, stride=(2,2),
+                                             kernel_size=self.kernel_size,
+                                             padding=1)
+
+        self.convTrans3 = nn.ConvTranspose2d(64,32,stride=(2,2),
+                                             kernel_size=self.kernel_size,
+                                             padding=0)
+
+        self.convTrans4 = nn.ConvTranspose2d(32, 1, stride=(1,1),
+                                             kernel_size=self.kernel_size,
+                                             padding=0)
+
+        self.sigm = nn.Sigmoid()
+
+    def encoder(self, x):
+        breakpoint()
+        x = self.conv1(x)
+        x = self.relu(x)
+        x = self.conv2(x)
+        x = self.relu(x)
+        x = self.conv3(x)
+        x = self.relu(x)
+        x = self.conv4(x)
+        x = self.flatten(x)
+        x = self.linear1(x)
+        return x
+
+    def decoder(self, x):
+        x = self.linear2(x)
+        # reshape
+        x = x.view(-1, 64, 7, 7)
+        x = self.convTrans1(x)
+        x = self.relu(x)
+        x = self.convTrans2(x)
+        x = self.relu(x)
+        x = self.convTrans3(x)
+        x = self.relu(x)
+        x = self.convTrans4(x)
+        # trimming
+        x = x[:,:,:-1, :-1]
+        x = self.sigm(x)
+        return x
 
     def forward(self, x):
         x = self.encoder(x)
         x = self.decoder(x)
         return x
 
+# class Reshape(nn.Module):
+#     def __init__(self, *args):
+#         super().__init__()
+#         self.shape = args
+
+#     def forward(self, x):
+#         return x.view(self.shape)
+
+# class Trim(nn.Module):
+#     def __init__(self, *args):
+#         super().__init__()
+
+#     def forward(self, x):
+#         return x[:, :, :-1, :-1]
+
+# class AutoEncoder2(nn.Module):
+#     def __init__(self):
+#         super().__init__()
+#         self.encoder = nn.Sequential(
+#             nn.Conv2d(1, 32, stride=(1, 1), kernel_size=(3, 3),  padding=1),
+#             nn.LeakyReLU(0.01),
+#             nn.Conv2d(32, 64, stride=(2, 2), kernel_size=(3, 3), padding=1),
+#             nn.LeakyReLU(0.01),
+#             nn.Conv2d(64, 64, stride=(2, 2), kernel_size=(3, 3), padding=1),
+#             nn.LeakyReLU(0.01),
+#             nn.Conv2d(64, 64, stride=(1, 1), kernel_size=(3, 3), padding=1),
+#             nn.Flatten(),
+#             nn.Linear(3136, 2)
+#         )
+#         self.decoder = nn.Sequential(
+#             torch.nn.Linear(2, 3136),
+#             Reshape(-1, 64, 7, 7),
+#             nn.ConvTranspose2d(64, 64, stride=(1, 1), kernel_size=(3, 3), padding=1),
+#             nn.LeakyReLU(0.01),
+#             nn.ConvTranspose2d(64, 64, stride=(2, 2), kernel_size=(3, 3), padding=1),
+#             nn.LeakyReLU(0.01),
+#             nn.ConvTranspose2d(64, 32, stride=(2, 2), kernel_size=(3, 3), padding=0),
+#             nn.LeakyReLU(0.01),
+#             nn.ConvTranspose2d(32, 1, stride=(1, 1), kernel_size=(3, 3), padding=0),
+#             Trim(),  # 1x29x29 -> 1x28x28
+#             nn.Sigmoid()
+#         )
+
+#     def forward(self, x):
+#         print(x.norm())
+#         print(x.norm())
+#         return x
+
+
 model = AutoEncoder()
+model.load_state_dict(torch.load('conv_autoencoder.pth'))
+
 
 # Move the model to GPU if possible
 device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
 print(f'model lives on the {device}')
 model.to(device)
-
 
 optimizer = torch.optim.Adam(model.parameters(), lr=learning_rate)
 
@@ -132,7 +223,7 @@ def train_autoencoder(num_epochs, model, optimizer,
                       logging_interval=100,
                       skip_epoch_stats=False,
                       save_model=None):
-    
+
     log_dict = {'train_loss_per_batch' : [],
                 'train_loss_per_epoch' : []}
 
@@ -175,10 +266,23 @@ def train_autoencoder(num_epochs, model, optimizer,
 
             # this saves memory during inference (same as torch.no_grad())
             with torch.set_grad_enabled(False):
-                train_loss = compute_epoch_loss_autoencoder
+                train_loss = compute_epoch_loss_autoencoder(model,
+                                                            train_loader,
+                                                            loss_fn,
+                                                            device)
+                print(f' *** Epoch: {epoch+1}/{num+_epochs} '
+                      f'| Loss {train_loss}')
+                log_dict['train_loss_per_epoch'].append(train_loss.item())
+
+        print(f'Time elapsed: {(time.time()-start_time)/60}')
+    print(f'Total training time: {(time.time()-start_time)/60}')
+
+    if save_model is not None:
+        torch.save(model.state_dict(), save_model)
+
+    return log_dict
 
 
-            
 
 
 def compute_epoch_loss_autoencoder(model, data_loader, loss_fn, device):
@@ -196,4 +300,12 @@ def compute_epoch_loss_autoencoder(model, data_loader, loss_fn, device):
         curr_loss = curr_loss / num_examples
 
         return curr_loss
-            
+
+log_dict = train_autoencoder(num_epochs=1,
+                             model=model,
+                             optimizer=optimizer,
+                             train_loader=train_loader,
+                             skip_epoch_stats=True,
+                             logging_interval=50)
+
+# torch.save(model.state_dict(), 'conv_autoencoder.pth')

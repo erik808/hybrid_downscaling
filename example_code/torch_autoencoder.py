@@ -16,7 +16,7 @@ import matplotlib.pyplot as plt
 
 # hyperparameters
 random_seed = 49
-torch.manual_seed(49)
+torch.manual_seed(random_seed)
 learning_rate = 0.0005
 batch_size = 256
 num_epochs = 1
@@ -67,17 +67,17 @@ train_loader, valid_loader, test_loader = \
     get_dataloaders_mnist(batch_size=batch_size,
                           num_workers=2)
 
-
 # visualize data
 train_iter = iter(train_loader)
 images, labels = next(train_iter)
 
 plt.close('all')
-# plt.pcolormesh(images[0,0,:,:], cmap='Greys')
-# print(labels[0].numpy())
-# plt.gca().invert_yaxis()
-# plt.pause(1)
+plt.pcolormesh(images[0,0,:,:], cmap='Greys')
+print(labels[0].numpy())
+plt.gca().invert_yaxis()
+plt.pause(1)
 
+breakpoint()
 
 class AutoEncoder(nn.Module):
     def __init__(self):

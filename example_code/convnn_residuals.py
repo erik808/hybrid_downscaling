@@ -94,20 +94,14 @@ res_secp_da[1:,:,:] = res_secp_arr
 # true residual
 res_true_da = da_HR - da_HR_LR_HR
 
-def normalize(x, minval=None, maxmin=None):
-    if minval is None:
-        minval = np.nanmin(x)
-    if maxmin is None:
-        maxmin = np.nanmax(x) - minval
-        
+def normalize(x):
+    minval = np.nanmin(x)
+    maxmin = np.nanmax(x) - minval
     out = ((x - minval) / maxmin)
     return out, minval, maxmin
 
 res_secp_da, minval_rp, maxmin_rp = normalize(res_secp_da)
 res_true_da, minval_rt, maxmin_rt = normalize(res_true_da)
-
-da_HR, minval_HR, maxmin_HR = normalize(da_HR)
-da_HR_LR_HR, _, _ = normalize(da_HR_LR_HR, minval_HR, maxmin_HR)
 
 # Create simple convolutional network
 class ConvNN(nn.Module):
@@ -156,27 +150,27 @@ model = ConvNN()
 
 # Create data loaders for pytorch using xbatcher
 # truth, training period
-yb_train = xbatcher.BatchGenerator(da_HR[train_range,:,:],
+yb_train = xbatcher.BatchGenerator(res_true_da[train_range,:,:],
                                    input_dims = {'lat':69,
                                                  'lon':129},
                                    input_overlap = {'time' : 2},
                                    batch_dims = {'time' : 10})
 
 # input, training period
-xb_train = xbatcher.BatchGenerator(da_HR_LR_HR[train_range,:,:],
+xb_train = xbatcher.BatchGenerator(res_secp_da[train_range,:,:],
                                    input_dims = {'lat':69,
                                                  'lon':129},
                                    input_overlap = {'time' : 2},
                                    batch_dims = {'time' : 10})
 
-yb_test = xbatcher.BatchGenerator(da_HR[test_range,:,:],
+yb_test = xbatcher.BatchGenerator(res_true_da[test_range,:,:],
                                    input_dims = {'lat':69,
                                                  'lon':129},
                                    input_overlap = {'time' : 0},
                                    batch_dims = {'time' : 1})
 
 # input, testing period
-xb_test = xbatcher.BatchGenerator(da_HR_LR_HR[test_range,:,:],
+xb_test = xbatcher.BatchGenerator(res_secp_da[test_range,:,:],
                                    input_dims = {'lat':69,
                                                  'lon':129},
                                    input_overlap = {'time' : 0},

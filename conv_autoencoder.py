@@ -30,7 +30,6 @@ LR_data_file = ('cmems_mod_nws_phy-uv_my_7km-2D_PT1H-i_'
                 'uo-vo_4.22E-7.78E_56.80N-58.67N_2023-01-01-2023-05-01.nc')
 
 bt_HR = xr.open_dataset(HR_bathy_file)
-
 ds_HR = xr.open_dataset(HR_data_file)
 ds_LR = xr.open_dataset(LR_data_file)
 
@@ -78,7 +77,7 @@ da_HR_LR_HR = da_HR_LR_HR.fillna(0.0)
 
 Nt, Nlat, Nlon = da_HR_LR_HR.shape
 Nt, Nlat_LR, Nlon_LR = da_HR_LR.shape
-T = int(Nt * 3 /4.)
+T = int(Nt * 4 / 5.)
 train_range_m = range(0,T-1)
 train_range = range(1,T)
 init_idx = train_range[-1]
@@ -120,7 +119,7 @@ class ResBlock(nn.Module):
         self.n_feats = n_feats
         self.kernel_size = kernel_size
         self.res_scale = res_scale
-        
+
         self.relu = nn.LeakyReLU(0.01)
         self.conv = nn.Conv2d(self.n_feats,self.n_feats,stride=(1,1),
                               kernel_size=self.kernel_size,
@@ -133,7 +132,7 @@ class ResBlock(nn.Module):
 
     def forward(self, x):
         res = self.resblock(x).mul(self.res_scale)
-        res += x        
+        res += x
         return res
 
 class ConvNN(nn.Module):
@@ -197,7 +196,7 @@ class ConvNN(nn.Module):
         return x
 
     def forward(self, x):
-        x = self.scale(x)        
+        x = self.scale(x)
         x = self.conv1(x)
         res = self.residual(x)
         res += x
@@ -291,7 +290,7 @@ if do_training:
                       f' Batch {batch_i}/{len(xb_train)} |'
                       f' Loss {loss}')
         print(f'time elapsed: {(time.time()-start_time)/60}m')
-    print(f'total time elapsed: {(time.time()-start_time)/60}m')    
+    print(f'total time elapsed: {(time.time()-start_time)/60}m')
     torch.save(model.state_dict(), 'ConvNN.pth')
 else:
     model.load_state_dict(torch.load('ConvNN.pth'))
@@ -322,9 +321,9 @@ with torch.set_grad_enabled(False):
         predY[i,:,:] = r
 
 
-# EXPORT        
+# EXPORT
 timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
-    
+
 model_type='ConvNN'
 pmodel = xr.zeros_like(da_HR[test_range,:,:])
 pmodel[:,:,:] = predY
@@ -340,7 +339,7 @@ ds['2'] = dsX_LR.rename('X_LR')
 ds['3'] = (dsX_LR + pmodel).rename(f'p{model_type} + X_LR')
 ds['4'] = pmodel.rename(f'p{model_type}')
 ds['5'] = dmodel.rename(f'd{model_type}')
-ds['6'] = (dsX_HR-dsX_LR).rename(f'X_HR - X_LR')
+ds['6'] = (dmodel-(dsX_HR-dsX_LR)).rename(f'd{model_type} - (X_HR - X_LR)')
 
 ds['1']['vmin'] = -1;   ds['1']['vmax'] = 1
 ds['2']['vmin'] = -1;   ds['2']['vmax'] = 1

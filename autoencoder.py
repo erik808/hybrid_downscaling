@@ -38,7 +38,7 @@ test_data = data[test_range,:,:]
 
 ## Build an autoencoder with Keras using the functional API
 keras.utils.clear_session(free_memory=True)
-create_model=True
+create_model=False
 model_path_autoencoder = 'models/autoencoder.keras'
 model_path_encoder = 'models/encoder.keras'
 model_path_decoder = 'models/decoder.keras'
@@ -74,7 +74,7 @@ if create_model:
     autoencoder = Model(state_input, decoded, name="autoencoder")
     autoencoder.summary(60)
 
-elif isinstance(model_path, str):
+elif isinstance(model_path_encoder, str):
     encoder = keras.saving.load_model(model_path_encoder)
     decoder = keras.saving.load_model(model_path_decoder)
     autoencoder = keras.saving.load_model(model_path_autoencoder)
@@ -88,23 +88,26 @@ loss = keras.losses.MeanSquaredError(
 autoencoder.compile(optimizer='adam',
                     loss=loss)
 
-epochs = 10
-batch_size = 50
-shuffle = True
-autoencoder.fit(
-    x=train_data,
-    y=train_data,
-    epochs=epochs,
-    batch_size=batch_size,
-    shuffle=shuffle,
-    validation_data=(test_data, test_data)
+train_model = False
+if train_model:
+    epochs = 10
+    batch_size = 50
+    shuffle = True
+    autoencoder.fit(
+        x=train_data,
+        y=train_data,
+        epochs=epochs,
+        batch_size=batch_size,
+        shuffle=shuffle,
+        validation_data=(test_data, test_data)
     )
 
-# save models
-autoencoder.save(model_path_autoencoder)
-encoder.save(model_path_encoder)
-decoder.save(model_path_decoder)
+    # save models
+    autoencoder.save(model_path_autoencoder)
+    encoder.save(model_path_encoder)
+    decoder.save(model_path_decoder)
 
+print('predict')    
 predictions = autoencoder.predict(test_data)
 encoded_data = encoder.predict(test_data)
 decoded_data = decoder.predict(encoded_data)

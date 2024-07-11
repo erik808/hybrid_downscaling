@@ -101,9 +101,9 @@ autoencoder.fit(
     )
 
 # save models
-autoencoder.save(model_path)
-encoder.save(model_path)
-decoder.save(model_path)
+autoencoder.save(model_path_autoencoder)
+encoder.save(model_path_encoder)
+decoder.save(model_path_decoder)
 
 predictions = autoencoder.predict(test_data)
 encoded_data = encoder.predict(test_data)
@@ -128,3 +128,5 @@ plt.imshow(decoded_data[id,:,:,0])
 plt.gca().invert_yaxis()
 plt.tight_layout()
 plt.pause(1)
+print('\a')
+breakpoint()

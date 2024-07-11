@@ -56,8 +56,9 @@ def load_data():
     da_HR_LR_HR = xr.zeros_like(da_HR)
     da_HR_LR_HR[:,:,:] = da_HR_LR_HR_tmp
     da_LR = da_HR_LR_HR.fillna(0.0)
+    da_R = da_HR - da_LR
 
-    return da_HR, da_LR
+    return da_HR, da_LR, da_R
 
 
-da_HR,_ = load_data()
+da_HR,_,_ = load_data()

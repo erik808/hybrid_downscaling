@@ -242,7 +242,7 @@ tic = time.time()
 make_movie=True
 if make_movie:
     with Pool(8) as p:
-        p.map(plot_frame, range(0,10,1))
+        p.map(plot_frame, range(0,100,1))
 
     movie_name = f'movie_{model_type}_{timestamp}.mov'
     framerate = 24

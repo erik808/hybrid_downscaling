@@ -1,10 +1,11 @@
+from datetime import datetime
+
 from importlib import reload
 
 import numpy as np
 import matplotlib.pyplot as plt
 
 from datetime import datetime
-
 
 from sklearn.preprocessing import MinMaxScaler
 from sklearn.preprocessing import StandardScaler
@@ -216,6 +217,7 @@ plt.imshow(encoded_data[id,:,:,1])
 plt.gca().invert_yaxis()
 
 plt.tight_layout()
-plt.pause(1)
-print('\a')
-breakpoint()
+
+timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
+fig_name = f'output/results_autoencoder_{timestamp}.png'
+plt.savefig(fig_name)

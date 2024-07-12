@@ -2,7 +2,7 @@ import numpy as np
 import xarray as xr
 import xesmf as xe
 
-data_dir = {'data'}
+data_dir = 'data'
 
 HR_data_file = (f'{data_dir}/cmems_mod_nws_phy_anfc_0.027deg-2D_PT15M-i_'
                 f'uo-vo_4.23E-7.78E_56.81N-58.70N_2023-01-01-2023-05-01.nc')

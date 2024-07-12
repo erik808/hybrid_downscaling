@@ -4,11 +4,9 @@ import matplotlib.pyplot as plt
 import xesmf as xe
 import os
 import time
-from xmovie import Movie
 from multiprocess import Pool
 from dask.diagnostics import ProgressBar
 from importlib import reload
-from ESN.ESN import ESN
 from datetime import datetime
 
 import torch
@@ -20,13 +18,13 @@ import xbatcher
 
 # Load training and test data
 
-HR_data_file = ('cmems_mod_nws_phy_anfc_0.027deg-2D_PT15M-i_'
+HR_data_file = ('data/cmems_mod_nws_phy_anfc_0.027deg-2D_PT15M-i_'
                 'uo-vo_4.23E-7.78E_56.81N-58.70N_2023-01-01-2023-05-01.nc')
 
-HR_bathy_file = ('cmems_mod_nws_phy_anfc_0.027deg-3D_'
+HR_bathy_file = ('data/cmems_mod_nws_phy_anfc_0.027deg-3D_'
                  'static_multi-vars_4.23E-7.78E_56.81N-58.70N_0.49-643.57m.nc')
 
-LR_data_file = ('cmems_mod_nws_phy-uv_my_7km-2D_PT1H-i_'
+LR_data_file = ('data/cmems_mod_nws_phy-uv_my_7km-2D_PT1H-i_'
                 'uo-vo_4.22E-7.78E_56.80N-58.67N_2023-01-01-2023-05-01.nc')
 
 bt_HR = xr.open_dataset(HR_bathy_file)
@@ -257,8 +255,8 @@ log_dict = {'training loss per batch' : [],
 
 epochs = 5
 verbosity = 20
-do_training=False
-model.load_state_dict(torch.load('ConvNN.pth'))
+do_training=True
+# model.load_state_dict(torch.load('ConvNN.pth'))
 if do_training:
     for epoch_i in range(epochs):
 

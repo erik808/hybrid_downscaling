@@ -1,5 +1,10 @@
-from datetime import datetime
+import os
+import sys
+os.system('export MKL_NUM_THREADS=12')
+os.system('export OMP_NUM_THREADS=12')
 
+from datetime import datetime
+import time
 from importlib import reload
 
 import numpy as np
@@ -8,26 +13,36 @@ import matplotlib.pyplot as plt
 from datetime import datetime
 
 from sklearn.preprocessing import MinMaxScaler
-from sklearn.preprocessing import StandardScaler
 
+import torch
+import torch.multiprocessing
 import keras
 from keras import layers
 from keras import ops
 from keras.models import Model
 
 import data_manager as dm
+timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
+
+models_dir = f'experiments/{timestamp}/models'
+results_dir = f'experiments/{timestamp}/results'
+checkpoints_dir = f'experiments/{timestamp}/checkpoints'
+
+log_file = f'{models_dir}/log.txt'
+
+os.system(f'mkdir -p {models_dir}')
+os.system(f'mkdir -p {results_dir}')
+os.system(f'mkdir -p {checkpoints_dir}')
 
 # assume everything has this shape
 Nt, Nlat, Nlon = dm.da_HR.shape
 
 scaled_range = (0,1)
 
+# StandardScaler doesnt work that well
 scaler_HR = MinMaxScaler(feature_range=scaled_range)
 scaler_LR = MinMaxScaler(feature_range=scaled_range)
 scaler_Rs = MinMaxScaler(feature_range=scaled_range)
-# scaler_HR = StandardScaler()
-# scaler_LR = StandardScaler()
-# scaler_Rs = StandardScaler()
 
 da_Rs = dm.da_HR - dm.da_LR
 
@@ -73,19 +88,22 @@ del stacked_data, data_Rs, data_LR, dm
 ## Build an autoencoder with Keras using the functional API
 keras.utils.clear_session(free_memory=True)
 create_model=True
-model_path_autoencoder = 'models/autoencoder_res.keras'
-model_path_encoder = 'models/encoder_res.keras'
-model_path_decoder = 'models/decoder_res.keras'
+
+model_path_autoencoder = f'{models_dir}/autoencoder_res.keras'
+model_path_encoder = f'{models_dir}/encoder_res.keras'
+model_path_decoder = f'{models_dir}/decoder_res.keras'
+
 if create_model:
+    num_filters = 32
     num_channels = train_data.shape[-1]
     state_input = layers.Input(shape=(Nlat, Nlon, num_channels),
                                name="full_state_input")
     # Encoding layers
-    e1 = layers.Conv2D(32, (3,3), activation="relu",
+    e1 = layers.Conv2D(num_filters, (3,3), activation="relu",
                        padding="same")(state_input)
     e2 = layers.MaxPooling2D((2,2),
                              padding="same")(e1)
-    e3 = layers.Conv2D(32, (3,3), activation="relu",
+    e3 = layers.Conv2D(num_filters, (3,3), activation="relu",
                        padding="same")(e2)
     encoded = layers.MaxPooling2D((2,2),
                                   padding="same")(e3)
@@ -94,9 +112,9 @@ if create_model:
     encoder.summary(60)
 
     # Decoder
-    d1 = layers.Conv2DTranspose(32, (3,3), strides=2, activation="relu",
+    d1 = layers.Conv2DTranspose(num_filters, (3,3), strides=2, activation="relu",
                                 padding="same")(encoded)
-    d2 = layers.Conv2DTranspose(32, (3,3), strides=2, activation="relu",
+    d2 = layers.Conv2DTranspose(num_filters, (3,3), strides=2, activation="relu",
                                 padding="same")(d1)
     d3 = layers.Conv2D(num_channels, (3,3), activation="sigmoid",
                        padding="same")(d2)
@@ -124,18 +142,41 @@ autoencoder.compile(optimizer='adam',
 
 train_model=True
 if train_model:
-    epochs = 10
+    checkpoint_filepath = f'{checkpoints_dir}/checkpoint.model.keras'
+
+    # mdl_callback = keras.callbacks.ModelCheckpoint(
+    #     filepath=checkpoint_filepath,
+    #     monitor='val_loss',
+    #     mode='min',
+    #     save_best_only=True)
+
+    # tb_callback = keras.callbacks.TensorBoard(
+    #     log_dir=models_dir,
+    #     histogram_freq=1,
+    #     write_graph=False,
+    #     write_images=True,
+    #     write_steps_per_second=True,
+    #     update_freq="epoch",
+    #     profile_batch=0,
+    #     embeddings_freq=0,
+    #     embeddings_metadata=None,
+    # )
+
+    epochs = 2
     batch_size = 50
     shuffle = True
-    autoencoder.fit(
-        x=train_data,
-        y=train_data,
-        epochs=epochs,
-        batch_size=batch_size,
-        shuffle=shuffle,
-        validation_data=(test_data, test_data)
-        )
-
+    tic = time.time()
+    hist = autoencoder.fit(x=train_data,
+                           y=train_data,
+                           epochs=epochs,
+                           batch_size=batch_size,
+                           shuffle=shuffle,
+                           validation_data=(test_data, test_data),
+                           # callbacks=[tb_callback]
+                           )
+    toc = time.time()
+    print(f'total training time: {(toc-tic)/60}m')
+    
     # save models
     autoencoder.save(model_path_autoencoder)
     encoder.save(model_path_encoder)
@@ -146,10 +187,21 @@ predictions = autoencoder.predict(test_data)
 encoded_data = encoder.predict(test_data)
 decoded_data = decoder.predict(encoded_data)
 
+original = sys.stdout
+with open(log_file, 'w') as f:
+    sys.stdout = f
+    print(autoencoder.summary(100))
+    sys.stdout = original
+
+# FACTORIZE THIS:
+# Analysis
+
 id = 100
+plt.close('all')
+fig = plt.figure(figsize=(13, 15))
+
 flow_vmin = -1
 flow_vmax = 1
-plt.close()
 plt.subplot(4,3,1)
 resid = scaler_Rs.inverse_transform(test_data[id,:,:,0]\
                                     .reshape(1,-1))\
@@ -218,6 +270,15 @@ plt.gca().invert_yaxis()
 
 plt.tight_layout()
 
-timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
-fig_name = f'output/results_autoencoder_{timestamp}.png'
+fig_name = f'{results_dir}/results_autoencoder_{timestamp}.png'
+print(fig_name)
+plt.savefig(fig_name)
+
+fig_name = f'{results_dir}/history_{timestamp}.png'
+plt.close('all')
+plt.plot(hist.history['loss'],'.-', label='loss')
+plt.plot(hist.history['val_loss'],'.-', label='validation loss')
+plt.legend()
+plt.gca().set_xlabel('epoch')
+print(fig_name)
 plt.savefig(fig_name)

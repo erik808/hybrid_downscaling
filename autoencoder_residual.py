@@ -22,9 +22,16 @@ from keras import ops
 from keras.models import Model
 
 import data_manager as dm
-experiment_id = datetime.now().strftime('%Y%m%d_%H%M%S')
+reload(dm)
 
-experiment_id = '20240712_171926'
+new_experiment=False
+if new_experiment:
+    create_model_from_scratch=True
+    # experiment_id = datetime.now().strftime('%Y%m%d_%H%M%S')
+    experiment_id = 'testing'
+else:
+    create_model_from_scratch=False
+    experiment_id = 'testing'
 
 models_dir = f'experiments/{experiment_id}/models'
 results_dir = f'experiments/{experiment_id}/results'
@@ -73,6 +80,7 @@ train_data = stacked_data[train_range,:,:,:]
 test_data = stacked_data[test_range,:,:,:]
 
 # clean memory
+mask = torch.tensor(dm.mask.values)[None,:,:,None]
 del stacked_data, data_Rs, data_LR, dm
 
 ## Build an autoencoder with Keras using the functional API
@@ -83,8 +91,27 @@ model_path_encoder = f'{models_dir}/encoder_res.keras'
 model_path_decoder = f'{models_dir}/decoder_res.keras'
 
 # create custom masking class
+@keras.saving.register_keras_serializable(name="custom_masking")
+class Masking(layers.Layer):
+    def __init__(self, mask, **kwargs):
+        super(Masking, self).__init__(**kwargs)
+        self.mask = mask
 
-create_model_from_scratch=False
+    def get_config(self):
+        config = super(Masking, self).get_config()
+        config.update({
+            'mask' : keras.saving.serialize_keras_object(self.mask)})
+        return config
+
+    @classmethod
+    def from_config(cls, config):
+        mask_config = config.pop("mask")
+        mask = keras.saving.deserialize_keras_object(mask_config)
+        return cls(mask, **config)
+
+    def call(self, inputs):
+        return ops.multiply(inputs, self.mask)
+
 if create_model_from_scratch:
     num_filters = 32
     num_channels = train_data.shape[-1]
@@ -110,7 +137,9 @@ if create_model_from_scratch:
                                 padding="same")(d1)
     d3 = layers.Conv2D(num_channels, (3,3), activation="sigmoid",
                        padding="same")(d2)
-    decoded = layers.Cropping2D(cropping=((2,1),(2,1)))(d3)
+    cropped = layers.Cropping2D(cropping=((2,1),(2,1)))(d3)
+    masking_layer = Masking(mask)
+    decoded = masking_layer(cropped)
 
     decoder = Model(encoded, decoded, name="decoder")
     decoder.summary(60)
@@ -119,9 +148,9 @@ if create_model_from_scratch:
     autoencoder.summary(60)
 
 elif isinstance(model_path_encoder, str):
-    encoder = keras.saving.load_model(model_path_encoder)
-    decoder = keras.saving.load_model(model_path_decoder)
-    autoencoder = keras.saving.load_model(model_path_autoencoder)
+    encoder = keras.models.load_model(model_path_encoder)
+    decoder = keras.models.load_model(model_path_decoder)
+    autoencoder = keras.models.load_model(model_path_autoencoder)
 else:
     raise Exception('nope')
 
@@ -129,6 +158,7 @@ loss = keras.losses.MeanSquaredError(
         reduction="sum_over_batch_size",
         name="mean_squared_error"
     )
+
 autoencoder.compile(optimizer='adam',
                     loss=loss)
 
@@ -155,7 +185,7 @@ if train_model:
     # )
 
     epochs = 1
-    batch_size = 50
+    batch_size = 100
     shuffle = True
     tic = time.time()
     hist = autoencoder.fit(x=train_data,
@@ -168,7 +198,7 @@ if train_model:
                            )
     toc = time.time()
     print(f'total training time: {(toc-tic)/60}m')
-    
+
     # save models
     autoencoder.save(model_path_autoencoder)
     encoder.save(model_path_encoder)

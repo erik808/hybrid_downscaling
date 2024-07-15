@@ -31,7 +31,7 @@ if new_experiment:
     # experiment_id = 'testing'
 else:
     create_model_from_scratch=False
-    experiment_id = 'testing'
+    experiment_id = '20240715_165252'
 
 models_dir = f'experiments/{experiment_id}/models'
 results_dir = f'experiments/{experiment_id}/results'
@@ -178,7 +178,7 @@ if train_model:
     #     embeddings_metadata=None,
     # )
 
-    epochs = 1
+    epochs = 100
     batch_size = 50
     shuffle = True
     tic = time.time()
@@ -219,53 +219,53 @@ with open(log_file, 'w') as f:
 id = 100
 plt.close('all')
 fig = plt.figure(figsize=(15, 13))
+shrinkf=0.6
 
-flow_vmin = -1
-flow_vmax = 1
 plt.subplot(3,3,1)
-h = xr_HR_true = scaler_HR.inverse_transform(test_data[id,:,:,0]\
+xr_HR_true = scaler_HR.inverse_transform(test_data[id,:,:,0]\
                                              .reshape(1,-1))\
                           .reshape(Nlat, Nlon)
-plt.colorbar(h)
-plt.imshow(xr_HR_true, vmin=flow_vmin, vmax = flow_vmax, cmap='RdBu')
+
+h = plt.imshow(xr_HR_true, cmap='RdBu')
+plt.colorbar(h, shrink=shrinkf)
 plt.gca().invert_yaxis()
 
 plt.subplot(3,3,2)
-h = xr_HR_pred = scaler_HR.inverse_transform(predictions[id,:,:,0]\
-                                             .reshape(1,-1))\
-                          .reshape(Nlat, Nlon)
-plt.colorbar(h)
-plt.imshow(xr_HR_pred,vmin=flow_vmin,vmax=flow_vmax,cmap='RdBu')
+xr_HR_pred = scaler_HR.inverse_transform(predictions[id,:,:,0]\
+                                         .reshape(1,-1))\
+                      .reshape(Nlat, Nlon)
+h = plt.imshow(xr_HR_pred, cmap='RdBu')
+plt.colorbar(h, shrink=shrinkf)
 plt.gca().invert_yaxis()
 
 plt.subplot(3,3,3)
 diff=xr_HR_true-xr_HR_pred
 h = plt.imshow(diff,cmap='RdBu')
-plt.colorbar(h)
+plt.colorbar(h, shrink=shrinkf)
 plt.gca().invert_yaxis()
 plt.gca().set_title(f'{np.linalg.norm(diff.reshape(-1))}')
 plt.pause(1)
 
 plt.subplot(3,3,4)
 h = plt.imshow(test_data[id,:,:,0],)
-plt.colorbar(h)
+plt.colorbar(h, shrink=shrinkf)
 plt.gca().invert_yaxis()
 
 plt.subplot(3,3,5)
 h = plt.imshow(predictions[id,:,:,0])
-plt.colorbar(h)
+plt.colorbar(h, shrink=shrinkf)
 plt.gca().invert_yaxis()
 
 plt.subplot(3,3,6)
 diff = test_data[id,:,:,0]-predictions[id,:,:,0]
 h = plt.imshow(diff)
-plt.colorbar(h)
+plt.colorbar(h, shrink=shrinkf)
 plt.gca().set_title(f'{np.linalg.norm(diff.reshape(-1))}')
 plt.gca().invert_yaxis()
 
 plt.subplot(3,3,7)
 h = plt.imshow(encoded_data[id,:,:,0],)
-plt.colorbar(h)
+plt.colorbar(h, shrink=shrinkf)
 plt.gca().invert_yaxis()
 
 

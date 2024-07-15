@@ -24,7 +24,7 @@ from keras.models import Model
 import data_manager as dm
 reload(dm)
 
-new_experiment=False
+new_experiment=True
 if new_experiment:
     create_model_from_scratch=True
     # experiment_id = datetime.now().strftime('%Y%m%d_%H%M%S')
@@ -110,7 +110,7 @@ class Masking(layers.Layer):
         return cls(mask, **config)
 
     def call(self, inputs):
-        return ops.multiply(inputs, self.mask)
+        return ops.multiply(inputs, self.mask)        
 
 if create_model_from_scratch:
     num_filters = 32

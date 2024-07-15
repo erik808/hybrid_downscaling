@@ -34,7 +34,8 @@ def load_data():
     ds_HR = xr.open_dataset(HR_data_file)
     ds_LR = xr.open_dataset(LR_data_file)
 
-    grid_HR = build_grid(ds_HR, bt_HR.mask[0,:,:])
+    mask = bt_HR.mask[0,:,:]
+    grid_HR = build_grid(ds_HR, mask)
     grid_LR = build_grid(ds_LR)
 
     interp_HR_LR = xe.Regridder(grid_HR, grid_LR, "bilinear",
@@ -59,6 +60,6 @@ def load_data():
     da_HR_LR_HR[:,:,:] = da_HR_LR_HR_tmp
     da_LR = da_HR_LR_HR.fillna(0.0)
 
-    return da_HR, da_LR
+    return da_HR, da_LR, mask
 
-da_HR, da_LR = load_data()
+da_HR, da_LR, mask = load_data()

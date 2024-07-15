@@ -21,18 +21,17 @@ import data_manager as dm
 reload(dm)
 
 scaler = MinMaxScaler(feature_range=(0,1))
-Nt, Nlat, Nlon = dm.da_HR.shape
-data_HR = scaler.fit_transform(dm.da_HR.values.reshape(Nt, -1))\
-                .reshape(Nt, Nlat, Nlon)
-data_LR = scaler.transform(dm.da_LR.values.reshape(Nt, -1))\
-                .reshape(Nt, Nlat, Nlon)
+data_HR = scaler.fit_transform(dm.da_HR.values.reshape(dm.Nt, -1))\
+                .reshape(dm.Nt, dm.Nlat, dm.Nlon)
+data_LR = scaler.transform(dm.da_LR.values.reshape(dm.Nt, -1))\
+                .reshape(dm.Nt, dm.Nlat, dm.Nlon)
 
-T = int(Nt * 4 / 5.)
+T = int(dm.Nt * 4 / 5.)
 look_back = 3
 train_range_m = range(look_back,T-1)
 train_range = range(look_back+1,T)
 init_idx = train_range[-1]
-test_range = range(init_idx+1, Nt)
+test_range = range(init_idx+1, dm.Nt)
 
 def create_lookback(da, look_back):
     Tdim = da.shape[0]
@@ -105,7 +104,7 @@ class MyLSTM(nn.Module):
         x = self.linear(x)
         return x
 
-model = MyLSTM(input_size=Nlat*Nlon)
+model = MyLSTM(input_size=dm.Nlat*dm.Nlon)
 
 learning_rate = 0.0001
 optimizer = torch.optim.Adam(model.parameters(), lr=learning_rate)
@@ -179,11 +178,11 @@ with torch.set_grad_enabled(False):
         print(f'{i}: |res_true|: {norm_restrue}, '
               f'|res_old|: {norm_resold}, loss: {loss}')
         
-        yk = ob.view(1,look_back,Nlat,Nlon)\
+        yk = ob.view(1,look_back,dm.Nlat,dm.Nlon)\
                .detach().numpy().squeeze()
 
-        predY[i,:,:] = scaler.inverse_transform(yk[-1,:,:].reshape(1,Nlat*Nlon))\
-                             .reshape(Nlat,Nlon)
+        predY[i,:,:] = scaler.inverse_transform(yk[-1,:,:].reshape(1,dm.Nlat*dm.Nlon))\
+                             .reshape(dm.Nlat,dm.Nlon)
         xk_HR_m = xk_HR
         xk_HR = np.concatenate((xk_HR[1:,:,:],
                                 np.expand_dims(xk_LR_p + yk[-1,:,:],

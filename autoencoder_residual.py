@@ -22,11 +22,13 @@ from keras import ops
 from keras.models import Model
 
 import data_manager as dm
-timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
+experiment_id = datetime.now().strftime('%Y%m%d_%H%M%S')
 
-models_dir = f'experiments/{timestamp}/models'
-results_dir = f'experiments/{timestamp}/results'
-checkpoints_dir = f'experiments/{timestamp}/checkpoints'
+experiment_id = '20240712_171926'
+
+models_dir = f'experiments/{experiment_id}/models'
+results_dir = f'experiments/{experiment_id}/results'
+checkpoints_dir = f'experiments/{experiment_id}/checkpoints'
 
 log_file = f'{models_dir}/log.txt'
 
@@ -60,18 +62,6 @@ data_Rs = scaler_Rs.fit_transform(da_Rs.values.reshape(Nt, -1))\
 
 plt.close('all')
 
-# plt.subplot(1,3,1)
-# plt.imshow(data_HR[0,:,:]);
-# plt.gca().invert_yaxis();
-# plt.subplot(1,3,2)
-# plt.imshow(data_LR[0,:,:]);
-# plt.gca().invert_yaxis();
-# plt.subplot(1,3,3)
-# plt.imshow(data_Rs[0,:,:]);
-# plt.gca().invert_yaxis();
-# plt.tight_layout()
-# plt.pause(1)
-
 Nt, Nlat, Nlon, Nchannels = data_HR.shape
 split = int(Nt*4/5)
 train_range = range(0, split)
@@ -87,13 +77,15 @@ del stacked_data, data_Rs, data_LR, dm
 
 ## Build an autoencoder with Keras using the functional API
 keras.utils.clear_session(free_memory=True)
-create_model=True
 
 model_path_autoencoder = f'{models_dir}/autoencoder_res.keras'
 model_path_encoder = f'{models_dir}/encoder_res.keras'
 model_path_decoder = f'{models_dir}/decoder_res.keras'
 
-if create_model:
+# create custom masking class
+
+create_model_from_scratch=False
+if create_model_from_scratch:
     num_filters = 32
     num_channels = train_data.shape[-1]
     state_input = layers.Input(shape=(Nlat, Nlon, num_channels),
@@ -144,11 +136,11 @@ train_model=True
 if train_model:
     checkpoint_filepath = f'{checkpoints_dir}/checkpoint.model.keras'
 
-    # mdl_callback = keras.callbacks.ModelCheckpoint(
-    #     filepath=checkpoint_filepath,
-    #     monitor='val_loss',
-    #     mode='min',
-    #     save_best_only=True)
+    mdl_callback = keras.callbacks.ModelCheckpoint(
+        filepath=checkpoint_filepath,
+        monitor='val_loss',
+        mode='min',
+        save_best_only=True)
 
     # tb_callback = keras.callbacks.TensorBoard(
     #     log_dir=models_dir,
@@ -162,7 +154,7 @@ if train_model:
     #     embeddings_metadata=None,
     # )
 
-    epochs = 2
+    epochs = 1
     batch_size = 50
     shuffle = True
     tic = time.time()
@@ -172,7 +164,7 @@ if train_model:
                            batch_size=batch_size,
                            shuffle=shuffle,
                            validation_data=(test_data, test_data),
-                           # callbacks=[tb_callback]
+                           callbacks=[mdl_callback]
                            )
     toc = time.time()
     print(f'total training time: {(toc-tic)/60}m')
@@ -270,6 +262,7 @@ plt.gca().invert_yaxis()
 
 plt.tight_layout()
 
+timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
 fig_name = f'{results_dir}/results_autoencoder_{timestamp}.png'
 print(fig_name)
 plt.savefig(fig_name)

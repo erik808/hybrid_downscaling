@@ -10,8 +10,6 @@ from importlib import reload
 import numpy as np
 import matplotlib.pyplot as plt
 
-from datetime import datetime
-
 from sklearn.preprocessing import MinMaxScaler
 
 import torch
@@ -21,10 +19,12 @@ from keras import layers
 from keras import ops
 from keras.models import Model
 
-from multiprocess import Pool
-
 import data_manager as dm
 reload(dm)
+
+import plot_utils
+reload(plot_utils)
+from plot_utils import PlotMachine
 
 new_experiment=True
 if new_experiment:
@@ -272,58 +272,10 @@ output_dict = {'xr_HR true' : {'values' : xr_HR_true_fun,
                                    'vmax' : .5, 'cmap' : 'viridis'},
                }
 
-# FACTORIZE THIS further:
-# Analysis
-def plot_frame(id, fig_name=None):
-    shrinkf=0.5
-    plt.clf()
-    if fig_name == None:
-        fig_name = f'{movie_dir}/frame-{id:06d}.png'
+plotmachine = PlotMachine(output_dict=output_dict,
+                          results_dir=results_dir,
+                          movie_dir=movie_dir,
+                          time_array=test_time)
 
-    for f, (key, item) in enumerate(output_dict.items()):
-        plt.subplot(3,3,f+1)
-        h = plt.imshow(item['values'](id),
-                       cmap=item['cmap'],
-                       vmin=item['vmin'],
-                       vmax=item['vmax'])
-        plt.colorbar(h, shrink=shrinkf)
-        plt.gca().set_title(key)
-        plt.gca().invert_yaxis()
-
-    plt.suptitle(f"date: {np.datetime64(test_time[id], 'h')}")
-    print(fig_name)
-    plt.savefig(fig_name)
-
-fig = plt.figure(figsize=(15, 13))
-timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
-fig_name = f'{results_dir}/results_autoencoder_{timestamp}.png'
-plot_frame(100, fig_name)
-
-fig = plt.figure(figsize=(15, 8))
-with Pool(8) as p:
-    p.map(plot_frame, range(0,len(test_time),4))
-
-movie_name = f'movie_{timestamp}.mov'
-framerate = 24
-sys_cmd = ( f"ffmpeg -r {framerate} -f image2 -pattern_type glob -i "
-            f"'{movie_dir}/frame-*.png' "
-            f"-vcodec libx264 -crf 25  -pix_fmt yuv420p -y "
-            f"{movie_dir}/{movie_name}" )
-
-print(sys_cmd)
-os.system(sys_cmd)
-sys_cmd = ( f"rm {movie_dir}/frame-*.png")
-print(sys_cmd)
-os.system(sys_cmd)
-
-fig_name = f'{results_dir}/history_{timestamp}.png'
-plt.close('all')
-plt.plot(hist.history['loss'],'.-', label='loss')
-plt.plot(hist.history['val_loss'],'.-', label='validation loss')
-plt.grid()
-plt.legend()
-plt.gca().set_xlabel('epoch')
-print(fig_name)
-
-plt.tight_layout()
-plt.savefig(fig_name)
+plotmachine.plot_single_frame(100)
+plotmachine.create_movie()

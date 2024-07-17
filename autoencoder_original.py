@@ -21,7 +21,8 @@ from keras.models import Model
 
 import data_manager as dm
 reload(dm)
-
+import ae_model as ae
+reload(ae)
 import plot_utils
 reload(plot_utils)
 from plot_utils import PlotMachine
@@ -30,15 +31,19 @@ new_experiment=True
 if new_experiment:
     create_model_from_scratch=True
     experiment_id = datetime.now().strftime('%Y%m%d_%H%M%S')
-    # experiment_id = 'testing'
+    add_id = '_uv_7_layers'
+    
+    experiment_id = 'testing'
+    add_id = ''
 else:
     create_model_from_scratch=False
-    experiment_id = '20240716_104034'
+    add_id = ''
+    experiment_id = '20240716_174451_uv_7_layers'
 
-models_dir = f'experiments/{experiment_id}/models'
-results_dir = f'experiments/{experiment_id}/results'
-movie_dir = f'experiments/{experiment_id}/movies'
-checkpoints_dir = f'experiments/{experiment_id}/checkpoints'
+models_dir = f'experiments/{experiment_id}{add_id}/models'
+results_dir = f'experiments/{experiment_id}{add_id}/results'
+movie_dir = f'experiments/{experiment_id}{add_id}/movies'
+checkpoints_dir = f'experiments/{experiment_id}{add_id}/checkpoints'
 
 log_file = f'{models_dir}/log.txt'
 
@@ -48,39 +53,43 @@ os.system(f'mkdir -p {results_dir}')
 os.system(f'mkdir -p {checkpoints_dir}')
 
 # assume everything has this shape
-Nt, Nlat, Nlon = dm.da_HR.shape
+da_HR, da_LR, da_mask = dm.load_uv_data()
+
+# do the assembling into channels here
+data_HR_stacked = np.stack([da_HR['uo'].values,
+                            da_HR['vo'].values], axis=3)
+data_LR_stacked = np.stack([da_LR['uo'].values,
+                            da_LR['vo'].values], axis=3)
+
+Nt, Nlat, Nlon, num_channels = data_HR_stacked.shape
 
 scaled_range = (0,1)
 
 # StandardScaler doesnt work that well
 scaler_HR = MinMaxScaler(feature_range=scaled_range)
-data_HR = scaler_HR.fit_transform(dm.da_HR.values.reshape(Nt, -1))\
-                   .reshape(Nt, Nlat, Nlon,1)
-data_LR = scaler_HR.transform(dm.da_LR.values.reshape(Nt, -1))\
-                   .reshape(Nt, Nlat, Nlon,1)
+data_HR = scaler_HR.fit_transform(data_HR_stacked.reshape(Nt, -1))\
+                   .reshape(Nt, Nlat, Nlon, num_channels)
+data_LR = scaler_HR.transform(data_LR_stacked.reshape(Nt, -1))\
+                   .reshape(Nt, Nlat, Nlon, num_channels)
 
 plt.close('all')
 
-Nt, Nlat, Nlon, Nchannels = data_HR.shape
 split = int(Nt*4/5)
 train_range = range(0, split)
 test_range = range(split, Nt)
 
-# stacked_data = np.concatenate([data_HR, data_LR], axis=3)
-stacked_data = data_HR
-
-train_data = stacked_data[train_range,:,:,:]
-test_data = stacked_data[test_range,:,:,:]
+train_data = data_HR[train_range,:,:,:]
+test_data = data_HR[test_range,:,:,:]
 
 test_LR = data_LR[test_range,:,:,:]
-train_time = dm.da_LR.time.values[train_range]
-test_time  = dm.da_LR.time.values[test_range]
+train_time = da_LR['uo'].time.values[train_range]
+test_time  = da_LR['uo'].time.values[test_range]
 
 # create mask to be used in network
-mask = torch.tensor(dm.mask.values)[None,:,:,None]
+mask = torch.tensor(da_mask.values)[None,:,:,None]
 
 # clean memory
-del stacked_data, data_HR, data_LR, dm
+del data_HR, data_LR, dm, da_HR, da_LR
 
 ## Build an autoencoder with Keras using the functional API
 keras.utils.clear_session(free_memory=True)
@@ -89,69 +98,9 @@ model_path_autoencoder = f'{models_dir}/autoencoder_res.keras'
 model_path_encoder = f'{models_dir}/encoder_res.keras'
 model_path_decoder = f'{models_dir}/decoder_res.keras'
 
-# create custom masking class
-@keras.saving.register_keras_serializable(name="custom_masking")
-class Masking(layers.Layer):
-    def __init__(self, mask, **kwargs):
-        super(Masking, self).__init__(**kwargs)
-        self.mask = mask
-
-    def get_config(self):
-        config = super(Masking, self).get_config()
-        config.update({
-            'mask' : keras.saving.serialize_keras_object(self.mask)})
-        return config
-
-    @classmethod
-    def from_config(cls, config):
-        mask_config = config.pop("mask")
-        mask = keras.saving.deserialize_keras_object(mask_config)
-        return cls(mask, **config)
-
-    def call(self, inputs):
-        return ops.multiply(inputs, self.mask)
 
 if create_model_from_scratch:
-    num_filters = 32
-    num_channels = train_data.shape[-1]
-    masking_layer1 = Masking(mask, name="masking_layer1")
-    masking_layer2 = Masking(mask, name="masking_layer2")
-    state_input = layers.Input(shape=(Nlat, Nlon, num_channels),
-                               name="full_state_input")
-    # Encoding layers
-    e1 = layers.Conv2D(num_filters, (5,5), strides = (2,2),
-                       activation="relu",
-                       padding="same")(state_input)
-    # e2 = masking_layer1(e1)
-    # e3 = layers.MaxPooling2D((2,2),
-    #                          padding="same")(e2)
-    encoded = layers.Conv2D(num_filters, (5,5), strides = (2,2),
-                       activation="relu",
-                       padding="same")(e1)
-
-    # encoded = layers.MaxPooling2D((2,2),
-    #                               padding="same")(e4)
-
-    encoder = Model(state_input, encoded, name="encoder")
-    encoder.summary(60)
-
-    # Decoder
-    d1 = layers.Conv2DTranspose(num_filters, (5,5), strides=(2,2), activation="relu",
-                                padding="same")(encoded)
-    d2 = layers.Conv2DTranspose(num_filters, (5,5), strides=(2,2), activation="relu",
-                                padding="same")(d1)
-    d3 = layers.Conv2D(num_channels, (3,3), activation="sigmoid",
-                       padding="same")(d2)
-    cropped = layers.Cropping2D(cropping=((2,1),(2,1)))(d3)
-
-    decoded = masking_layer2(cropped)
-
-    decoder = Model(encoded, decoded, name="decoder")
-    decoder.summary(60)
-
-    autoencoder = Model(state_input, decoded, name="autoencoder")
-    autoencoder.summary(60)
-
+    encoder, decoder, autoencoder = ae.build_model(mask=mask)
 elif isinstance(model_path_encoder, str):
     encoder = keras.models.load_model(model_path_encoder)
     decoder = keras.models.load_model(model_path_decoder)
@@ -159,13 +108,9 @@ elif isinstance(model_path_encoder, str):
 else:
     raise Exception('nope')
 
-loss = keras.losses.MeanSquaredError(
-        reduction="sum_over_batch_size",
-        name="mean_squared_error"
-    )
-
-autoencoder.compile(optimizer='adam',
-                    loss=loss)
+print('--------------------------------------')
+print(f'experiment: {experiment_id}{add_id}')
+print('--------------------------------------')
 
 train_model=True
 if train_model:
@@ -177,17 +122,17 @@ if train_model:
         mode='min',
         save_best_only=True)
 
-    # tb_callback = keras.callbacks.TensorBoard(
-    #     log_dir=models_dir,
-    #     histogram_freq=1,
-    #     write_graph=False,
-    #     write_images=True,
-    #     write_steps_per_second=True,
-    #     update_freq="epoch",
-    #     profile_batch=0,
-    #     embeddings_freq=0,
-    #     embeddings_metadata=None,
-    # )
+    tb_callback = keras.callbacks.TensorBoard(
+        log_dir=models_dir,
+        histogram_freq=1,
+        write_graph=False,
+        write_images=True,
+        write_steps_per_second=True,
+        update_freq="epoch",
+        profile_batch=0,
+        embeddings_freq=0,
+        embeddings_metadata=None,
+    )
 
     epochs = 10
     batch_size = 50
@@ -199,7 +144,7 @@ if train_model:
                            batch_size=batch_size,
                            shuffle=shuffle,
                            validation_data=(test_data, test_data),
-                           callbacks=[mdl_callback]
+                           callbacks=[mdl_callback, tb_callback]
                            )
     toc = time.time()
     print(f'total training time: {(toc-tic)/60}m')
@@ -223,54 +168,73 @@ with open(log_file, 'w') as f:
     sys.stdout = original
 
 # Create dictionary for output visualization
-xr_HR_true_fun = lambda i : scaler_HR.inverse_transform(test_data[i,:,:,0]\
-                                                   .reshape(1,-1))\
-                                .reshape(Nlat, Nlon)
-
-xr_HR_pred_fun = lambda i : scaler_HR.inverse_transform(predictions[i,:,:,0]\
+xr_HR_true_fun = lambda i : scaler_HR.inverse_transform(test_data[i,:,:,:]\
                                                         .reshape(1,-1))\
-                                     .reshape(Nlat, Nlon)
+                                     .reshape(Nlat, Nlon, num_channels)
+
+# total kinetic energy
+Kt_HR_true_fun = lambda i : np.sqrt(np.square(xr_HR_true_fun(i)).sum(axis=2))
+
+xr_HR_pred_fun = lambda i : scaler_HR.inverse_transform(predictions[i,:,:,:]\
+                                                        .reshape(1,-1))\
+                                     .reshape(Nlat, Nlon, num_channels)
+
+Kt_HR_pred_fun = lambda i : np.sqrt(np.square(xr_HR_pred_fun(i)).sum(axis=2))
 
 xr_HR_diff_fun = lambda i : xr_HR_true_fun(i) - xr_HR_pred_fun(i)
+
+Kt_HR_diff_fun = lambda i : Kt_HR_true_fun(i) - Kt_HR_pred_fun(i)
 
 Rs_true_fun = lambda i : test_data[i,:,:,0] - test_LR[i,:,:,0]
 Rs_pred_fun = lambda i : predictions[i,:,:,0] - test_LR[i,:,:,0]
 Rs_diff_fun = lambda i : Rs_true_fun(i) - Rs_pred_fun(i)
 
-enc_xr_HR_true_fun = lambda i : (encoded_xr_HR_true[i,:,:,0])
-enc_xr_LR_true_fun = lambda i : (encoded_xr_LR_true[i,:,:,0])
-enc_xr_HR_pred_fun = lambda i : (encoded_xr_HR_pred[i,:,:,0])
+enc_xr_HR_k_fun = lambda i,k : (encoded_xr_HR_true[i,:,:,k])
+enc_vmax = lambda i : np.max(encoded_xr_HR_true[:,:,:,i])
+enc_vmin = lambda i : np.min(encoded_xr_HR_true[:,:,:,i])
 
-output_dict = {'xr_HR true' : {'values' : xr_HR_true_fun,
-                               'vmin' : -.8,
-                               'vmax' : .8, 'cmap' : 'RdBu'},
-               'xr_HR pred' : {'values' : xr_HR_pred_fun,
-                               'vmin' : -.8,
-                               'vmax' : .8, 'cmap' : 'RdBu'},
-               'xr_HR diff' : {'values' : xr_HR_diff_fun,
-                               'vmin' : -0.2,
-                               'vmax' : 0.2, 'cmap' : 'RdBu'},
+output_dict = {'Kt_HR true' : {'values' : Kt_HR_true_fun,
+                               'vmin' : 0,
+                               'vmax' : .8,
+                               'cmap' : 'viridis'},
+               'Kt_HR pred' : {'values' : Kt_HR_pred_fun,
+                               'vmin' : 0,
+                               'vmax' : .8,
+                               'cmap' : 'viridis'},
+               'Kt_HR diff' : {'values' : Kt_HR_diff_fun,
+                               'vmin' : -0.1,
+                               'vmax' : 0.1,
+                               'cmap' : 'RdBu'},
 
                'res true' : {'values' : Rs_true_fun,
-                             'vmin' : -0.2,
-                             'vmax' : 0.2, 'cmap' : 'RdBu'},
+                             'vmin' : -0.1,
+                             'vmax' : 0.1,
+                             'cmap' : 'RdBu'},
                'res pred' : {'values' : Rs_pred_fun,
-                             'vmin' : -0.2,
-                             'vmax' : 0.2, 'cmap' : 'RdBu'},
+                             'vmin' : -0.1,
+                             'vmax' : 0.1,
+                             'cmap' : 'RdBu'},
                'res dif' : {'values' : Rs_diff_fun,
-                            'vmin' : -0.1,
-                            'vmax' : 0.1, 'cmap' : 'RdBu'},
+                            'vmin' : -0.05,
+                            'vmax' : 0.05,
+                            'cmap' : 'RdBu'},
 
-               'enc xr_HR true' : {'values' : enc_xr_HR_true_fun,
-                                   'vmin' : 0,
-                                   'vmax' : .5, 'cmap' : 'viridis'},
-               'enc xr_HR pred' : {'values' : enc_xr_HR_pred_fun,
-                                   'vmin' : 0,
-                                   'vmax' : .5, 'cmap' : 'viridis'},
-               'enc xr_LR true' : {'values' : enc_xr_LR_true_fun,
-                                   'vmin' : 0,
-                                   'vmax' : .5, 'cmap' : 'viridis'},
+               'enc xr_HR ch:0' : {'values' : lambda i : enc_xr_HR_k_fun(i,0),
+                                   'vmin' : enc_vmin(0),
+                                   'vmax' : enc_vmax(0),
+                                   'cmap' : 'viridis'},
+               'enc xr_HR ch:1' : {'values' : lambda i : enc_xr_HR_k_fun(i,1),
+                                   'vmin' : enc_vmin(1),
+                                   'vmax' : enc_vmax(1),
+                                   'cmap' : 'viridis'},
+               'enc xr_HR ch:2' : {'values' : lambda i : enc_xr_HR_k_fun(i,2),
+                                   'vmin' : enc_vmin(2),
+                                   'vmax' : enc_vmax(2),
+                                   'cmap' : 'viridis'},
                }
+
+reload(plot_utils)
+from plot_utils import PlotMachine
 
 plotmachine = PlotMachine(output_dict=output_dict,
                           results_dir=results_dir,
@@ -279,3 +243,4 @@ plotmachine = PlotMachine(output_dict=output_dict,
 
 plotmachine.plot_single_frame(100)
 plotmachine.create_movie()
+plotmachine.plot_history(hist)

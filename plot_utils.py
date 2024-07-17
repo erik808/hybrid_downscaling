@@ -6,7 +6,7 @@ from multiprocess import Pool
 
 class PlotMachine():
 
-    def __init__(self, figsize=(15,8),
+    def __init__(self, figsize=(20,12),
                  output_dict=None,
                  time_array=None,
                  results_dir=None,
@@ -16,7 +16,7 @@ class PlotMachine():
         self.time_array=time_array
         self.results_dir=results_dir
         self.movie_dir=movie_dir
-        self.cbar_shrinkf=0.5
+        self.cbar_shrinkf=0.7
         self.frame_stride=4
         self.pool_size=8
 
@@ -28,6 +28,7 @@ class PlotMachine():
 
     def create_movie(self):
         fig = plt.figure(figsize=self.figsize)
+        timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
         with Pool(self.pool_size) as p:
             p.map(self.plot_frame, range(0,len(self.time_array), self.frame_stride))
 
@@ -65,10 +66,11 @@ class PlotMachine():
     
 
     def plot_history(self, hist):
+        timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
         fig_name = f'{self.results_dir}/history_{timestamp}.png'
         plt.close('all')
-        plt.plot(hist.history['loss'],'.-', label='loss')
-        plt.plot(hist.history['val_loss'],'.-', label='validation loss')
+        plt.semilogy(hist.history['loss'],'.-', label='loss')
+        plt.semilogy(hist.history['val_loss'],'.-', label='validation loss')
         plt.grid()
         plt.legend()
         plt.gca().set_xlabel('epoch')

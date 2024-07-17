@@ -29,7 +29,7 @@ def build_grid(ds, mask=None):
         grid['mask'] = mask
     return grid
 
-def load_data():
+def load_u_data():
     bt_HR = xr.open_dataset(HR_bathy_file)
     ds_HR = xr.open_dataset(HR_data_file)
     ds_LR = xr.open_dataset(LR_data_file)
@@ -62,4 +62,49 @@ def load_data():
 
     return da_HR, da_LR, mask
 
-da_HR, da_LR, mask = load_data()
+def load_uv_data():
+    bt_HR = xr.open_dataset(HR_bathy_file)
+    ds_HR = xr.open_dataset(HR_data_file)
+    ds_LR = xr.open_dataset(LR_data_file)
+
+    mask = bt_HR.mask[0,:,:]
+    grid_HR = build_grid(ds_HR, mask)
+    grid_LR = build_grid(ds_LR)
+
+    interp_HR_LR = xe.Regridder(grid_HR, grid_LR, "bilinear",
+                                extrap_method="inverse_dist")
+    interp_LR_HR = xe.Regridder(grid_LR, grid_HR, "bilinear",
+                                extrap_method="inverse_dist")
+
+    da_HR_uo = ds_HR.uo.rename({'longitude':'lon',
+                                'latitude':'lat'})\
+                                .fillna(0.0)
+
+    da_HR_vo = ds_HR.vo.rename({'longitude':'lon',
+                                'latitude':'lat'})\
+                                .fillna(0.0)
+
+
+    def create_da_LR(da_HR):
+        da_HR_LR = interp_HR_LR(da_HR.values)
+        da_HR_LR_HR_tmp = interp_LR_HR(da_HR_LR)
+
+        da_HR_LR = xr.DataArray(da_HR_LR, dims=['time','lat','lon'],
+                                coords={'time':ds_HR.time,
+                                        'lat':ds_LR.latitude.values,
+                                        'lon':ds_LR.longitude.values})
+
+        da_HR_LR_HR = xr.zeros_like(da_HR)
+        da_HR_LR_HR[:,:,:] = da_HR_LR_HR_tmp
+        da_LR = da_HR_LR_HR.fillna(0.0)
+        return da_LR
+
+    da_LR_uo = create_da_LR(da_HR_uo)
+    da_LR_vo = create_da_LR(da_HR_vo)
+
+    da_HR = {'uo': da_HR_uo,
+             'vo': da_HR_vo}
+    da_LR = {'uo': da_LR_uo,
+             'vo': da_LR_vo}
+
+    return da_HR, da_LR, mask

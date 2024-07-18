@@ -13,7 +13,6 @@ import matplotlib.pyplot as plt
 from sklearn.preprocessing import MinMaxScaler
 
 import torch
-import torch.multiprocessing
 import keras
 import keras_tuner
 from keras import layers
@@ -35,16 +34,16 @@ new_experiment=True
 training_mode='normal'
 do_prediction = True
 if new_experiment:
-    create_model_from_scratch=True
+    load_models_from_file=False
     experiment_id = datetime.now().strftime('%Y%m%d_%H%M%S')
-    add_id = '_optimized'
-
+    add_id = '_tf_multiply'
+    
     # experiment_id = 'tuning'
     # add_id = ''
 else:
-    create_model_from_scratch=False
+    load_models_from_file=True
     add_id = ''
-    experiment_id = '20240716_174451_uv_7_layers'
+    experiment_id = '20240718_153705_optimized'
 
 models_dir = f'experiments/{experiment_id}{add_id}/models'
 tuning_dir = f'experiments/{experiment_id}{add_id}/tuning'
@@ -87,8 +86,11 @@ test_range = range(split, Nt)
 
 train_data = data_HR[train_range,:,:,:]
 test_data = data_HR[test_range,:,:,:]
+# train and test data used for feedthrough connection in AE
+train_data_ft = data_LR[train_range,:,:,:]
+test_data_ft = data_LR[test_range,:,:,:]
 
-test_LR = data_LR[test_range,:,:,:]
+test_LR = test_data_ft
 train_time = da_LR['uo'].time.values[train_range]
 test_time  = da_LR['uo'].time.values[test_range]
 
@@ -105,18 +107,16 @@ model_path_autoencoder = f'{models_dir}/autoencoder_res.keras'
 model_path_encoder = f'{models_dir}/encoder_res.keras'
 model_path_decoder = f'{models_dir}/decoder_res.keras'
 
-if create_model_from_scratch:
-    ae = AutoEncoder(test_vec=train_data[0,:,:,:],
-                     mask=mask, log_file=log_file)
-    autoencoder, encoder, decoder = ae.build_model(use_dropout=False)
-
-elif isinstance(model_path_encoder, str):
+ae = AutoEncoder(test_vec=train_data[0,:,:,:],
+                 mask=mask, log_file=log_file)
+autoencoder, encoder, decoder = ae.build_model(use_feedthrough=True,
+                                               feedthrough_type='multiply')
+    
+if load_models_from_file:
+    autoencoder = keras.models.load_model(model_path_autoencoder)
     encoder = keras.models.load_model(model_path_encoder)
     decoder = keras.models.load_model(model_path_decoder)
-    autoencoder = keras.models.load_model(model_path_autoencoder)
-else:
-    raise Exception('nope')
-
+    
 print('--------------------------------------')
 print(f'experiment: {experiment_id}{add_id}')
 print('--------------------------------------')
@@ -144,15 +144,26 @@ if training_mode == 'normal':
     )
 
     epochs = 50
-    batch_size = 16
+    batch_size = 2
     shuffle = True
     tic = time.time()
-    hist = autoencoder.fit(x=train_data,
-                           y=train_data,
+
+    if ae.use_feedthrough:
+        X_train = [train_data, train_data_ft]
+        X_test = [test_data, test_data_ft]
+    else:
+        X_train = train_data
+        X_test = test_data
+
+    Y_train = train_data
+    Y_test = test_data
+    
+    hist = autoencoder.fit(x=X_train,
+                           y=Y_train,
                            epochs=epochs,
                            batch_size=batch_size,
                            shuffle=shuffle,
-                           validation_data=(test_data, test_data),
+                           validation_data=(X_test, Y_test),
                            callbacks=[mdl_callback, tb_callback]
                            )
     toc = time.time()
@@ -168,7 +179,7 @@ elif training_mode == 'tuning':
     ae_tuning = AutoEncoder(test_vec=train_data[0,:,:,:],
                             mask=mask, log_file=log_file)
     epochs = 2
-    batch_size = 50
+    batch_size = 2
     shuffle = True
 
     tuner = keras_tuner.Hyperband(
@@ -194,7 +205,6 @@ elif training_mode == 'tuning':
                         validation_data=(test_data, test_data))
 
     tuner.results_summary()
-    breakpoint()
 else:
     print('-- Skipping training --')
     pass
@@ -202,10 +212,8 @@ else:
 if do_prediction:
 
     print('create predictions')
-    predictions = autoencoder.predict(test_data)
-    encoded_xr_HR_true = encoder.predict(test_data)
-    encoded_xr_HR_pred = encoder.predict(predictions)
-    encoded_xr_LR_true = encoder.predict(test_LR)
+    predictions = autoencoder.predict(X_test)
+    encoded_xr_HR_true = encoder.predict(train_data)
 
     # Create dictionary for output visualization
     xr_HR_true_fun = lambda i : scaler_HR.inverse_transform(test_data[i,:,:,:]\

@@ -37,7 +37,6 @@ class AutoEncoder(keras_tuner.HyperModel):
         self.mask = mask
         self.log_file = log_file
         self.dropout_rate=0.25
-
         self.log('AutoEncoder\n', 'w')
 
     def build_model(self,
@@ -48,7 +47,12 @@ class AutoEncoder(keras_tuner.HyperModel):
                     optimizer='adam',
                     verbosity=0,
                     use_feedthrough=False,
+                    feedthrough_type='multiply',
                     ):
+
+        self.use_feedthrough = use_feedthrough
+        self.feedthrough_type = feedthrough_type
+        self.use_dropout = use_dropout
 
         Nlat, Nlon, num_channels = self.test_vec.shape
         num_filters = 32
@@ -115,16 +119,21 @@ class AutoEncoder(keras_tuner.HyperModel):
         if use_feedthrough:
             feedthrough = layers.Input(shape=(Nlat, Nlon, num_channels),
                                        name="feedthrough_input")
-
+            
             z = layers.Conv2D(num_filters, kernel_size,
                               strides = (1,1),
                               activation=activation,
                               padding="same")(feedthrough)
 
-            output = layers.Concatenate()([decoded, z])
+            if feedthrough_type == 'concatenate':
+                output = layers.Concatenate()([cropped, z])
+            elif feedthrough_type == 'multiply':
+                output = layers.Multiply()([cropped, z])
+            else:
+                raise Exception('specify feedthrough_type when using feedthrough')
+                
             output = layers.Conv2D(num_channels, kernel_size, activation="sigmoid",
-                                   padding="same")(output)
-            output = masking_layer_ft(output)
+                                   padding="same")(output)            
 
             inputs_decoder=[encoded, feedthrough]
             inputs_autoencoder=[state_input, feedthrough]
@@ -165,7 +174,6 @@ class AutoEncoder(keras_tuner.HyperModel):
         # write to log
         self.log(locals(), 'a')
         self.log_model(autoencoder, 'a')
-        breakpoint()
         return autoencoder, encoder, decoder
 
     # build model for hyperparameter tuning

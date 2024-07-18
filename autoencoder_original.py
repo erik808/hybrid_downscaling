@@ -86,6 +86,7 @@ test_range = range(split, Nt)
 
 train_data = data_HR[train_range,:,:,:]
 test_data = data_HR[test_range,:,:,:]
+
 # train and test data used for feedthrough connection in AE
 train_data_ft = data_LR[train_range,:,:,:]
 test_data_ft = data_LR[test_range,:,:,:]
@@ -144,7 +145,7 @@ if training_mode == 'normal':
     )
 
     epochs = 50
-    batch_size = 2
+    batch_size = 8
     shuffle = True
     tic = time.time()
 

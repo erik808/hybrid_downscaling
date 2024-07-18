@@ -36,16 +36,18 @@ class AutoEncoder(keras_tuner.HyperModel):
         self.test_vec = test_vec
         self.mask = mask
         self.log_file = log_file
+        self.dropout_rate=0.25
 
         self.log('AutoEncoder\n', 'w')
 
     def build_model(self,
                     conv_arch='7_conv_layers',
-                    learning_rate=0.001,
+                    learning_rate=0.002,
                     use_dropout=False,
                     activation='relu',
                     optimizer='adam',
                     verbosity=0,
+                    use_feedthrough=False,
                     ):
 
         Nlat, Nlon, num_channels = self.test_vec.shape
@@ -54,6 +56,8 @@ class AutoEncoder(keras_tuner.HyperModel):
         kernel_size = (3,3)
 
         masking_layer = Masking(self.mask, name="masking_layer")
+        masking_layer_ft = Masking(self.mask, name="masking_layer_ft")
+
         state_input = layers.Input(shape=(Nlat, Nlon, num_channels),
                                    name="full_state_input")
 
@@ -68,7 +72,7 @@ class AutoEncoder(keras_tuner.HyperModel):
                               padding="same")(x)
 
         if use_dropout:
-            x = layers.Dropout(0.25)(x)
+            x = layers.Dropout(self.dropout_rate)(x)
 
         encoded = layers.Conv2D(num_filters_red, kernel_size, strides = (2,2),
                            activation=activation,
@@ -89,14 +93,17 @@ class AutoEncoder(keras_tuner.HyperModel):
                                        padding="same")(y)
 
         if use_dropout:
-            y = layers.Dropout(0.25)(y)
+            y = layers.Dropout(self.dropout_rate)(y)
 
         y = layers.Conv2DTranspose(num_filters, kernel_size,
                                    strides=(2,2), activation=activation,
                                     padding="same")(y)
-        y = layers.Conv2D(num_channels, kernel_size, activation="sigmoid",
-                           padding="same")(y)
 
+        if not use_feedthrough:
+            y = layers.Conv2D(num_channels, kernel_size, activation="sigmoid",
+                              padding="same")(y)
+
+        # Crop the decoded output
         if conv_arch == '7_conv_layers':
             cropped = layers.Cropping2D(cropping=((1,2),(3,4)))(y)
 
@@ -105,13 +112,40 @@ class AutoEncoder(keras_tuner.HyperModel):
         else:
             raise Exception(f'invalid conv_arch {conv_arch}')
 
-        decoded = masking_layer(cropped)
+        if use_feedthrough:
+            feedthrough = layers.Input(shape=(Nlat, Nlon, num_channels),
+                                       name="feedthrough_input")
 
-        decoder = Model(encoded, decoded, name="decoder")
+            z = layers.Conv2D(num_filters, kernel_size,
+                              strides = (1,1),
+                              activation=activation,
+                              padding="same")(feedthrough)
+
+            output = layers.Concatenate()([decoded, z])
+            output = layers.Conv2D(num_channels, kernel_size, activation="sigmoid",
+                                   padding="same")(output)
+            output = masking_layer_ft(output)
+
+            inputs_decoder=[encoded, feedthrough]
+            inputs_autoencoder=[state_input, feedthrough]
+            outputs = [masking_layer(output)]
+
+        else:
+            inputs_decoder=[encoded]
+            inputs_autoencoder=[state_input]
+            outputs = [masking_layer(cropped)]
+
+        decoder = Model(inputs=inputs_decoder,
+                        outputs=outputs,
+                        name="decoder")
+
         if verbosity > 10:
             decoder.summary(60)
 
-        autoencoder = Model(state_input, decoded, name="autoencoder")
+        autoencoder = Model(inputs=inputs_autoencoder,
+                            outputs=outputs,
+                            name="autoencoder")
+
         if verbosity > 5:
             autoencoder.summary(60)
 
@@ -131,19 +165,16 @@ class AutoEncoder(keras_tuner.HyperModel):
         # write to log
         self.log(locals(), 'a')
         self.log_model(autoencoder, 'a')
-
+        breakpoint()
         return autoencoder, encoder, decoder
 
     # build model for hyperparameter tuning
     def build(self, hp):
-        # activation=hp.Choice("activation", ["relu", "tanh"])
-        optimizer=hp.Choice("optimizer", ["sgd", "adam"])
         learning_rate = hp.Float("learning_rate",
                                  min_value=1e-4,
                                  max_value=5e-2,
                                  sampling="log")
-        hypermodel, _, _ = self.build_model(learning_rate=learning_rate,
-                                            optimizer=optimizer)
+        hypermodel, _, _ = self.build_model(learning_rate=learning_rate)
         return hypermodel
 
     def fit(self, hp, model, *args, **kwargs):
@@ -152,7 +183,6 @@ class AutoEncoder(keras_tuner.HyperModel):
                              max_value=32)
         return model.fit(*args, batch_size=batch_sizes,
                          **kwargs)
-
 
     def log(self, msg, mode='a'):
         original = sys.stdout

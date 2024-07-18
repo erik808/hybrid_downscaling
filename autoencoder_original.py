@@ -32,12 +32,12 @@ from plot_utils import PlotMachine
 
 # setup config
 new_experiment=True
-training_mode='tuning'
+training_mode='normal'
 do_prediction = True
 if new_experiment:
     create_model_from_scratch=True
     experiment_id = datetime.now().strftime('%Y%m%d_%H%M%S')
-    add_id = '_tuning'
+    add_id = '_optimized'
 
     # experiment_id = 'tuning'
     # add_id = ''
@@ -143,18 +143,18 @@ if training_mode == 'normal':
         embeddings_metadata=None,
     )
 
-    epochs = 10
-    batch_size = 50
+    epochs = 50
+    batch_size = 16
     shuffle = True
     tic = time.time()
-    autoencoder.fit(x=train_data,
-                    y=train_data,
-                    epochs=epochs,
-                    batch_size=batch_size,
-                    shuffle=shuffle,
-                    validation_data=(test_data, test_data),
-                    callbacks=[mdl_callback, tb_callback]
-                    )
+    hist = autoencoder.fit(x=train_data,
+                           y=train_data,
+                           epochs=epochs,
+                           batch_size=batch_size,
+                           shuffle=shuffle,
+                           validation_data=(test_data, test_data),
+                           callbacks=[mdl_callback, tb_callback]
+                           )
     toc = time.time()
     print(f'total training time: {(toc-tic)/60}m')
 
@@ -171,13 +171,14 @@ elif training_mode == 'tuning':
     batch_size = 50
     shuffle = True
 
-    tuner = keras_tuner.BayesianOptimization(
+    tuner = keras_tuner.Hyperband(
         hypermodel=AutoEncoder(test_vec=train_data[0,:,:,:],
                                mask=mask, log_file=log_file),
         objective="val_loss",
-        max_trials=100,
-        # executions_per_trial=2,
-        # max_epochs=2,
+#        max_trials=200,
+        max_epochs=200,
+#        executions_per_trial=2,
+#        epochs=2,
         overwrite=True,
         directory=tuning_dir,
         project_name="ae_tuning",

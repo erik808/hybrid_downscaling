@@ -61,7 +61,7 @@ class PlotMachine():
             plt.gca().invert_yaxis()
 
         plt.suptitle(f"date: {np.datetime64(self.time_array[id], 'h')}")
-        print(fig_name)
+        # print(fig_name)
         plt.savefig(fig_name)    
     
 

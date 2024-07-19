@@ -3,7 +3,7 @@ import sys
 os.system('export MKL_NUM_THREADS=12')
 os.system('export OMP_NUM_THREADS=12')
 
-import pickle
+import dill
 
 from datetime import datetime
 import time
@@ -32,12 +32,12 @@ from plot_utils import PlotMachine
 new_experiment=True
 training_mode='normal'
 do_prediction = True
-use_feedthrough = False
+use_feedthrough = True
 
 if new_experiment:
     load_models_from_file=False
     experiment_id = datetime.now().strftime('%Y%m%d_%H%M%S')
-    add_id = '_no_feedthrough'
+    add_id = '_with_feedthrough'
     
     # experiment_id = 'tuning'
     # add_id = ''
@@ -110,7 +110,7 @@ if training_mode == 'normal':
         embeddings_metadata=None,
     )
 
-    epochs = 100
+    epochs = 1
     batch_size = 4
     shuffle = True
     tic = time.time()
@@ -184,9 +184,9 @@ container = {'hist' : hist,
              'batch_size' : batch_size,
              'encoder' : encoder,
              'decoder' : decoder,
-             'autoencoder' : autoencoder,
+             'autoencoder' : autoencoder}
 
-with open(stored_data, 'wb') as file:
+with open(mdata_file, 'wb') as file:
     dill.dump(mdata_file, file)
 
 if do_prediction:

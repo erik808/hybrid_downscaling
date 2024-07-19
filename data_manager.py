@@ -1,3 +1,4 @@
+import os
 import numpy as np
 import xarray as xr
 import xesmf as xe
@@ -154,7 +155,7 @@ def create_training_data(split_factor=4/5,
                      'time' : da_LR['uo'].time.values[train_range]}
 
     data['test']  = {'HR'   : data_HR[test_range,:,:,:],
-                     'LR'   : data_HR[test_range,:,:,:],
+                     'LR'   : data_LR[test_range,:,:,:],
                      'time' : da_LR['uo'].time.values[test_range]}
 
     return data, params, scalers

@@ -46,30 +46,38 @@ xHR_train = xHR_train.reshape(T_train, -1, order='C')
 xLR_train = xLR_train.reshape(T_train, -1, order='C')
 xHR_test = xHR_test.reshape(T_test, -1, order='C')
 xLR_test = xLR_test.reshape(T_test, -1, order='C')
+N_feats_orig = xHR_train.shape[1]
+
+# Remove zero columns
+nonzero_ids = np.where(np.sum(xHR_train, axis=0)!=0)[0]
+xHR_train = xHR_train[:,nonzero_ids]
+xLR_train = xLR_train[:,nonzero_ids]
+xLR_test = xLR_test[:,nonzero_ids]
 N_feats = xHR_train.shape[1]
 
-# !! TODO temporarily remove zero columns
-# zero_ids = np.where(np.sum(xHR_train, axis=0)==0)
 
 # !! TODO factorize this somewhere
 model_type = 'ESNc'
+
+
+history = 8000
 
 if (model_type == 'DMDc' or
     model_type == 'ESNc'):
     # !! another hyperparameter
     control_amp = 1
-    trainU = np.hstack((xHR_train[:-1,] ,
-                        xLR_train[1:,] * control_amp))
+    trainU = np.hstack((xHR_train[-history:-1,] ,
+                        xLR_train[-history+1:,] * control_amp))
 
 elif (model_type == 'DMD' or
       model_type == 'ESN'):
-    trainU = xHR_train[:-1,]
+    trainU = xHR_train[-history:-1,]
 
 elif model_type == 'corr_only':
     raise Exception('not implemented')
      # trainU = X_LR[train_range_p,:]
 
-trainY = xHR_train[1:,]
+trainY = xHR_train[-history+1:,]
 
 esn_pars = {}
 if (model_type == 'DMD' or
@@ -92,15 +100,15 @@ if model_type == 'ESNc':
                                 2*N_feats)
 
 #!! TODO Essential hyperparameter!!
-esn_pars['scalingType']        = 'none'
-esn_pars['Nr']                 = 10000
-esn_pars['rhoMax']             = 0.4
-esn_pars['alpha']              = 0.2
-esn_pars['entriesPerRow']      = 10
-esn_pars['tikhonov_lambda']    = 1e1
-esn_pars['squaredStates']      = 'even'
-esn_pars['inputMatrixType']    = 'balancedSparse'
-esn_pars['fCutoff']            = 0.01
+esn_pars['scalingType']     = 'minMax1'
+esn_pars['Nr']              = 5000
+esn_pars['rhoMax']          = 0.4
+esn_pars['alpha']           = 0.2
+esn_pars['entriesPerRow']   = 7
+esn_pars['tikhonov_lambda'] = 1e-2
+esn_pars['squaredStates']   = 'even'
+esn_pars['inputMatrixType'] = 'balancedSparse'
+esn_pars['fCutoff']         = 0.01
 
 esn = ESN(esn_pars['Nr'], trainU.shape[1], trainY.shape[1])
 esn.setPars(esn_pars)
@@ -110,13 +118,14 @@ esn.train(trainU, trainY)
 # -------------------------------------------------------
 # CREATE PREDICTIONS
 # -------------------------------------------------------
-predY = np.zeros((T_test, N_feats))
+predY = np.zeros((T_test, N_feats_orig))
 esn_state = esn.X[-1,:].copy()
+print(np.linalg.norm(esn_state))
 
 # initialization:
 xk = xHR_train[-1,]
 
-verbosity = 100
+verbosity = 400
 for i in range(T_test):
 
     # from data:
@@ -142,9 +151,9 @@ for i in range(T_test):
     yk         = esn.unscaleOutput(u_out)
 
     xk = yk
-    predY[i,] = yk
+    predY[i,nonzero_ids] = yk
     if not i % verbosity:
-        print(f'{i+1} / {T_test}')
+        print(f'{i} / {T_test}')
 
 Y=predY.reshape(T_test, enclat, enclon, filters, order='C')
 inputs = [Y, data['test']['LR']]
@@ -153,10 +162,12 @@ D = decoder.predict(inputs)
 X=xHR_test.reshape(T_test, enclat, enclon, filters, order='C')
 
 plt.close('all')
+figsize=(11,9)
+fig = plt.figure(figsize=figsize)
 plt.subplot(3,2,1)
-tid = 2000
+tid = 300
 chn = 3
-t_mse = 500
+t_mse = T_test
 h=plt.imshow(X[tid,:,:,chn], cmap='binary')
 plt.colorbar(h)
 plt.gca().invert_yaxis()
@@ -170,6 +181,7 @@ plt.subplot(3,2,5)
 # plt.gca().invert_yaxis()
 MSE = np.sqrt(np.sum(np.square(X-Y),axis=(1,2,3)))
 plt.plot(MSE[:t_mse])
+plt.gca().set_ylim([0,8])
 plt.grid()
 
 plt.subplot(3,2,2)
@@ -187,7 +199,14 @@ plt.subplot(3,2,6)
 # plt.gca().invert_yaxis()
 MSE = np.sqrt(np.sum(np.square(Z-D),axis=(1,2,3)))
 plt.plot(MSE[:t_mse])
+plt.gca().set_ylim([0,7])
+
 plt.grid()
 
 plt.tight_layout()
+timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
+figname = f'{ae_esn_dir}/results_{timestamp}.png'
+print(figname)
+plt.savefig(figname)
 plt.pause(1)
+

@@ -23,29 +23,5 @@ model_path_decoder = f'{models_dir}/decoder_res.keras'
 encoder = keras.models.load_model(model_path_encoder)
 decoder = keras.models.load_model(model_path_decoder)
 
-# load uv data
-da_HR, da_LR, da_mask = dm.load_uv_data()
-
-# FACTORIZE training data creation:
-# data, params = dm.create_training_data()
-# train_data_HR = data['train']['HR']
-# test_data_HR = data['test']['HR']
-# train_data_LR = data['train']['LR']
-# test_data_LR = data['test']['LR']
-# train_time = params['time']'train']
-# test_time = params['time']['test']
-
-# do the assembling into channels here
-data_HR_stacked = np.stack([da_HR['uo'].values,
-                            da_HR['vo'].values], axis=3)
-data_LR_stacked = np.stack([da_LR['uo'].values,
-                            da_LR['vo'].values], axis=3)
-
-Nt, Nlat, Nlon, num_channels = data_HR_stacked.shape
-
-# StandardScaler doesnt work that well
-scaler_HR = MinMaxScaler(feature_range=scaled_range)
-data_HR = scaler_HR.fit_transform(data_HR_stacked.reshape(Nt, -1))\
-                   .reshape(Nt, Nlat, Nlon, num_channels)
-data_LR = scaler_HR.transform(data_LR_stacked.reshape(Nt, -1))\
-                   .reshape(Nt, Nlat, Nlon, num_channels)
+# get training data and metadata
+data, params, scalers  = dm.create_training_data()

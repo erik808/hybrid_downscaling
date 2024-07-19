@@ -3,6 +3,8 @@ import sys
 os.system('export MKL_NUM_THREADS=12')
 os.system('export OMP_NUM_THREADS=12')
 
+import pickle
+
 from datetime import datetime
 import time
 from importlib import reload
@@ -10,9 +12,6 @@ from importlib import reload
 import numpy as np
 import matplotlib.pyplot as plt
 
-from sklearn.preprocessing import MinMaxScaler
-
-import torch
 import keras
 import keras_tuner
 from keras import layers
@@ -33,10 +32,12 @@ from plot_utils import PlotMachine
 new_experiment=True
 training_mode='normal'
 do_prediction = True
+use_feedthrough = False
+
 if new_experiment:
     load_models_from_file=False
     experiment_id = datetime.now().strftime('%Y%m%d_%H%M%S')
-    add_id = '_tf_multiply'
+    add_id = '_no_feedthrough'
     
     # experiment_id = 'tuning'
     # add_id = ''
@@ -45,61 +46,27 @@ else:
     add_id = ''
     experiment_id = '20240718_153705_optimized'
 
-models_dir = f'experiments/{experiment_id}{add_id}/models'
-tuning_dir = f'experiments/{experiment_id}{add_id}/tuning'
-results_dir = f'experiments/{experiment_id}{add_id}/results'
-movie_dir = f'experiments/{experiment_id}{add_id}/movies'
-checkpoints_dir = f'experiments/{experiment_id}{add_id}/checkpoints'
-log_file = f'{models_dir}/log.txt'
+dirs, files = dm.setup_directories(experiment_id, add_id)
 
-os.system(f'mkdir -p {models_dir}')
-os.system(f'mkdir -p {tuning_dir}')
-os.system(f'mkdir -p {movie_dir}')
-os.system(f'mkdir -p {results_dir}')
-os.system(f'mkdir -p {checkpoints_dir}')
+models_dir = dirs['models']
+tuning_dir = dirs['tuning']
+results_dir = dirs['results']
+movie_dir = dirs['movies']
+checkpoints_dir = dirs['checkpoints']
+log_file = files['log']
 
-# assume everything has this shape
-da_HR, da_LR, da_mask = dm.load_uv_data()
-
-# do the assembling into channels here
-data_HR_stacked = np.stack([da_HR['uo'].values,
-                            da_HR['vo'].values], axis=3)
-data_LR_stacked = np.stack([da_LR['uo'].values,
-                            da_LR['vo'].values], axis=3)
-
-Nt, Nlat, Nlon, num_channels = data_HR_stacked.shape
-
-scaled_range = (0,1)
-
-# StandardScaler doesnt work that well
-scaler_HR = MinMaxScaler(feature_range=scaled_range)
-data_HR = scaler_HR.fit_transform(data_HR_stacked.reshape(Nt, -1))\
-                   .reshape(Nt, Nlat, Nlon, num_channels)
-data_LR = scaler_HR.transform(data_LR_stacked.reshape(Nt, -1))\
-                   .reshape(Nt, Nlat, Nlon, num_channels)
-
-plt.close('all')
-
-split = int(Nt*4/5)
-train_range = range(0, split)
-test_range = range(split, Nt)
-
-train_data = data_HR[train_range,:,:,:]
-test_data = data_HR[test_range,:,:,:]
-
-# train and test data used for feedthrough connection in AE
-train_data_ft = data_LR[train_range,:,:,:]
-test_data_ft = data_LR[test_range,:,:,:]
-
-test_LR = test_data_ft
-train_time = da_LR['uo'].time.values[train_range]
-test_time  = da_LR['uo'].time.values[test_range]
-
-# create mask to be used in network
-mask = torch.tensor(da_mask.values)[None,:,:,None]
-
-# clean memory
-del data_HR, data_LR, dm, da_HR, da_LR
+data, params, scalers  = dm.create_training_data()
+train_data    = data['train']['HR']
+train_data_ft = data['train']['LR']
+train_time    = data['train']['time']
+test_data     = data['test']['HR']
+test_data_ft  = data['test']['LR']
+test_time     = data['test']['time']
+mask = params['mask']
+Nt = params['Nt']
+Nlon = params['Nlon']
+Nlat = params['Nlat']
+num_channels = params['num_channels']
 
 ## Build an autoencoder with Keras using the functional API
 keras.utils.clear_session(free_memory=True)
@@ -110,7 +77,7 @@ model_path_decoder = f'{models_dir}/decoder_res.keras'
 
 ae = AutoEncoder(test_vec=train_data[0,:,:,:],
                  mask=mask, log_file=log_file)
-autoencoder, encoder, decoder = ae.build_model(use_feedthrough=True,
+autoencoder, encoder, decoder = ae.build_model(use_feedthrough=use_feedthrough,
                                                feedthrough_type='multiply')
     
 if load_models_from_file:
@@ -121,7 +88,6 @@ if load_models_from_file:
 print('--------------------------------------')
 print(f'experiment: {experiment_id}{add_id}')
 print('--------------------------------------')
-
 
 if training_mode == 'normal':
     checkpoint_filepath = f'{checkpoints_dir}/checkpoint.model.keras'
@@ -144,8 +110,8 @@ if training_mode == 'normal':
         embeddings_metadata=None,
     )
 
-    epochs = 50
-    batch_size = 8
+    epochs = 100
+    batch_size = 4
     shuffle = True
     tic = time.time()
 
@@ -210,6 +176,19 @@ else:
     print('-- Skipping training --')
     pass
 
+# save modeldata
+timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
+mdata_file = f'{models_dir}/mdata_{timestamp}.dill'
+container = {'hist' : hist,
+             'epochs' : epochs,
+             'batch_size' : batch_size,
+             'encoder' : encoder,
+             'decoder' : decoder,
+             'autoencoder' : autoencoder,
+
+with open(stored_data, 'wb') as file:
+    dill.dump(mdata_file, file)
+
 if do_prediction:
 
     print('create predictions')
@@ -217,16 +196,16 @@ if do_prediction:
     encoded_xr_HR_true = encoder.predict(train_data)
 
     # Create dictionary for output visualization
-    xr_HR_true_fun = lambda i : scaler_HR.inverse_transform(test_data[i,:,:,:]\
-                                                            .reshape(1,-1))\
-                                         .reshape(Nlat, Nlon, num_channels)
+    xr_HR_true_fun = lambda i : scalers['HR'].inverse_transform(test_data[i,:,:,:]\
+                                                                .reshape(1,-1))\
+                                             .reshape(Nlat, Nlon, num_channels)
 
     # total kinetic energy
     Kt_HR_true_fun = lambda i : np.sqrt(np.square(xr_HR_true_fun(i)).sum(axis=2))
 
-    xr_HR_pred_fun = lambda i : scaler_HR.inverse_transform(predictions[i,:,:,:]\
-                                                            .reshape(1,-1))\
-                                         .reshape(Nlat, Nlon, num_channels)
+    xr_HR_pred_fun = lambda i : scalers['HR'].inverse_transform(predictions[i,:,:,:]\
+                                                                .reshape(1,-1))\
+                                             .reshape(Nlat, Nlon, num_channels)
 
     Kt_HR_pred_fun = lambda i : np.sqrt(np.square(xr_HR_pred_fun(i)).sum(axis=2))
 
@@ -234,8 +213,8 @@ if do_prediction:
 
     Kt_HR_diff_fun = lambda i : Kt_HR_true_fun(i) - Kt_HR_pred_fun(i)
 
-    Rs_true_fun = lambda i : test_data[i,:,:,0] - test_LR[i,:,:,0]
-    Rs_pred_fun = lambda i : predictions[i,:,:,0] - test_LR[i,:,:,0]
+    Rs_true_fun = lambda i : test_data[i,:,:,0] - test_data_ft[i,:,:,0]
+    Rs_pred_fun = lambda i : predictions[i,:,:,0] - test_data_ft[i,:,:,0]
     Rs_diff_fun = lambda i : Rs_true_fun(i) - Rs_pred_fun(i)
 
     enc_xr_HR_k_fun = lambda i,k : (encoded_xr_HR_true[i,:,:,k])

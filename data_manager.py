@@ -118,7 +118,7 @@ def create_training_data(split_factor=4/5,
     params = {}
     data = {}
 
-    da_HR, da_LR, da_mask = dm.load_uv_data()
+    da_HR, da_LR, da_mask = load_uv_data()
 
     # create a torch mask
     params['mask'] = torch.tensor(da_mask.values)[None,:,:,None]
@@ -130,13 +130,16 @@ def create_training_data(split_factor=4/5,
                                 da_LR['vo'].values], axis=3)
 
     Nt, Nlat, Nlon, num_channels = data_HR_stacked.shape
-    params.append({'Nt':Nt,
+    params.update({'Nt':Nt,
                    'Nlat':Nlat,
                    'Nlon':Nlon,
                    'num_channels':num_channels})
 
     # StandardScaler doesnt work that well
     scaler_HR = MinMaxScaler(feature_range=scaling_range)
+    scalers = {}
+    scalers['HR'] = scaler_HR
+
     data_HR = scaler_HR.fit_transform(data_HR_stacked.reshape(Nt, -1))\
                        .reshape(Nt, Nlat, Nlon, num_channels)
     data_LR = scaler_HR.transform(data_LR_stacked.reshape(Nt, -1))\
@@ -146,13 +149,38 @@ def create_training_data(split_factor=4/5,
     train_range = range(0, split)
     test_range = range(split, Nt)
 
-    data['train'] = {'HR' : data_HR[train_range,:,:,:],
-                     'LR' : data_LR[train_range,:,:,:]}
+    data['train'] = {'HR'   : data_HR[train_range,:,:,:],
+                     'LR'   : data_LR[train_range,:,:,:],
+                     'time' : da_LR['uo'].time.values[train_range]}
 
-    data['test']  = {'HR' : data_HR[test_range,:,:,:],
-                     'LR' : data_HR[test_range,:,:,:]}
+    data['test']  = {'HR'   : data_HR[test_range,:,:,:],
+                     'LR'   : data_HR[test_range,:,:,:],
+                     'time' : da_LR['uo'].time.values[test_range]}
 
-    params['time'] = {'train' : da_LR['uo'].time.values[train_range],
-                      'test' : da_LR['uo'].time.values[test_range]}
+    return data, params, scalers
 
-    return data, params
+
+
+def setup_directories(experiment_id, add_id):
+    models_dir = f'experiments/{experiment_id}{add_id}/models'
+    tuning_dir = f'experiments/{experiment_id}{add_id}/tuning'
+    results_dir = f'experiments/{experiment_id}{add_id}/results'
+    movie_dir = f'experiments/{experiment_id}{add_id}/movies'
+    checkpoints_dir = f'experiments/{experiment_id}{add_id}/checkpoints'
+    log_file = f'{models_dir}/log.txt'
+
+    os.system(f'mkdir -p {models_dir}')
+    os.system(f'mkdir -p {tuning_dir}')
+    os.system(f'mkdir -p {movie_dir}')
+    os.system(f'mkdir -p {results_dir}')
+    os.system(f'mkdir -p {checkpoints_dir}')
+
+    dirs = {'models'      : models_dir,
+            'tuning'      : tuning_dir,
+            'results'     : results_dir,
+            'movies'      : movie_dir,
+            'checkpoints' : checkpoints_dir}
+
+    files = {'log' : log_file}
+
+    return dirs, files

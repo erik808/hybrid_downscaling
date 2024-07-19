@@ -1,6 +1,8 @@
 import numpy as np
 import xarray as xr
 import xesmf as xe
+import torch
+from sklearn.preprocessing import MinMaxScaler
 
 data_dir = 'data'
 
@@ -108,3 +110,49 @@ def load_uv_data():
              'vo': da_LR_vo}
 
     return da_HR, da_LR, mask
+
+
+def create_training_data(split_factor=4/5,
+                         scaling_range=(0,1)):
+    # assume everything has this shape
+    params = {}
+    data = {}
+
+    da_HR, da_LR, da_mask = dm.load_uv_data()
+
+    # create a torch mask
+    params['mask'] = torch.tensor(da_mask.values)[None,:,:,None]
+
+    # do the assembling into channels here
+    data_HR_stacked = np.stack([da_HR['uo'].values,
+                                da_HR['vo'].values], axis=3)
+    data_LR_stacked = np.stack([da_LR['uo'].values,
+                                da_LR['vo'].values], axis=3)
+
+    Nt, Nlat, Nlon, num_channels = data_HR_stacked.shape
+    params.append({'Nt':Nt,
+                   'Nlat':Nlat,
+                   'Nlon':Nlon,
+                   'num_channels':num_channels})
+
+    # StandardScaler doesnt work that well
+    scaler_HR = MinMaxScaler(feature_range=scaling_range)
+    data_HR = scaler_HR.fit_transform(data_HR_stacked.reshape(Nt, -1))\
+                       .reshape(Nt, Nlat, Nlon, num_channels)
+    data_LR = scaler_HR.transform(data_LR_stacked.reshape(Nt, -1))\
+                       .reshape(Nt, Nlat, Nlon, num_channels)
+
+    split = int(Nt*split_factor)
+    train_range = range(0, split)
+    test_range = range(split, Nt)
+
+    data['train'] = {'HR' : data_HR[train_range,:,:,:],
+                     'LR' : data_LR[train_range,:,:,:]}
+
+    data['test']  = {'HR' : data_HR[test_range,:,:,:],
+                     'LR' : data_HR[test_range,:,:,:]}
+
+    params['time'] = {'train' : da_LR['uo'].time.values[train_range],
+                      'test' : da_LR['uo'].time.values[test_range]}
+
+    return data, params

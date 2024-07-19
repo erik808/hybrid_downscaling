@@ -27,13 +27,13 @@ decoder = keras.models.load_model(model_path_decoder)
 da_HR, da_LR, da_mask = dm.load_uv_data()
 
 # FACTORIZE training data creation:
-# data, time, mask = dm.create_training_data()
+# data, params = dm.create_training_data()
 # train_data_HR = data['train']['HR']
 # test_data_HR = data['test']['HR']
 # train_data_LR = data['train']['LR']
 # test_data_LR = data['test']['LR']
-# train_time = time['train']
-# test_time = time['test']
+# train_time = params['time']'train']
+# test_time = params['time']['test']
 
 # do the assembling into channels here
 data_HR_stacked = np.stack([da_HR['uo'].values,
@@ -49,6 +49,3 @@ data_HR = scaler_HR.fit_transform(data_HR_stacked.reshape(Nt, -1))\
                    .reshape(Nt, Nlat, Nlon, num_channels)
 data_LR = scaler_HR.transform(data_LR_stacked.reshape(Nt, -1))\
                    .reshape(Nt, Nlat, Nlon, num_channels)
-
-
-

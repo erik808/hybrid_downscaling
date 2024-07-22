@@ -186,7 +186,7 @@ hyperparams = { 'external' : {'model_type'      : 'ESN',
                               'reshape_order'   : 'C',
                               'control_amp'     : 1 },
 
-                'internal' : { 'Nr'                 : 10000,
+                'internal' : { 'Nr'                 : 2000,
                                'scalingType'        : 'none',
                                'rhoMax'             : 1.6,
                                'alpha'              : 1.0,
@@ -215,8 +215,8 @@ def objective(trial):
     # hyperparams['internal']['fCutoff'] = \
     #     trial.suggest_float('fCutoff', 1e-12, 1e-1, log=True)
 
-    # hyperparams['external']['reshape_order'] = \
-    #     trial.suggest_categorical('reshape_order', ['C', 'F'])
+    hyperparams['external']['model_type'] = \
+        trial.suggest_categorical('model_type', ['ESN', 'ESNc'])
 
     # hyperparams['internal']['scalingType'] = \
     #     trial.suggest_categorical('scalingType',
@@ -292,7 +292,7 @@ def objective(trial):
         plt.plot(np.sqrt(SE))
         plt.plot(np.asarray(RSE_list).T)
         plt.grid()
-        plt.gca().set_ylim([0,200])
+        plt.gca().set_ylim([0,20])
         plt.tight_layout()
         print(fignm)
         plt.savefig(fignm)

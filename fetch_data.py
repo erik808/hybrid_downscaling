@@ -33,13 +33,6 @@ time_end = "2023-05-01T23:00:00"
 # variables=["deptho", "deptho_lev", "mask"]
 variables = ["uo", "vo"]
 
-out = fetch_wrapper(box_NwCC,
-                    dataset_id=dataset_id_LR,
-                    # dataset_part="bathy",
-                    variables=variables,
-                    start_datetime=time_start,
-                    end_datetime=time_end)
-
 def fetch_wrapper(box, **kwargs):
     out = cm.subset(
         minimum_longitude=box['min_lon'],
@@ -57,3 +50,14 @@ def fetch_wrapper(box, **kwargs):
         **kwargs
     )
     return out
+
+
+out = fetch_wrapper(box_NwCC,
+                    dataset_id=dataset_id_LR,
+                    # dataset_part="bathy",
+                    variables=variables,
+                    start_datetime=time_start,
+                    end_datetime=time_end)
+
+
+

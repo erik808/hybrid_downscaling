@@ -186,17 +186,19 @@ hyperparams = { 'external' : {'model_type'      : 'ESN',
                               'reshape_order'   : 'C',
                               'control_amp'     : 1 },
 
-                'internal' : { 'Nr'                 : 1000,
+                'internal' : { 'Nr'                 : 10000,
                                'scalingType'        : 'none',
-                               'rhoMax'             : 1.2,
-                               'alpha'              : 1.6,
-                               'avgDegree'          : 7,
+                               'rhoMax'             : 1.6,
+                               'alpha'              : 1.0,
+                               'avgDegree'          : 20,
+                               'entriesPerRow'      : 50,
+                               'noiseAmplitude'     : 0.1,
                                'tikhonov_lambda'    : 1e-6,
                                'squaredStates'      : 'even',
                                'reservoirStateInit' : 'zero',
                                'inputMatrixType'    : 'balancedSparse',
                                'fCutoff'            : 0.0,
-                               'Wconstruction'      : 'avgDegree'} }
+                               'Wconstruction'      : 'entriesPerRow'} }
 
 
 timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
@@ -207,17 +209,14 @@ os.system(f'mkdir -p {tuningplots_dir}')
 
 def objective(trial):
 
-    # hyperparams['internal']['tikhonov_lambda'] = \
-    #     trial.suggest_float('tikhonov_lambda', 1e-8, 1e-2, log=True)
+    hyperparams['internal']['tikhonov_lambda'] = \
+        trial.suggest_float('tikhonov_lambda', 1e-7, 1e-2, log=True)
 
     # hyperparams['internal']['fCutoff'] = \
     #     trial.suggest_float('fCutoff', 1e-12, 1e-1, log=True)
 
     # hyperparams['external']['reshape_order'] = \
     #     trial.suggest_categorical('reshape_order', ['C', 'F'])
-
-    # hyperparams['internal']['squaredStates'] = \
-    #     trial.suggest_categorical('squaredStates', ['even', 'disabled'])
 
     # hyperparams['internal']['scalingType'] = \
     #     trial.suggest_categorical('scalingType',
@@ -235,14 +234,15 @@ def objective(trial):
     #     trial.suggest_categorical('reservoirStateInit',
     #                               ['zero', 'random'])
 
-    # hyperparams['internal']['rhoMax'] = \
-    #     trial.suggest_float('rhoMax', 0.01, 2, step=0.1)
+    hyperparams['internal']['rhoMax'] = \
+        trial.suggest_float('rhoMax', 0.01, 4, step=0.1)
 
-    # hyperparams['internal']['alpha'] = \
-    #     trial.suggest_float('alpha', 0.01, 2, step=0.1)
+    hyperparams['internal']['noiseAmplitude'] = \
+        trial.suggest_float('noiseAmplitude', 0.0, 1.0, step=0.1)
 
-    hyperparams['internal']['avgDegree'] = \
-        trial.suggest_int('avgDegree', 2, 1000, step=1)
+    hyperparams['internal']['alpha'] = \
+        trial.suggest_float('alpha', 0.01, 2, step=0.1)
+
 
     RMSE_list = []
     RSE_list = []

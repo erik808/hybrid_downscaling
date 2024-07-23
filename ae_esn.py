@@ -186,13 +186,13 @@ hyperparams = { 'external' : {'model_type'      : 'ESN',
                               'reshape_order'   : 'C',
                               'control_amp'     : 1 },
 
-                'internal' : { 'Nr'                 : 2000,
+                'internal' : { 'Nr'                 : 1000,
                                'scalingType'        : 'none',
-                               'rhoMax'             : 1.6,
-                               'alpha'              : 1.0,
-                               'avgDegree'          : 20,
+                               'rhoMax'             : 0.4,
+                               'alpha'              : 0.1,
+                               'avgDegree'          : 100,
                                'entriesPerRow'      : 50,
-                               'noiseAmplitude'     : 0.1,
+                               'noiseAmplitude'     : 0.4,
                                'tikhonov_lambda'    : 1e-6,
                                'squaredStates'      : 'even',
                                'reservoirStateInit' : 'zero',
@@ -209,8 +209,8 @@ os.system(f'mkdir -p {tuningplots_dir}')
 
 def objective(trial):
 
-    hyperparams['internal']['tikhonov_lambda'] = \
-        trial.suggest_float('tikhonov_lambda', 1e-7, 1e-2, log=True)
+    # hyperparams['internal']['tikhonov_lambda'] = \
+    #     trial.suggest_float('tikhonov_lambda', 1e-7, 1e-2, log=True)
 
     # hyperparams['internal']['fCutoff'] = \
     #     trial.suggest_float('fCutoff', 1e-12, 1e-1, log=True)
@@ -218,10 +218,9 @@ def objective(trial):
     hyperparams['external']['model_type'] = \
         trial.suggest_categorical('model_type', ['ESN', 'ESNc'])
 
-    # hyperparams['internal']['scalingType'] = \
-    #     trial.suggest_categorical('scalingType',
-    #                               ['none', 'minMax1', 'minMax2',
-    #                                'minMaxAll', 'standardize'])
+    hyperparams['internal']['scalingType'] = \
+        trial.suggest_categorical('scalingType',
+                                  ['none', 'minMax1', 'standardize'])
 
     # hyperparams['internal']['inputMatrixType'] = \
     #     trial.suggest_categorical('inputMatrixType',
@@ -237,11 +236,14 @@ def objective(trial):
     hyperparams['internal']['rhoMax'] = \
         trial.suggest_float('rhoMax', 0.01, 4, step=0.1)
 
-    hyperparams['internal']['noiseAmplitude'] = \
-        trial.suggest_float('noiseAmplitude', 0.0, 1.0, step=0.1)
+    # hyperparams['internal']['noiseAmplitude'] = \
+    #     trial.suggest_float('noiseAmplitude', 0.0, 1.0, step=0.1)
 
-    hyperparams['internal']['alpha'] = \
-        trial.suggest_float('alpha', 0.01, 2, step=0.1)
+    # hyperparams['internal']['alpha'] = \
+    #     trial.suggest_float('alpha', 0.01, 2, step=0.1)
+
+    # hyperparams['internal']['avgDegree'] = \
+    #     trial.suggest_int('avgDegree', 2, 200, step=10)
 
 
     RMSE_list = []

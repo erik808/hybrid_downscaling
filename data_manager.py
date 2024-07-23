@@ -34,7 +34,7 @@ def build_grid(ds, mask=None):
 
 def load_u_data():
     bt_HR = xr.open_dataset(HR_bathy_file)
-    ds_HR = xr.open_dataset(HR_data_file)
+    ds_HR = xr.open_mfdataset(HR_data_files, parallel=True)
     ds_LR = xr.open_dataset(LR_data_file)
 
     mask = bt_HR.mask[0,:,:]

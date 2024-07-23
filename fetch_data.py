@@ -27,8 +27,8 @@ dataset_part="bathy"
 dataset_id_HR = "cmems_mod_nws_phy_anfc_0.027deg-2D_PT15M-i"
 dataset_id_LR = "cmems_mod_nws_phy-uv_my_7km-2D_PT1H-i"
 
-time_start = "2023-01-01T23:00:00"
-time_end = "2023-05-01T23:00:00"
+time_start = "2023-01-01T00:00:00"
+time_end = "2023-12-31T23:00:00"
 
 # variables=["deptho", "deptho_lev", "mask"]
 variables = ["uo", "vo"]
@@ -53,7 +53,7 @@ def fetch_wrapper(box, **kwargs):
 
 
 out = fetch_wrapper(box_NwCC,
-                    dataset_id=dataset_id_LR,
+                    dataset_id=dataset_id_HR,
                     # dataset_part="bathy",
                     variables=variables,
                     start_datetime=time_start,

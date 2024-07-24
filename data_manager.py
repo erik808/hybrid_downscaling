@@ -3,18 +3,23 @@ import numpy as np
 import xarray as xr
 import xesmf as xe
 import torch
+import dill
 from sklearn.preprocessing import MinMaxScaler
 
-data_dir = 'data'
+data_dir      = 'data'
+dill_file     = f'{data_dir}/ae_esn_training_data.dill'
+dill_file_enc = f'{data_dir}/ae_esn_training_data_encoded.dill'
 
-HR_data_file = (f'{data_dir}/cmems_mod_nws_phy_anfc_0.027deg-2D_PT15M-i_'
-                f'uo-vo_4.23E-7.78E_56.81N-58.70N_2023-01-01-2023-05-01.nc')
+
+HR_data_files = (f'{data_dir}/cmems_mod_nws_phy_anfc_0.027deg-2D_PT15M-i_'
+                 f'uo-vo_4.23E-7.78E_56.81N-58.70N_2023-/*.nc')
 
 HR_bathy_file = (f'{data_dir}/cmems_mod_nws_phy_anfc_0.027deg-3D_'
                  f'static_multi-vars_4.23E-7.78E_56.81N-58.70N_0.49-643.57m.nc')
 
 LR_data_file = (f'{data_dir}/cmems_mod_nws_phy-uv_my_7km-2D_PT1H-i_'
                 f'uo-vo_4.22E-7.78E_56.80N-58.67N_2023-01-01-2023-05-01.nc')
+
 
 def build_grid(ds, mask=None):
     lat_arr = ds.latitude
@@ -67,12 +72,13 @@ def load_u_data():
 
 def load_uv_data():
     bt_HR = xr.open_dataset(HR_bathy_file)
-    ds_HR = xr.open_dataset(HR_data_file)
+    ds_HR = xr.open_mfdataset(HR_data_files, parallel=True)
     ds_LR = xr.open_dataset(LR_data_file)
 
     mask = bt_HR.mask[0,:,:]
     grid_HR = build_grid(ds_HR, mask)
     grid_LR = build_grid(ds_LR)
+
 
     interp_HR_LR = xe.Regridder(grid_HR, grid_LR, "bilinear",
                                 extrap_method="inverse_dist")
@@ -87,9 +93,10 @@ def load_uv_data():
                                 'latitude':'lat'})\
                                 .fillna(0.0)
 
-
     def create_da_LR(da_HR):
+        print('Regridding HR to LR')
         da_HR_LR = interp_HR_LR(da_HR.values)
+        print('Regridding LR to HR')
         da_HR_LR_HR_tmp = interp_LR_HR(da_HR_LR)
 
         da_HR_LR = xr.DataArray(da_HR_LR, dims=['time','lat','lon'],
@@ -113,8 +120,8 @@ def load_uv_data():
     return da_HR, da_LR, mask
 
 
-def create_training_data(split_factor=4/5,
-                         scaling_range=(0,1)):
+def load_training_data(split_factor=4/5,
+                       scaling_range=(0,1)):
     # assume everything has this shape
     params = {}
     data = {}
@@ -160,6 +167,55 @@ def create_training_data(split_factor=4/5,
 
     return data, params, scalers
 
+def create_training_data(compute_data=True, encoder=None):
+    if compute_data:
+        print('Create training data')
+        orig_data, params, scalers  = load_training_data()
+
+        container = {'data' : orig_data,
+                     'params' : params,
+                     'scalers' : scalers}
+
+        print(f'writing to {dill_file}')
+        with open(dill_file, 'wb') as file:
+            dill.dump(container, file)
+
+        if encoder != None:
+            print('Create encoded train and test data...')
+            enc_data = {}
+            for period in ['train', 'test']:
+                enc_data[period] = {}
+                for resolution in ['HR', 'LR']:
+                    print(f'{period}-{resolution}')
+                    enc_data[period][resolution] = \
+                        encoder.predict(orig_data[period][resolution])
+
+            container_enc = {'data' : enc_data}
+
+            print(f'writing to {dill_file_enc}')
+            with open(dill_file_enc, 'wb') as file:
+                dill.dump(container_enc, file)
+
+    else:
+        print('Load training data from file')
+        print(f'  loading from {dill_file}')
+        with open(dill_file, 'rb') as file:
+            data = dill.load(file)
+
+        orig_data = data['data']
+        params = data['params']
+        scalers = data['scalers']
+
+        if encoder != None:
+            print(f'  loading from {dill_file_enc}')
+            with open(dill_file_enc, 'rb') as file:
+                data_enc = dill.load(file)
+
+            enc_data = data_enc['data']
+        else:
+            enc_data = None
+
+    return orig_data, params, scalers, enc_data
 
 
 def setup_directories(experiment_id, add_id):

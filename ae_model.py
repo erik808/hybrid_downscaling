@@ -30,13 +30,14 @@ class Masking(layers.Layer):
 
 class AutoEncoder(keras_tuner.HyperModel):
 
-    def __init__(self, test_vec, mask, log_file):
+    def __init__(self, test_vec, mask, log_file, esn=None):
         super(AutoEncoder, self).__init__()
 
         self.test_vec = test_vec
         self.mask = mask
         self.log_file = log_file
-        self.dropout_rate=0.25
+        self.dropout_rate = 0.25
+        self.esn = esn
         self.log('AutoEncoder\n', 'w')
 
     def build_model(self,
@@ -47,7 +48,7 @@ class AutoEncoder(keras_tuner.HyperModel):
                     optimizer='adam',
                     verbosity=0,
                     use_feedthrough=False,
-                    feedthrough_type='multiply',
+                    feedthrough_type='multiply'
                     ):
 
         self.use_feedthrough = use_feedthrough
@@ -86,6 +87,9 @@ class AutoEncoder(keras_tuner.HyperModel):
         if verbosity > 10:
             encoder.summary(60)
 
+        if self.esn != None:
+            breakpoint()
+
         # Decoder ------------------------------------------------------
         y = layers.Conv2DTranspose(num_filters, kernel_size,
                                    strides=(2,2),
@@ -119,7 +123,7 @@ class AutoEncoder(keras_tuner.HyperModel):
         if use_feedthrough:
             feedthrough = layers.Input(shape=(Nlat, Nlon, num_channels),
                                        name="feedthrough_input")
-            
+
             z = layers.Conv2D(num_filters, kernel_size,
                               strides = (1,1),
                               activation=activation,
@@ -131,9 +135,9 @@ class AutoEncoder(keras_tuner.HyperModel):
                 output = layers.Multiply()([cropped, z])
             else:
                 raise Exception('specify feedthrough_type when using feedthrough')
-                
+
             output = layers.Conv2D(num_channels, kernel_size, activation="sigmoid",
-                                   padding="same")(output)            
+                                   padding="same")(output)
 
             inputs_decoder=[encoded, feedthrough]
             inputs_autoencoder=[state_input, feedthrough]

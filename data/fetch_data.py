@@ -51,7 +51,6 @@ def fetch_wrapper(box, **kwargs):
     )
     return out
 
-
 out = fetch_wrapper(box_NwCC,
                     dataset_id=dataset_id_HR,
                     # dataset_part="bathy",

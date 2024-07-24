@@ -1,8 +1,4 @@
 import os
-import sys
-os.system('export MKL_NUM_THREADS=12')
-os.system('export OMP_NUM_THREADS=12')
-
 import dill
 
 from datetime import datetime
@@ -55,7 +51,7 @@ movie_dir = dirs['movies']
 checkpoints_dir = dirs['checkpoints']
 log_file = files['log']
 
-data, params, scalers  = dm.create_training_data()
+data, params, scalers, _  = dm.create_training_data(False)
 train_data    = data['train']['HR']
 train_data_ft = data['train']['LR']
 train_time    = data['train']['time']
@@ -75,8 +71,15 @@ model_path_autoencoder = f'{models_dir}/autoencoder_res.keras'
 model_path_encoder = f'{models_dir}/encoder_res.keras'
 model_path_decoder = f'{models_dir}/decoder_res.keras'
 
+
+from ae_esn import ESN_interface
+
+esn = ESN_interface(data)
+
 ae = AutoEncoder(test_vec=train_data[0,:,:,:],
-                 mask=mask, log_file=log_file)
+                 mask=mask,
+                 log_file=log_file,
+                 esn)
 autoencoder, encoder, decoder = ae.build_model(use_feedthrough=use_feedthrough,
                                                feedthrough_type='multiply')
     
@@ -187,7 +190,7 @@ container = {'hist' : hist,
              'autoencoder' : autoencoder}
 
 with open(mdata_file, 'wb') as file:
-    dill.dump(mdata_file, file)
+    dill.dump(container, file)
 
 if do_prediction:
 

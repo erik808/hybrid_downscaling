@@ -56,12 +56,12 @@ checkpoints_dir = dirs['checkpoints']
 log_file = files['log']
 
 data, params, scalers, _  = dm.create_training_data(False)
-train_data    = data['train']['HR']
-train_data_ft = data['train']['LR']
-train_time    = data['train']['time']
-test_data     = data['test']['HR']
-test_data_ft  = data['test']['LR']
-test_time     = data['test']['time']
+train_data    = data['train']['HR'][:1007,]
+train_data_ft = data['train']['LR'][:1007,]
+train_time    = data['train']['time'][:1007,]
+test_data     = data['test']['HR'][:1007,]
+test_data_ft  = data['test']['LR'][:1007,]
+test_time     = data['test']['time'][:1007,]
 mask = params['mask']
 Nt = params['Nt']
 Nlon = params['Nlon']
@@ -118,7 +118,7 @@ if training_mode == 'normal':
         embeddings_metadata=None,
     )
 
-    epochs = 1
+    epochs = 2
     batch_size = 4
     shuffle = True
     tic = time.time()
@@ -143,7 +143,10 @@ if training_mode == 'normal':
                            epochs=epochs,
                            batch_size=batch_size,
                            shuffle=shuffle,
-                           validation_data=(X_test, Y_test),
+                           # validation_data=(X_test, Y_test),
+                           validation_data=None, # validation does not
+                                                 # work with embedded
+                                                 # ESN
                            callbacks=[mdl_callback, tb_callback]
                            )
     toc = time.time()

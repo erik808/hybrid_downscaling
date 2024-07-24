@@ -1,5 +1,6 @@
 import numpy as np
 from ESN.ESN import ESN
+import torch
 import keras
 from keras import layers
 from keras import ops
@@ -12,7 +13,7 @@ hyperparams = { 'external' : {'model_type'      : 'ESNc',
                               'decode_pred'     : True,
                               'control_amp'     : 1 },
 
-                'internal' : { 'Nr'                 : 10000,
+                'internal' : { 'Nr'                 : 5000,
                                'scalingType'        : 'none',
                                'rhoMax'             : 1.2,
                                'alpha'              : 0.7,
@@ -212,7 +213,9 @@ class ESN_embedded(layers.Layer):
         self.esn_params = esn_params
         self.total_num_samples = total_num_samples
         self.populate_lookup = np.zeros((self.total_num_samples,1))
-        self.needs_initializing=True
+        self.needs_initializing = True
+        self.esn_ready_to_train = False
+        self.esn_trained = False
         print('Initialized embedded ESN instance')
 
 
@@ -228,22 +231,32 @@ class ESN_embedded(layers.Layer):
         esn_params = keras.saving.deserialize_keras_object(esn_params_cfg)
         return cls(mask, **config)
 
+
+
     def call(self, inputs, time):
         try:
             values = inputs.detach().numpy()
+            timeid = time.detach().numpy()[:,0,0,0].astype(int)
         except TypeError as e:
             return inputs
 
         if self.needs_initializing:
-            self.initialize(values, time)
+            self.initialize(values)
 
-        self.populate_storage(values, time)
+        self.populate_storage(values, timeid)
+
+        if self.esn_ready_to_train:
+            self.train()
+        elif self.esn_trained:
+            # replace values in inputs with prediction outputs
+            inputs[:,:,:,:] = torch.tensor(self.predict(values, timeid))
 
         return inputs
 
-    def initialize(self, values, time):
 
-        self.T, self.enclat, self.enclon, self.filters = \
+    def initialize(self, values):
+
+        _, self.enclat, self.enclon, self.filters = \
             values.shape
 
         self.N_feats = self.enclat * self.enclon * self.filters
@@ -251,11 +264,70 @@ class ESN_embedded(layers.Layer):
 
         self.needs_initializing = False
 
-    def populate_storage(self, values, time):
+    def populate_storage(self, values, timeid):
         reshape_order = self.esn_params['external']['reshape_order']
-        time_indices = time.detach().numpy()[:,0,0,0].astype(int)
-        self.populate_lookup[time_indices,:] = 1
-        self.storage[time_indices, :] = \
-            values.reshape(self.T, -1, order=reshape_order)
-        
-        breakpoint()
+
+        T, _, _, _ = \
+            values.shape
+
+        if not np.all(self.populate_lookup[timeid,:]):
+            self.populate_lookup[timeid,:] = 1
+            self.storage[timeid, :] = \
+                values.reshape(T, -1, order=reshape_order)
+
+        if np.all(self.populate_lookup):
+            # we did the whole epoch, now we can train the ESN
+            self.esn_ready_to_train = True
+            # reset lookup table for filling the storage in the next
+            # epoch
+            self.populate_lookup = np.zeros((self.total_num_samples,1))
+
+    def train(self):
+        print('\nTraining an embedded ESN')
+        Nr = self.esn_params['internal']['Nr']
+        Nu = self.storage.shape[1]
+        Ny = self.storage.shape[1]
+        self.esn = ESN(Nr, Nu, Ny)
+        self.esn.setPars(self.esn_params['internal'])
+        self.esn.initialize()
+
+        # factorize with rest of ESN interface
+        trainU = self.storage[:-1,]
+        trainY = self.storage[1:,]
+
+        self.esn.train(trainU, trainY)
+
+        self.esn_ready_to_train = False
+        self.esn_trained = True
+
+    def predict(self, values, timeid):
+
+        outputs = np.zeros_like(values)
+
+        # perform a step for every (value, timeid) pair
+        for i, tid in enumerate(timeid):
+            outputs[i,:,:,:] = self.step(values[i,:], tid)\
+                                   .reshape(self.enclat,
+                                            self.enclon,
+                                            self.filters)
+
+        return outputs
+
+    def step(self, values, timeid):
+        reshape_order = self.esn_params['external']['reshape_order']
+
+        # factorize with rest of ESN interface
+
+        # not sure if this should be shifted or not
+        # timeid = np.max([1,timeid])
+        sk    = self.esn.X[timeid,:]
+        u_in  = values.reshape(-1,order=reshape_order)
+
+        u_in  = np.expand_dims(u_in, axis=0)
+        u_in  = self.esn.scaleInput(u_in)
+        sk    = self.esn.update(sk, u_in)
+        u_out = self.esn.apply(sk, u_in)
+        u_out = np.expand_dims(u_out, axis=0)
+        yk    = self.esn.unscaleOutput(u_out).squeeze()
+
+        return yk

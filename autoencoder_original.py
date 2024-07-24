@@ -74,12 +74,13 @@ model_path_decoder = f'{models_dir}/decoder_res.keras'
 
 from ae_esn import ESN_interface
 
-esn = ESN_interface(data)
+breakpoint()
+# esn = ESN_interface(data)
 
 ae = AutoEncoder(test_vec=train_data[0,:,:,:],
                  mask=mask,
                  log_file=log_file,
-                 esn)
+                 esn=esn)
 autoencoder, encoder, decoder = ae.build_model(use_feedthrough=use_feedthrough,
                                                feedthrough_type='multiply')
     

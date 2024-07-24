@@ -249,7 +249,8 @@ class ESN_embedded(layers.Layer):
             self.train()
         elif self.esn_trained:
             # replace values in inputs with prediction outputs
-            inputs[:,:,:,:] = torch.tensor(self.predict(values, timeid))
+            outputs = torch.tensor(self.predict(values, timeid))
+            inputs = ops.where(outputs != 0, outputs, inputs)
 
         return inputs
 
@@ -283,7 +284,7 @@ class ESN_embedded(layers.Layer):
             self.populate_lookup = np.zeros((self.total_num_samples,1))
 
     def train(self):
-        print('\nTraining an embedded ESN')
+        print('\nTraining embedded ESN')
         Nr = self.esn_params['internal']['Nr']
         Nu = self.storage.shape[1]
         Ny = self.storage.shape[1]
@@ -310,7 +311,7 @@ class ESN_embedded(layers.Layer):
                                    .reshape(self.enclat,
                                             self.enclon,
                                             self.filters)
-
+            
         return outputs
 
     def step(self, values, timeid):
@@ -319,8 +320,13 @@ class ESN_embedded(layers.Layer):
         # factorize with rest of ESN interface
 
         # not sure if this should be shifted or not
-        # timeid = np.max([1,timeid])
-        sk    = self.esn.X[timeid,:]
+        timeid = np.max([1,timeid])
+        try:
+            sk    = self.esn.X[timeid-1,:]
+        except Exception as e:
+            print(e)
+            breakpoint()
+            
         u_in  = values.reshape(-1,order=reshape_order)
 
         u_in  = np.expand_dims(u_in, axis=0)

@@ -118,12 +118,12 @@ if training_mode == 'normal':
         embeddings_metadata=None,
     )
 
-    epochs = 2
+    epochs = 10
     batch_size = 4
     shuffle = True
     tic = time.time()
 
-    # really necessary to expland to 4 dims?    
+    # really necessary to expland to 4 dims?
     T_train = np.expand_dims(np.arange(train_data.shape[0]), axis=[1,2,3])
     T_test = np.expand_dims(np.arange(train_data.shape[0],
                                       train_data.shape[0] + test_data.shape[0]),

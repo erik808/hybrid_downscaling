@@ -1,4 +1,7 @@
+import numpy as np
 from ESN.ESN import ESN
+import keras
+from keras import layers
 
 class ESN_interface():
 
@@ -9,7 +12,7 @@ class ESN_interface():
             enc_data['test']['LR'].shape
 
         self.orig_test_data = orig_data['test']['LR']
-        
+
         self.encoder = encoder
         self.decoder = decoder
 
@@ -37,8 +40,8 @@ class ESN_interface():
         self.nonzero_ids = np.where(np.sum(self.xHR_train, axis=0)!=0)[0]
         self.xHR_train = self.xHR_train[:,self.nonzero_ids]
         self.xLR_train = self.xLR_train[:,self.nonzero_ids]
-        self.xLR_test = self.xLR_test[:,self.nonzero_ids]        
-        
+        self.xLR_test = self.xLR_test[:,self.nonzero_ids]
+
         self.model_type = hyperparams['external']['model_type']
 
         self.history = hyperparams['external']['training_length']
@@ -113,7 +116,7 @@ class ESN_interface():
                 Pxk_dec = np.expand_dims(self.orig_test_data[i,], axis=0)
             else:
                 Pxk_dec = None
-                
+
             xk, sk, yk = self.step(xk, Pxk, sk, Pxk_dec)
             predY[i,self.nonzero_ids] = yk
 
@@ -164,7 +167,7 @@ class ESN_interface():
                 "give a full predictor state"
 
             full_yk = pY[0,:].reshape(1,self.enclat,
-                                      self.enclon,self.filters)            
+                                      self.enclon,self.filters)
             inputs = [full_yk, Pxk_dec]
             yk_dec = self.decoder.predict(inputs, verbose=0)
             xk_enc = self.encoder.predict(yk_dec, verbose=0)\
@@ -172,3 +175,30 @@ class ESN_interface():
             xk[:] = xk_enc[0,self.nonzero_ids]
 
         return xk, sk, yk
+
+@keras.saving.register_keras_serializable(name="ESN_embedded")
+class ESN_embedded(layers.Layer):
+    """ to embed an ESN into a keras/torch implementation """
+    """ dummy implementation at this point """
+
+    def __init__(self, esn_params, **kwargs):
+        super(ESN_embedded, self).__init__(**kwargs)
+        self.esn_params = esn_params
+        self.esn_initialized=False
+        print('Initialized embedded ESN instance')
+
+
+    def get_config(self):
+        config = super(ESN_embedded, self).get_config()
+        config.update({
+            'esn_params' : keras.saving.serialize_keras_object(self.esn_params)})
+        return config
+
+    @classmethod
+    def from_config(cls, config):
+        esn_params_cfg = config.pop('esn_params')
+        esn_params = keras.saving.deserialize_keras_object(esn_params_cfg)
+        return cls(mask, **config)
+
+    def call(self, inputs):
+        return inputs

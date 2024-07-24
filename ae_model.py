@@ -88,6 +88,7 @@ class AutoEncoder(keras_tuner.HyperModel):
             encoder.summary(60)
 
         if self.esn != None:
+            evolved = esn.evolve(encoded)
             breakpoint()
 
         # Decoder ------------------------------------------------------

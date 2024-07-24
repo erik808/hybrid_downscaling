@@ -146,13 +146,14 @@ hyperparams = { 'external' : {'model_type'      : 'ESNc',
 
 
 timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
-tuning_id = 'Tikhonov'
+tuning_id = 'Tikhonov_2'
 reload_tuning = True
 do_gridsearch = False
 study_name = tuning_id
 tuning_dir = f'{ae_esn_dir}/{tuning_id}/'
 
 storage = f'sqlite:///{tuning_dir}/storage.db'
+timeout = 60*60*2 # in seconds
 trial_dump = f'{tuning_dir}/optuna_{timestamp}.dump'
 tuningplots_dir = f'{tuning_dir}/plots/'
 
@@ -183,7 +184,8 @@ def objective(trial):
 
     print(f'mean RMSE: {mn_RMSE}, mean correlation: {1-mn_corr}')
     with open(trial_dump, "a") as file:
-        print(f'mean RMSE: {mn_RMSE}, mean correlation: {1-mn_corr}', file=file)
+        print(f'mean RMSE: {mn_RMSE}, mean correlation: {1-mn_corr}',
+              file=file)
 
     return mn_RMSE
 
@@ -198,21 +200,24 @@ if do_gridsearch:
         # "noiseAmplitude": [0.0, 0.1, 0.4],
         # "rhoMax" : [0.01, 0.1, 0.2, 0.5, 0.8, 1.0, 1.2, 1.5, 1.8, 2.0]
     }
-    study = optuna.create_study(sampler=optuna.samplers.GridSampler(search_space),
+    sampler = optuna.samplers.GridSampler(search_space)
+    study = optuna.create_study(sampler=sampler,
                                 direction="minimize",
                                 storage=storage,
                                 load_if_exists=reload_tuning,
                                 study_name=study_name)
 
-    study.optimize(objective, timeout=60*20)
+    study.optimize(objective, timeout=timeout)
 else:
     study = optuna.create_study(direction="minimize",
                                 storage=storage,
                                 study_name=study_name,
                                 load_if_exists=reload_tuning)
 
-    study.optimize(objective, n_trials=100)
+    study.optimize(objective, timeout=timeout)
 
+
+    
 study_log = f'{tuning_dir}/optuna_{timestamp}.log'
 print(f'writing log to {study_log}')
 with open(study_log, "w") as file:

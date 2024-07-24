@@ -15,6 +15,8 @@ import optuna
 import data_manager as dm
 reload(dm)
 
+import esn_interface
+reload(esn_interface)
 from esn_interface import ESN_interface
 
 # base experiment
@@ -122,28 +124,7 @@ def log_and_plot(trial, Y, X, RMSE_list, corr_list, RSE_list):
 
 # A collection of parameters, divided between parameters external to
 # the ESN and ESN internals.
-hyperparams = { 'external' : {'model_type'      : 'ESNc',
-                              'training_length' : 25000,
-                              'repetitions'     : 2,
-                              'test_length'     : 4*24*10,
-                              'reshape_order'   : 'C',
-                              'decode_pred'     : True,
-                              'control_amp'     : 1 },
-
-                'internal' : { 'Nr'                 : 10000,
-                               'scalingType'        : 'none',
-                               'rhoMax'             : 1.2,
-                               'alpha'              : 0.7,
-                               'avgDegree'          : 100,
-                               'entriesPerRow'      : 100,
-                               'noiseAmplitude'     : 0.1,
-                               'tikhonov_lambda'    : 10,
-                               'squaredStates'      : 'even',
-                               'reservoirStateInit' : 'zero',
-                               'inputMatrixType'    : 'balancedSparse',
-                               'fCutoff'            : 0.0,
-                               'Wconstruction'      : 'avgDegree'} }
-
+hyperparams = esn_interface.hyperparams
 
 timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
 tuning_id = 'Tikhonov_2'

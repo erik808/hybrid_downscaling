@@ -2,6 +2,30 @@ import numpy as np
 from ESN.ESN import ESN
 import keras
 from keras import layers
+from keras import ops
+
+hyperparams = { 'external' : {'model_type'      : 'ESNc',
+                              'training_length' : 25000,
+                              'repetitions'     : 2,
+                              'test_length'     : 4*24*10,
+                              'reshape_order'   : 'C',
+                              'decode_pred'     : True,
+                              'control_amp'     : 1 },
+
+                'internal' : { 'Nr'                 : 10000,
+                               'scalingType'        : 'none',
+                               'rhoMax'             : 1.2,
+                               'alpha'              : 0.7,
+                               'avgDegree'          : 100,
+                               'entriesPerRow'      : 100,
+                               'noiseAmplitude'     : 0.1,
+                               'tikhonov_lambda'    : 10,
+                               'squaredStates'      : 'even',
+                               'reservoirStateInit' : 'zero',
+                               'inputMatrixType'    : 'balancedSparse',
+                               'fCutoff'            : 0.0,
+                               'Wconstruction'      : 'avgDegree'} }
+
 
 class ESN_interface():
 
@@ -51,7 +75,8 @@ class ESN_interface():
             self.model_type == 'ESNc'):
             # !! another hyperparameter
             self.trainU = np.hstack((self.xHR_train[-self.history:-1,] ,
-                                self.xLR_train[-self.history+1:,] * self.control_amp))
+                                     self.xLR_train[-self.history+1:,]
+                                     * self.control_amp))
 
         elif (self.model_type == 'DMD' or
               self.model_type == 'ESN'):
@@ -181,10 +206,13 @@ class ESN_embedded(layers.Layer):
     """ to embed an ESN into a keras/torch implementation """
     """ dummy implementation at this point """
 
-    def __init__(self, esn_params, **kwargs):
+    def __init__(self, esn_params,
+                 total_num_samples, **kwargs):
         super(ESN_embedded, self).__init__(**kwargs)
         self.esn_params = esn_params
-        self.esn_initialized=False
+        self.total_num_samples = total_num_samples
+        self.populate_lookup = np.zeros((self.total_num_samples,1))
+        self.needs_initializing=True
         print('Initialized embedded ESN instance')
 
 
@@ -200,5 +228,34 @@ class ESN_embedded(layers.Layer):
         esn_params = keras.saving.deserialize_keras_object(esn_params_cfg)
         return cls(mask, **config)
 
-    def call(self, inputs):
+    def call(self, inputs, time):
+        try:
+            values = inputs.detach().numpy()
+        except TypeError as e:
+            return inputs
+
+        if self.needs_initializing:
+            self.initialize(values, time)
+
+        self.populate_storage(values, time)
+
         return inputs
+
+    def initialize(self, values, time):
+
+        self.T, self.enclat, self.enclon, self.filters = \
+            values.shape
+
+        self.N_feats = self.enclat * self.enclon * self.filters
+        self.storage = np.zeros((self.total_num_samples, self.N_feats))
+
+        self.needs_initializing = False
+
+    def populate_storage(self, values, time):
+        reshape_order = self.esn_params['external']['reshape_order']
+        time_indices = time.detach().numpy()[:,0,0,0].astype(int)
+        self.populate_lookup[time_indices,:] = 1
+        self.storage[time_indices, :] = \
+            values.reshape(self.T, -1, order=reshape_order)
+        
+        breakpoint()

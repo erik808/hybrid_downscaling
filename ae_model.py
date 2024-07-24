@@ -46,8 +46,9 @@ class AutoEncoder(keras_tuner.HyperModel):
                     use_dropout=False,
                     activation='relu',
                     optimizer='adam',
-                    verbosity=0,
+                    verbosity=20,
                     use_feedthrough=False,
+                    use_timeinput=True,
                     feedthrough_type='multiply'
                     ):
 
@@ -66,6 +67,10 @@ class AutoEncoder(keras_tuner.HyperModel):
         state_input = layers.Input(shape=(Nlat, Nlon, num_channels),
                                    name="full_state_input")
 
+        if use_timeinput:
+            time_input = layers.Input(shape=(1,1,1),
+                                      name="time_input")
+
         # Encoder ------------------------------------------------------
         x = layers.Conv2D(num_filters, kernel_size, strides = (2,2),
                           activation=activation,
@@ -83,13 +88,12 @@ class AutoEncoder(keras_tuner.HyperModel):
                            activation=activation,
                            padding="same")(x)
 
-        encoder = Model(state_input, encoded, name="encoder")
+        encoder = Model([state_input, time_input], encoded, name="encoder")
         if verbosity > 10:
             encoder.summary(60)
 
         if self.esn != None:
-            evolved = esn.evolve(encoded)
-            breakpoint()
+            encoded = self.esn(encoded, time_input)
 
         # Decoder ------------------------------------------------------
         y = layers.Conv2DTranspose(num_filters, kernel_size,
@@ -141,12 +145,12 @@ class AutoEncoder(keras_tuner.HyperModel):
                                    padding="same")(output)
 
             inputs_decoder=[encoded, feedthrough]
-            inputs_autoencoder=[state_input, feedthrough]
+            inputs_autoencoder=[state_input, time_input, feedthrough]
             outputs = [masking_layer(output)]
 
         else:
             inputs_decoder=[encoded]
-            inputs_autoencoder=[state_input]
+            inputs_autoencoder=[state_input, time_input]
             outputs = [masking_layer(cropped)]
 
         decoder = Model(inputs=inputs_decoder,

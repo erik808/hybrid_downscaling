@@ -20,6 +20,10 @@ import ae_model
 reload(ae_model)
 from ae_model import AutoEncoder
 
+import esn_interface
+reload(esn_interface)
+from esn_interface import ESN_embedded
+
 import plot_utils
 reload(plot_utils)
 from plot_utils import PlotMachine
@@ -34,7 +38,7 @@ if new_experiment:
     load_models_from_file=False
     experiment_id = datetime.now().strftime('%Y%m%d_%H%M%S')
     add_id = '_with_feedthrough'
-    
+
     # experiment_id = 'tuning'
     # add_id = ''
 else:
@@ -72,11 +76,9 @@ model_path_encoder = f'{models_dir}/encoder_res.keras'
 model_path_decoder = f'{models_dir}/decoder_res.keras'
 
 
-import esn_interface
-reload(esn_interface)
-from esn_interface import ESN_embedded
-
-esn = ESN_embedded()
+esn_params = esn_interface.hyperparams
+esn = ESN_embedded(esn_params=esn_params,
+                   total_num_samples=train_data.shape[0])
 
 ae = AutoEncoder(test_vec=train_data[0,:,:,:],
                  mask=mask,
@@ -86,13 +88,11 @@ ae = AutoEncoder(test_vec=train_data[0,:,:,:],
 autoencoder, encoder, decoder = ae.build_model(use_feedthrough=use_feedthrough,
                                                feedthrough_type='multiply')
 
-breakpoint()
-    
 if load_models_from_file:
     autoencoder = keras.models.load_model(model_path_autoencoder)
     encoder = keras.models.load_model(model_path_encoder)
     decoder = keras.models.load_model(model_path_decoder)
-    
+
 print('--------------------------------------')
 print(f'experiment: {experiment_id}{add_id}')
 print('--------------------------------------')
@@ -123,16 +123,21 @@ if training_mode == 'normal':
     shuffle = True
     tic = time.time()
 
+    # really necessary to expland to 4 dims?    
+    T_train = np.expand_dims(np.arange(train_data.shape[0]), axis=[1,2,3])
+    T_test = np.expand_dims(np.arange(train_data.shape[0],
+                                      train_data.shape[0] + test_data.shape[0]),
+                            axis=[1,2,3])
     if ae.use_feedthrough:
-        X_train = [train_data, train_data_ft]
-        X_test = [test_data, test_data_ft]
+        X_train = [train_data, T_train, train_data_ft]
+        X_test = [test_data, T_test, test_data_ft]
     else:
-        X_train = train_data
-        X_test = test_data
+        X_train = [train_data, T_train]
+        X_test = [test_data, T_train]
 
     Y_train = train_data
     Y_test = test_data
-    
+
     hist = autoencoder.fit(x=X_train,
                            y=Y_train,
                            epochs=epochs,

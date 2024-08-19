@@ -214,3 +214,22 @@ class AutoEncoder(keras_tuner.HyperModel):
             sys.stdout = f
             print(model.summary())
             sys.stdout = original
+
+
+class TriggerESN(keras.callbacks.Callback):
+    """Callback to control the ESN during training of the AE
+
+    This is very flexible but for now we just want to trigger training
+    at the beginning of an epoch and train every x epochs
+
+    """
+
+    def __init__(self, esn, train_every=1):
+        super().__init__()
+        self.esn = esn
+        self.train_every = train_every
+
+    def on_epoch_begin(self, epoch, logs=None):
+        if epoch == 0: return        
+        if not epoch % self.train_every:
+            self.esn.esn_ready_to_train[1] = True

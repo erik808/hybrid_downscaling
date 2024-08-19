@@ -19,6 +19,7 @@ reload(dm)
 import ae_model
 reload(ae_model)
 from ae_model import AutoEncoder
+from ae_model import TriggerESN
 
 import esn_interface
 reload(esn_interface)
@@ -58,8 +59,8 @@ log_file = files['log']
 data, params, scalers, _  = dm.create_training_data(False)
 
 # truncate
-# history = 1000
 history = data['train']['HR'].shape[0] # use all data
+history = 1000
 
 # input training data
 train_data_inp = data['train']['HR'][:-1,][-history:,]
@@ -68,9 +69,9 @@ train_data_otp = data['train']['HR'][1:,][-history:,]
 # feedthrough data
 train_data_ft = data['train']['LR'][1:,][-history:,]
 
-test_data     = data['test']['HR'][:500,]
-test_data_ft  = data['test']['LR'][:500,]
-test_time     = data['test']['time'][:500,]
+test_data     = data['test']['HR'][:200,]
+test_data_ft  = data['test']['LR'][:200,]
+test_time     = data['test']['time'][:200,]
 mask = params['mask']
 Nt = params['Nt']
 Nlon = params['Nlon']
@@ -109,12 +110,14 @@ print('--------------------------------------')
 if training_mode == 'normal':
     checkpoint_filepath = f'{checkpoints_dir}/checkpoint.model.keras'
 
+    # callback to create checkpoints
     mdl_callback = keras.callbacks.ModelCheckpoint(
         filepath=checkpoint_filepath,
         monitor='val_loss',
         mode='min',
         save_best_only=True)
 
+    # callback for extra output to tensorboard
     tb_callback = keras.callbacks.TensorBoard(
         log_dir=models_dir,
         histogram_freq=1,
@@ -126,6 +129,9 @@ if training_mode == 'normal':
         embeddings_freq=0,
         embeddings_metadata=None,
     )
+
+    # callback to trigger ESN training
+    esn_callback = TriggerESN(esn)
 
     epochs = 3
     batch_size = 4
@@ -152,7 +158,9 @@ if training_mode == 'normal':
                            validation_data=None, # validation does not
                                                  # work with embedded
                                                  # ESN
-                           callbacks=[mdl_callback, tb_callback]
+                           callbacks=[mdl_callback,
+                                      tb_callback,
+                                      esn_callback]
                            )
     toc = time.time()
     print(f'total training time: {(toc-tic)/60}m')
@@ -181,7 +189,7 @@ with open(mdata_file, 'wb') as file:
 
 if do_prediction:
     print('create predictions')
-    
+
     predictions = np.zeros_like(test_data)
     xk = np.expand_dims(train_data_otp[-1,:,:,:], axis=0)
     for i in range(T_test.shape[0]):
@@ -189,7 +197,7 @@ if do_prediction:
         Pxk = np.expand_dims(test_data_ft[i,:,:,:], axis=0)
         tid = np.expand_dims(T_test[i,:,:,:], axis=0)
         xk = autoencoder.predict([xk, tid, Pxk], verbose=0)
-        predictions[i,:,:,:] = xk    
+        predictions[i,:,:,:] = xk
 
     # Create dictionary for output visualization
     xr_HR_true_fun = lambda i : scalers['HR'].inverse_transform(test_data[i,:,:,:]\
@@ -245,6 +253,6 @@ if do_prediction:
                               movie_dir=movie_dir,
                               time_array=test_time)
 
-    plotmachine.plot_single_frame(500)
+    plotmachine.plot_single_frame(100)
     plotmachine.create_movie()
     plotmachine.plot_history(hist)

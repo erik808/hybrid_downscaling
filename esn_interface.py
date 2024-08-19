@@ -213,7 +213,9 @@ class ESN_embedded(layers.Layer):
         self.total_num_samples = total_num_samples
         self.populate_lookup = np.zeros((self.total_num_samples,1))
         self.needs_initializing = True
-        self.esn_ready_to_train = False
+        
+        # part is set here, part externally
+        self.esn_ready_to_train = [False, False]
         self.esn_trained = False
         self.last_sk = []
         print('Initialized embedded ESN instance')
@@ -242,7 +244,7 @@ class ESN_embedded(layers.Layer):
             
         self.populate_storage(values, timeid)
 
-        if self.esn_ready_to_train:
+        if np.all(self.esn_ready_to_train):
             self.train()
 
         elif self.esn_trained:
@@ -279,7 +281,7 @@ class ESN_embedded(layers.Layer):
 
         if np.all(self.populate_lookup):
             # we did the whole epoch, now we can train the ESN
-            self.esn_ready_to_train = True
+            self.esn_ready_to_train[0] = True
             # reset lookup table for filling the storage in the next
             # epoch
             self.populate_lookup = np.zeros((self.total_num_samples,1))
@@ -299,7 +301,8 @@ class ESN_embedded(layers.Layer):
 
         self.esn.train(trainU, trainY)
 
-        self.esn_ready_to_train = False
+        # reset this flag array
+        self.esn_ready_to_train = [False, False]
         self.esn_trained = True
 
         self.last_sk = self.esn.X[-1,:].copy()

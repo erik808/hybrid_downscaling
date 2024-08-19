@@ -205,7 +205,6 @@ class ESN_interface():
 @keras.saving.register_keras_serializable(name="ESN_embedded")
 class ESN_embedded(layers.Layer):
     """ to embed an ESN into a keras/torch implementation """
-    """ dummy implementation at this point """
 
     def __init__(self, esn_params,
                  total_num_samples, **kwargs):
@@ -218,20 +217,18 @@ class ESN_embedded(layers.Layer):
         self.esn_trained = False
         print('Initialized embedded ESN instance')
 
-
     def get_config(self):
         config = super(ESN_embedded, self).get_config()
         config.update({
             'esn_params' : keras.saving.serialize_keras_object(self.esn_params)})
         return config
 
+
     @classmethod
     def from_config(cls, config):
         esn_params_cfg = config.pop('esn_params')
         esn_params = keras.saving.deserialize_keras_object(esn_params_cfg)
         return cls(mask, **config)
-
-
 
     def call(self, inputs, time):
         try:
@@ -247,6 +244,7 @@ class ESN_embedded(layers.Layer):
 
         if self.esn_ready_to_train:
             self.train()
+
         elif self.esn_trained:
             # replace values in inputs with prediction outputs
             outputs = torch.tensor(self.predict(values, timeid))
@@ -311,7 +309,7 @@ class ESN_embedded(layers.Layer):
                                    .reshape(self.enclat,
                                             self.enclon,
                                             self.filters)
-            
+
         return outputs
 
     def step(self, values, timeid):
@@ -326,7 +324,7 @@ class ESN_embedded(layers.Layer):
         except Exception as e:
             print(e)
             breakpoint()
-            
+
         u_in  = values.reshape(-1,order=reshape_order)
 
         u_in  = np.expand_dims(u_in, axis=0)

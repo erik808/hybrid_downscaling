@@ -31,7 +31,7 @@ from plot_utils import PlotMachine
 # setup config
 new_experiment=True
 training_mode='normal'
-do_prediction = True
+do_prediction = False
 use_feedthrough = True
 
 if new_experiment:
@@ -56,12 +56,19 @@ checkpoints_dir = dirs['checkpoints']
 log_file = files['log']
 
 data, params, scalers, _  = dm.create_training_data(False)
-train_data    = data['train']['HR'][:1007,]
-train_data_ft = data['train']['LR'][:1007,]
-train_time    = data['train']['time'][:1007,]
-test_data     = data['test']['HR'][:1007,]
-test_data_ft  = data['test']['LR'][:1007,]
-test_time     = data['test']['time'][:1007,]
+
+# truncate
+trunc = 1000
+# input training data
+train_data_inp = data['train']['HR'][:-1,][:trunc,]
+# output training data
+train_data_otp = data['train']['HR'][1:,][:trunc,]
+# feedthrough data
+train_data_ft = data['train']['LR'][1:,][:trunc,]
+
+test_data     = data['test']['HR']
+test_data_ft  = data['test']['LR']
+test_time     = data['test']['time']
 mask = params['mask']
 Nt = params['Nt']
 Nlon = params['Nlon']
@@ -78,9 +85,9 @@ model_path_decoder = f'{models_dir}/decoder_res.keras'
 
 esn_params = esn_interface.hyperparams
 esn = ESN_embedded(esn_params=esn_params,
-                   total_num_samples=train_data.shape[0])
+                   total_num_samples=train_data_inp.shape[0])
 
-ae = AutoEncoder(test_vec=train_data[0,:,:,:],
+ae = AutoEncoder(test_vec=train_data_inp[0,:,:,:],
                  mask=mask,
                  log_file=log_file,
                  esn=esn)
@@ -118,32 +125,26 @@ if training_mode == 'normal':
         embeddings_metadata=None,
     )
 
-    epochs = 10
+    epochs = 3
     batch_size = 4
     shuffle = True
     tic = time.time()
 
-    # really necessary to expland to 4 dims?
-    T_train = np.expand_dims(np.arange(train_data.shape[0]), axis=[1,2,3])
-    T_test = np.expand_dims(np.arange(train_data.shape[0],
-                                      train_data.shape[0] + test_data.shape[0]),
-                            axis=[1,2,3])
+    # really necessary to expand to 4 dims?
+    T_train = np.expand_dims(np.arange(train_data_inp.shape[0]),
+                             axis=[1,2,3])
     if ae.use_feedthrough:
-        X_train = [train_data, T_train, train_data_ft]
-        X_test = [test_data, T_test, test_data_ft]
+        X_train = [train_data_inp, T_train, train_data_ft]
     else:
-        X_train = [train_data, T_train]
-        X_test = [test_data, T_train]
+        X_train = [train_data_inp, T_train]
 
-    Y_train = train_data
-    Y_test = test_data
+    Y_train = train_data_otp
 
     hist = autoencoder.fit(x=X_train,
                            y=Y_train,
                            epochs=epochs,
                            batch_size=batch_size,
                            shuffle=shuffle,
-                           # validation_data=(X_test, Y_test),
                            validation_data=None, # validation does not
                                                  # work with embedded
                                                  # ESN
@@ -157,37 +158,6 @@ if training_mode == 'normal':
     encoder.save(model_path_encoder)
     decoder.save(model_path_decoder)
 
-elif training_mode == 'tuning':
-    do_prediction = False
-    ae_tuning = AutoEncoder(test_vec=train_data[0,:,:,:],
-                            mask=mask, log_file=log_file)
-    epochs = 2
-    batch_size = 2
-    shuffle = True
-
-    tuner = keras_tuner.Hyperband(
-        hypermodel=AutoEncoder(test_vec=train_data[0,:,:,:],
-                               mask=mask, log_file=log_file),
-        objective="val_loss",
-#        max_trials=200,
-        max_epochs=200,
-#        executions_per_trial=2,
-#        epochs=2,
-        overwrite=True,
-        directory=tuning_dir,
-        project_name="ae_tuning",
-    )
-
-    tuner.search_space_summary()
-
-    hist = tuner.search(train_data,
-                        train_data,
-                        epochs=epochs,
-                        #batch_size=batch_size,
-                        shuffle=shuffle,
-                        validation_data=(test_data, test_data))
-
-    tuner.results_summary()
 else:
     print('-- Skipping training --')
     pass
@@ -209,7 +179,7 @@ if do_prediction:
 
     print('create predictions')
     predictions = autoencoder.predict(X_test)
-    encoded_xr_HR_true = encoder.predict(train_data)
+    encoded_xr_HR_true = encoder.predict(test_data)
 
     # Create dictionary for output visualization
     xr_HR_true_fun = lambda i : scalers['HR'].inverse_transform(test_data[i,:,:,:]\

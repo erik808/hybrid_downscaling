@@ -31,7 +31,7 @@ from plot_utils import PlotMachine
 # setup config
 new_experiment=True
 training_mode='normal'
-do_prediction = False
+do_prediction = True
 use_feedthrough = True
 
 if new_experiment:
@@ -58,17 +58,19 @@ log_file = files['log']
 data, params, scalers, _  = dm.create_training_data(False)
 
 # truncate
-trunc = 1000
-# input training data
-train_data_inp = data['train']['HR'][:-1,][:trunc,]
-# output training data
-train_data_otp = data['train']['HR'][1:,][:trunc,]
-# feedthrough data
-train_data_ft = data['train']['LR'][1:,][:trunc,]
+# history = 1000
+history = data['train']['HR'].shape[0] # use all data
 
-test_data     = data['test']['HR']
-test_data_ft  = data['test']['LR']
-test_time     = data['test']['time']
+# input training data
+train_data_inp = data['train']['HR'][:-1,][-history:,]
+# output training data
+train_data_otp = data['train']['HR'][1:,][-history:,]
+# feedthrough data
+train_data_ft = data['train']['LR'][1:,][-history:,]
+
+test_data     = data['test']['HR'][:500,]
+test_data_ft  = data['test']['LR'][:500,]
+test_time     = data['test']['time'][:500,]
 mask = params['mask']
 Nt = params['Nt']
 Nlon = params['Nlon']
@@ -131,8 +133,10 @@ if training_mode == 'normal':
     tic = time.time()
 
     # really necessary to expand to 4 dims?
-    T_train = np.expand_dims(np.arange(train_data_inp.shape[0]),
-                             axis=[1,2,3])
+    T_train = np.expand_dims(np.arange(train_data_inp.shape[0]), axis=[1,2,3])
+    T_test = np.expand_dims(np.arange(train_data_inp.shape[0],
+                                      train_data_inp.shape[0] + test_data.shape[0]),
+                            axis=[1,2,3])
     if ae.use_feedthrough:
         X_train = [train_data_inp, T_train, train_data_ft]
     else:
@@ -176,10 +180,16 @@ with open(mdata_file, 'wb') as file:
     dill.dump(container, file)
 
 if do_prediction:
-
     print('create predictions')
-    predictions = autoencoder.predict(X_test)
-    encoded_xr_HR_true = encoder.predict(test_data)
+    
+    predictions = np.zeros_like(test_data)
+    xk = np.expand_dims(train_data_otp[-1,:,:,:], axis=0)
+    for i in range(T_test.shape[0]):
+        print(f'{i} / {T_test.shape[0]}')
+        Pxk = np.expand_dims(test_data_ft[i,:,:,:], axis=0)
+        tid = np.expand_dims(T_test[i,:,:,:], axis=0)
+        xk = autoencoder.predict([xk, tid, Pxk], verbose=0)
+        predictions[i,:,:,:] = xk    
 
     # Create dictionary for output visualization
     xr_HR_true_fun = lambda i : scalers['HR'].inverse_transform(test_data[i,:,:,:]\
@@ -202,10 +212,6 @@ if do_prediction:
     Rs_true_fun = lambda i : test_data[i,:,:,0] - test_data_ft[i,:,:,0]
     Rs_pred_fun = lambda i : predictions[i,:,:,0] - test_data_ft[i,:,:,0]
     Rs_diff_fun = lambda i : Rs_true_fun(i) - Rs_pred_fun(i)
-
-    enc_xr_HR_k_fun = lambda i,k : (encoded_xr_HR_true[i,:,:,k])
-    enc_vmax = lambda i : np.max(encoded_xr_HR_true[:,:,:,i])
-    enc_vmin = lambda i : np.min(encoded_xr_HR_true[:,:,:,i])
 
     output_dict = {'Kt_HR true' : {'values' : Kt_HR_true_fun,
                                    'vmin' : 0,
@@ -232,19 +238,6 @@ if do_prediction:
                                 'vmin' : -0.05,
                                 'vmax' : 0.05,
                                 'cmap' : 'RdBu'},
-
-                   'enc xr_HR ch:0' : {'values' : lambda i : enc_xr_HR_k_fun(i,0),
-                                       'vmin' : enc_vmin(0),
-                                       'vmax' : enc_vmax(0),
-                                       'cmap' : 'viridis'},
-                   'enc xr_HR ch:1' : {'values' : lambda i : enc_xr_HR_k_fun(i,1),
-                                       'vmin' : enc_vmin(1),
-                                       'vmax' : enc_vmax(1),
-                                       'cmap' : 'viridis'},
-                   'enc xr_HR ch:2' : {'values' : lambda i : enc_xr_HR_k_fun(i,2),
-                                       'vmin' : enc_vmin(2),
-                                       'vmax' : enc_vmax(2),
-                                       'cmap' : 'viridis'},
                    }
 
     plotmachine = PlotMachine(output_dict=output_dict,
@@ -252,6 +245,6 @@ if do_prediction:
                               movie_dir=movie_dir,
                               time_array=test_time)
 
-    plotmachine.plot_single_frame(100)
+    plotmachine.plot_single_frame(500)
     plotmachine.create_movie()
     plotmachine.plot_history(hist)

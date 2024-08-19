@@ -13,7 +13,7 @@ hyperparams = { 'external' : {'model_type'      : 'ESNc',
                               'decode_pred'     : True,
                               'control_amp'     : 1 },
 
-                'internal' : { 'Nr'                 : 5000,
+                'internal' : { 'Nr'                 : 1000,
                                'scalingType'        : 'none',
                                'rhoMax'             : 1.2,
                                'alpha'              : 0.7,
@@ -215,6 +215,7 @@ class ESN_embedded(layers.Layer):
         self.needs_initializing = True
         self.esn_ready_to_train = False
         self.esn_trained = False
+        self.last_sk = []
         print('Initialized embedded ESN instance')
 
     def get_config(self):
@@ -222,7 +223,6 @@ class ESN_embedded(layers.Layer):
         config.update({
             'esn_params' : keras.saving.serialize_keras_object(self.esn_params)})
         return config
-
 
     @classmethod
     def from_config(cls, config):
@@ -239,7 +239,7 @@ class ESN_embedded(layers.Layer):
 
         if self.needs_initializing:
             self.initialize(values)
-
+            
         self.populate_storage(values, timeid)
 
         if self.esn_ready_to_train:
@@ -251,7 +251,6 @@ class ESN_embedded(layers.Layer):
             inputs = ops.where(outputs != 0, outputs, inputs)
 
         return inputs
-
 
     def initialize(self, values):
 
@@ -269,10 +268,14 @@ class ESN_embedded(layers.Layer):
         T, _, _, _ = \
             values.shape
 
+        # not going to populate storage if timeid beyond range
+        if np.any(timeid >= self.storage.shape[0]):            
+            return
+
         if not np.all(self.populate_lookup[timeid,:]):
             self.populate_lookup[timeid,:] = 1
             self.storage[timeid, :] = \
-                values.reshape(T, -1, order=reshape_order)
+                values.reshape(T, -1, order=reshape_order)            
 
         if np.all(self.populate_lookup):
             # we did the whole epoch, now we can train the ESN
@@ -290,7 +293,7 @@ class ESN_embedded(layers.Layer):
         self.esn.setPars(self.esn_params['internal'])
         self.esn.initialize()
 
-        # factorize with rest of ESN interface
+        # FIXME factorize with rest of ESN interface
         trainU = self.storage[:-1,]
         trainY = self.storage[1:,]
 
@@ -298,6 +301,8 @@ class ESN_embedded(layers.Layer):
 
         self.esn_ready_to_train = False
         self.esn_trained = True
+
+        self.last_sk = self.esn.X[-1,:].copy()
 
     def predict(self, values, timeid):
 
@@ -309,29 +314,31 @@ class ESN_embedded(layers.Layer):
                                    .reshape(self.enclat,
                                             self.enclon,
                                             self.filters)
-
         return outputs
 
     def step(self, values, timeid):
         reshape_order = self.esn_params['external']['reshape_order']
 
-        # factorize with rest of ESN interface
-
-        # not sure if this should be shifted or not
+        # TODO factorize with rest of ESN interface
         timeid = np.max([1,timeid])
-        try:
-            sk    = self.esn.X[timeid-1,:]
-        except Exception as e:
-            print(e)
+
+        # get the correct esn state:
+        Nt, Nr = self.esn.X.shape        
+        if np.any(Nt > timeid-1):
+            sk = self.esn.X[timeid-1,:]
+        elif len(self.last_sk) > 0:
+            sk = self.last_sk
+        else:
             breakpoint()
+            raise Exception('something is wrong with the ESN states')
 
         u_in  = values.reshape(-1,order=reshape_order)
-
         u_in  = np.expand_dims(u_in, axis=0)
         u_in  = self.esn.scaleInput(u_in)
         sk    = self.esn.update(sk, u_in)
         u_out = self.esn.apply(sk, u_in)
         u_out = np.expand_dims(u_out, axis=0)
         yk    = self.esn.unscaleOutput(u_out).squeeze()
+        self.last_sk = sk
 
         return yk

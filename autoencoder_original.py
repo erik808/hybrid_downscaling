@@ -45,7 +45,7 @@ if new_experiment:
 else:
     load_models_from_file=True
     add_id = ''
-    experiment_id = '20240718_153705_optimized'
+    experiment_id = '20240820_160543_with_feedthrough'
 
 dirs, files = dm.setup_directories(experiment_id, add_id)
 
@@ -60,7 +60,8 @@ data, params, scalers, _  = dm.create_training_data(False)
 
 # truncate
 history = data['train']['HR'].shape[0] # use all data
-history = 1000
+history = 10000
+future = 200
 
 # input training data
 train_data_inp = data['train']['HR'][:-1,][-history:,]
@@ -69,9 +70,9 @@ train_data_otp = data['train']['HR'][1:,][-history:,]
 # feedthrough data
 train_data_ft = data['train']['LR'][1:,][-history:,]
 
-test_data     = data['test']['HR'][:200,]
-test_data_ft  = data['test']['LR'][:200,]
-test_time     = data['test']['time'][:200,]
+test_data     = data['test']['HR'][:future,]
+test_data_ft  = data['test']['LR'][:future,]
+test_time     = data['test']['time'][:future,]
 mask = params['mask']
 Nt = params['Nt']
 Nlon = params['Nlon']
@@ -131,9 +132,9 @@ if training_mode == 'normal':
     )
 
     # callback to trigger ESN training
-    esn_callback = TriggerESN(esn)
+    esn_callback = TriggerESN(esn, train_every=4)
 
-    epochs = 3
+    epochs = 20
     batch_size = 4
     shuffle = True
     tic = time.time()
@@ -204,14 +205,24 @@ if do_prediction:
                                                                 .reshape(1,-1))\
                                              .reshape(Nlat, Nlon, num_channels)
 
-    # total kinetic energy
+    # instant kinetic energy
     Kt_HR_true_fun = lambda i : np.sqrt(np.square(xr_HR_true_fun(i)).sum(axis=2))
 
     xr_HR_pred_fun = lambda i : scalers['HR'].inverse_transform(predictions[i,:,:,:]\
                                                                 .reshape(1,-1))\
                                              .reshape(Nlat, Nlon, num_channels)
 
+    # instant kinetic energy
     Kt_HR_pred_fun = lambda i : np.sqrt(np.square(xr_HR_pred_fun(i)).sum(axis=2))
+
+    # Create dictionary for output visualization
+    xr_LR_true_fun = lambda i : scalers['HR'].inverse_transform(test_data_ft[i,:,:,:]\
+                                                                .reshape(1,-1))\
+                                             .reshape(Nlat, Nlon, num_channels)
+
+    # instant kinetic energy
+    Kt_LR_true_fun = lambda i : np.sqrt(np.square(xr_LR_true_fun(i)).sum(axis=2))
+
 
     xr_HR_diff_fun = lambda i : xr_HR_true_fun(i) - xr_HR_pred_fun(i)
 
@@ -225,34 +236,46 @@ if do_prediction:
                                    'vmin' : 0,
                                    'vmax' : .8,
                                    'cmap' : 'viridis'},
+                   
                    'Kt_HR pred' : {'values' : Kt_HR_pred_fun,
                                    'vmin' : 0,
                                    'vmax' : .8,
                                    'cmap' : 'viridis'},
+
+                   'Kt_LR true' : {'values' : Kt_LR_true_fun,
+                                   'vmin' : 0,
+                                   'vmax' : .8,
+                                   'cmap' : 'viridis'},
+                   
                    'Kt_HR diff' : {'values' : Kt_HR_diff_fun,
-                                   'vmin' : -0.1,
-                                   'vmax' : 0.1,
+                                   'vmin' : -0.2,
+                                   'vmax' : 0.2,
                                    'cmap' : 'RdBu'},
 
                    'res true' : {'values' : Rs_true_fun,
-                                 'vmin' : -0.1,
-                                 'vmax' : 0.1,
+                                 'vmin' : -0.2,
+                                 'vmax' : 0.2,
                                  'cmap' : 'RdBu'},
                    'res pred' : {'values' : Rs_pred_fun,
-                                 'vmin' : -0.1,
-                                 'vmax' : 0.1,
+                                 'vmin' : -0.2,
+                                 'vmax' : 0.2,
                                  'cmap' : 'RdBu'},
-                   'res dif' : {'values' : Rs_diff_fun,
-                                'vmin' : -0.05,
-                                'vmax' : 0.05,
-                                'cmap' : 'RdBu'},
+                   # 'res dif' : {'values' : Rs_diff_fun,
+                   #              'vmin' : -0.05,
+                   #              'vmax' : 0.05,
+                   #              'cmap' : 'RdBu'},
                    }
+
+    import plot_utils
+    reload(plot_utils)
+    from plot_utils import PlotMachine
 
     plotmachine = PlotMachine(output_dict=output_dict,
                               results_dir=results_dir,
                               movie_dir=movie_dir,
                               time_array=test_time)
 
+    plotmachine.plot_prediction_error(test_data, predictions, test_data_ft)
     plotmachine.plot_single_frame(100)
     plotmachine.create_movie()
     plotmachine.plot_history(hist)

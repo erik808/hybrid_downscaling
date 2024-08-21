@@ -30,7 +30,8 @@ class PlotMachine():
         fig = plt.figure(figsize=self.figsize)
         timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
         with Pool(self.pool_size) as p:
-            p.map(self.plot_frame, range(0,len(self.time_array), self.frame_stride))
+            p.map(self.plot_frame, range(0,len(self.time_array),
+                                         self.frame_stride))
 
         movie_name = f'movie_{timestamp}.mov'
         framerate = 24
@@ -44,14 +45,16 @@ class PlotMachine():
         sys_cmd = ( f"rm {self.movie_dir}/frame-*.png")
         print(sys_cmd)
         os.system(sys_cmd)
-        
-    def plot_frame(self, id, fig_name=None):        
+
+    def plot_frame(self, id, fig_name=None):
         plt.clf()
         if fig_name == None:
             fig_name = f'{self.movie_dir}/frame-{id:06d}.png'
 
+        dim = int(np.ceil(np.sqrt(len(self.output_dict))))
         for f, (key, item) in enumerate(self.output_dict.items()):
-            plt.subplot(3,3,f+1)
+
+            plt.subplot(dim,dim,f+1)
             h = plt.imshow(item['values'](id),
                            cmap=item['cmap'],
                            vmin=item['vmin'],
@@ -62,18 +65,39 @@ class PlotMachine():
 
         plt.suptitle(f"date: {np.datetime64(self.time_array[id], 'h')}")
         # print(fig_name)
-        plt.savefig(fig_name)    
-    
+        plt.savefig(fig_name)
+
 
     def plot_history(self, hist):
         timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
         fig_name = f'{self.results_dir}/history_{timestamp}.png'
         plt.close('all')
-        plt.semilogy(hist.history['loss'],'.-', label='loss')
-        plt.semilogy(hist.history['val_loss'],'.-', label='validation loss')
+        plt.semilogy(hist.history['loss'],'.-',
+                     label='loss')
+
+        if 'val_loss' in hist.history:
+            plt.semilogy(hist.history['val_loss'],'.-',
+                         label='validation loss')
         plt.grid()
         plt.legend()
         plt.gca().set_xlabel('epoch')
+        print(fig_name)
+        plt.tight_layout()
+        plt.savefig(fig_name)
+
+    def plot_prediction_error(self, X, Y, Z):
+        timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
+        fig_name = f'{self.results_dir}/errors_{timestamp}.png'
+
+        RSE_Y = np.sqrt(np.sum(np.square(X-Y),axis=(1,2,3)))
+        RSE_Z = np.sqrt(np.sum(np.square(X-Z),axis=(1,2,3)))
+
+        plt.close('all')
+        plt.plot(RSE_Y, label='RSE_Y')
+        plt.plot(RSE_Z, label='RSE_Z')
+        plt.grid()
+        plt.legend()
+        plt.gca().set_xlabel('time step')
         print(fig_name)
         plt.tight_layout()
         plt.savefig(fig_name)

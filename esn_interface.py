@@ -13,7 +13,7 @@ hyperparams = { 'external' : {'model_type'      : 'ESNc',
                               'decode_pred'     : True,
                               'control_amp'     : 1 },
 
-                'internal' : { 'Nr'                 : 1000,
+                'internal' : { 'Nr'                 : 5000,
                                'scalingType'        : 'none',
                                'rhoMax'             : 1.2,
                                'alpha'              : 0.7,

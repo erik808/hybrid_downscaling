@@ -232,12 +232,15 @@ class ESN_embedded(layers.Layer):
         esn_params = keras.saving.deserialize_keras_object(esn_params_cfg)
         return cls(mask, **config)
 
-    def call(self, inputs, time):
+    def call(self, inputs, time, control_ft):
         try:
             values = inputs.detach().numpy()
             timeid = time.detach().numpy()[:,0,0,0].astype(int)
+            control = control_ft.detach().numpy()
         except TypeError as e:
             return inputs
+
+        breakpoint()
 
         if self.needs_initializing:
             self.initialize(values)

@@ -71,29 +71,51 @@ class AutoEncoder(keras_tuner.HyperModel):
             time_input = layers.Input(shape=(1,1,1),
                                       name="time_input")
 
+        if use_feedthrough:
+            feedthrough = layers.Input(shape=(Nlat, Nlon, num_channels),
+                                       name="feedthrough_input")            
+
         # Encoder ------------------------------------------------------
-        x = layers.Conv2D(num_filters, kernel_size, strides = (2,2),
-                          activation=activation,
-                          padding="same")(state_input)
+        conv_layer_1 = layers.Conv2D(num_filters, kernel_size,
+                                     strides = (2,2),
+                                     activation=activation,
+                                     padding="same", name="conv_layer_1")
+        conv_layer_2 = layers.Conv2D(num_filters, kernel_size,
+                                     strides = (2,2),
+                                     activation=activation,
+                                     padding="same", name="conv_layer_2")
 
+        conv_layer_3 = layers.Conv2D(num_filters_red, kernel_size,
+                                     strides = (2,2),
+                                     activation=activation,
+                                     padding="same")
+        
+        dropout_layer = layers.Dropout(self.dropout_rate)
+        
+
+        x = conv_layer_1(state_input)
         if conv_arch == '7_conv_layers':
-            x = layers.Conv2D(num_filters, kernel_size, strides = (2,2),
-                              activation=activation,
-                              padding="same")(x)
-
+            x = conv_layer_2(x)
         if use_dropout:
-            x = layers.Dropout(self.dropout_rate)(x)
-
-        encoded = layers.Conv2D(num_filters_red, kernel_size, strides = (2,2),
-                           activation=activation,
-                           padding="same")(x)
+            x = dropout_layer(x)
+        encoded = conv_layer_3(x)
 
         encoder = Model([state_input, time_input], encoded, name="encoder")
+        
         if verbosity > 10:
             encoder.summary(60)
 
+        # Call ESN layer in the laten space
         if self.esn != None:
-            encoded = self.esn(encoded, time_input)
+            
+            c = conv_layer_1(feedthrough)
+            if conv_arch == '7_conv_layers':
+                c = conv_layer_2(c)
+            if use_dropout:
+                c = dropout_layer(c)
+            control = conv_layer_3(c)
+            
+            encoded = self.esn(encoded, time_input, control)
 
         # Decoder ------------------------------------------------------
         y = layers.Conv2DTranspose(num_filters, kernel_size,
@@ -126,9 +148,6 @@ class AutoEncoder(keras_tuner.HyperModel):
             raise Exception(f'invalid conv_arch {conv_arch}')
 
         if use_feedthrough:
-            feedthrough = layers.Input(shape=(Nlat, Nlon, num_channels),
-                                       name="feedthrough_input")
-
             z = layers.Conv2D(num_filters, kernel_size,
                               strides = (1,1),
                               activation=activation,
@@ -230,6 +249,6 @@ class TriggerESN(keras.callbacks.Callback):
         self.train_every = train_every
 
     def on_epoch_begin(self, epoch, logs=None):
-        if epoch == 0: return        
+        if epoch == 0: return
         if not epoch % self.train_every:
             self.esn.esn_ready_to_train[1] = True

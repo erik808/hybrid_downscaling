@@ -34,18 +34,18 @@ new_experiment=True
 training_mode='normal'
 do_prediction = True
 use_feedthrough = True
+feedthrough_only = True
 
 if new_experiment:
     load_models_from_file=False
     experiment_id = datetime.now().strftime('%Y%m%d_%H%M%S')
-    add_id = '_with_feedthrough'
-
+    add_id = '_feedthrough_only'
     # experiment_id = 'tuning'
     # add_id = ''
 else:
     load_models_from_file=True
     add_id = ''
-    experiment_id = '20240820_160543_with_feedthrough'
+    experiment_id = '20240822_161620_embedded_ESN'
 
 dirs, files = dm.setup_directories(experiment_id, add_id)
 
@@ -60,14 +60,14 @@ data, params, scalers, _  = dm.create_training_data(False)
 
 # truncate
 history = data['train']['HR'].shape[0] # use all data
-history = 10000
-future = 200
+# history = 3000
+future = 1000
 
 # input training data
 train_data_inp = data['train']['HR'][:-1,][-history:,]
-# output training data
+# output training data, shifted by 1
 train_data_otp = data['train']['HR'][1:,][-history:,]
-# feedthrough data
+# feedthrough data, shifted by 1
 train_data_ft = data['train']['LR'][1:,][-history:,]
 
 test_data     = data['test']['HR'][:future,]
@@ -86,21 +86,23 @@ model_path_autoencoder = f'{models_dir}/autoencoder_res.keras'
 model_path_encoder = f'{models_dir}/encoder_res.keras'
 model_path_decoder = f'{models_dir}/decoder_res.keras'
 
-
 esn_params = esn_interface.hyperparams
-esn = ESN_embedded(esn_params=esn_params,
-                   total_num_samples=train_data_inp.shape[0])
+esn = ESN_embedded(esn_params=esn_params)
 
 ae = AutoEncoder(test_vec=train_data_inp[0,:,:,:],
                  mask=mask,
                  log_file=log_file,
                  esn=esn)
 
-autoencoder, encoder, decoder = ae.build_model(use_feedthrough=use_feedthrough,
-                                               feedthrough_type='multiply')
+autoencoder, encoder, decoder = \
+    ae.build_model(use_feedthrough=use_feedthrough,
+                   feedthrough_only=feedthrough_only,
+                   feedthrough_type='multiply')
 
 if load_models_from_file:
     autoencoder = keras.models.load_model(model_path_autoencoder)
+    esn = autoencoder.get_layer('esn_embedded')
+    esn.esn_params = esn_params
     encoder = keras.models.load_model(model_path_encoder)
     decoder = keras.models.load_model(model_path_decoder)
 
@@ -131,11 +133,9 @@ if training_mode == 'normal':
         embeddings_metadata=None,
     )
 
-    # callback to trigger ESN training
-    esn_callback = TriggerESN(esn, train_every=4)
-
+    # callback to trigger ESN training    
     epochs = 20
-    batch_size = 4
+    batch_size = 2
     shuffle = True
     tic = time.time()
 
@@ -144,13 +144,20 @@ if training_mode == 'normal':
     T_test = np.expand_dims(np.arange(train_data_inp.shape[0],
                                       train_data_inp.shape[0] + test_data.shape[0]),
                             axis=[1,2,3])
-    if ae.use_feedthrough:
+
+    if feedthrough_only:
+        X_train = [train_data_ft]
+    elif use_feedthrough:
         X_train = [train_data_inp, T_train, train_data_ft]
     else:
         X_train = [train_data_inp, T_train]
 
     Y_train = train_data_otp
 
+    esn_callback = TriggerESN(esn,
+                              train_in_epochs=[1],
+                              num_samples=X_train[0].shape[0])
+    
     hist = autoencoder.fit(x=X_train,
                            y=Y_train,
                            epochs=epochs,
@@ -159,9 +166,7 @@ if training_mode == 'normal':
                            validation_data=None, # validation does not
                                                  # work with embedded
                                                  # ESN
-                           callbacks=[mdl_callback,
-                                      tb_callback,
-                                      esn_callback]
+                           callbacks=[esn_callback]
                            )
     toc = time.time()
     print(f'total training time: {(toc-tic)/60}m')
@@ -197,7 +202,13 @@ if do_prediction:
         print(f'{i} / {T_test.shape[0]}')
         Pxk = np.expand_dims(test_data_ft[i,:,:,:], axis=0)
         tid = np.expand_dims(T_test[i,:,:,:], axis=0)
-        xk = autoencoder.predict([xk, tid, Pxk], verbose=0)
+        if feedthrough_only:
+            xk = autoencoder.predict([Pxk], verbose=0)
+        elif use_feedthrough:
+            xk = autoencoder.predict([xk, tid, Pxk], verbose=0)
+        else:
+            xk = autoencoder.predict([xk, tid], verbose=0)
+            
         predictions[i,:,:,:] = xk
 
     # Create dictionary for output visualization
@@ -236,7 +247,7 @@ if do_prediction:
                                    'vmin' : 0,
                                    'vmax' : .8,
                                    'cmap' : 'viridis'},
-                   
+
                    'Kt_HR pred' : {'values' : Kt_HR_pred_fun,
                                    'vmin' : 0,
                                    'vmax' : .8,
@@ -246,7 +257,7 @@ if do_prediction:
                                    'vmin' : 0,
                                    'vmax' : .8,
                                    'cmap' : 'viridis'},
-                   
+
                    'Kt_HR diff' : {'values' : Kt_HR_diff_fun,
                                    'vmin' : -0.2,
                                    'vmax' : 0.2,

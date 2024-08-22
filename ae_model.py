@@ -1,4 +1,5 @@
 import sys
+import numpy as np
 
 import keras
 import keras_tuner
@@ -48,12 +49,17 @@ class AutoEncoder(keras_tuner.HyperModel):
                     optimizer='adam',
                     verbosity=20,
                     use_feedthrough=False,
+                    feedthrough_only=False,
                     use_timeinput=True,
                     feedthrough_type='multiply'
                     ):
 
         self.use_feedthrough = use_feedthrough
+        self.feedthrough_only = feedthrough_only
         self.feedthrough_type = feedthrough_type
+        if self.feedthrough_only: self.use_feedthrough = True
+
+        self.use_timeinput = use_timeinput
         self.use_dropout = use_dropout
 
         Nlat, Nlon, num_channels = self.test_vec.shape
@@ -67,13 +73,13 @@ class AutoEncoder(keras_tuner.HyperModel):
         state_input = layers.Input(shape=(Nlat, Nlon, num_channels),
                                    name="full_state_input")
 
-        if use_timeinput:
+        if self.use_timeinput:
             time_input = layers.Input(shape=(1,1,1),
                                       name="time_input")
 
-        if use_feedthrough:
+        if self.use_feedthrough:
             feedthrough = layers.Input(shape=(Nlat, Nlon, num_channels),
-                                       name="feedthrough_input")            
+                                       name="feedthrough_input")
 
         # Encoder ------------------------------------------------------
         conv_layer_1 = layers.Conv2D(num_filters, kernel_size,
@@ -88,10 +94,9 @@ class AutoEncoder(keras_tuner.HyperModel):
         conv_layer_3 = layers.Conv2D(num_filters_red, kernel_size,
                                      strides = (2,2),
                                      activation=activation,
-                                     padding="same")
-        
-        dropout_layer = layers.Dropout(self.dropout_rate)
-        
+                                     padding="same", name="conv_layer_3")
+
+        dropout_layer = layers.Dropout(self.dropout_rate, name="dropout")
 
         x = conv_layer_1(state_input)
         if conv_arch == '7_conv_layers':
@@ -101,20 +106,21 @@ class AutoEncoder(keras_tuner.HyperModel):
         encoded = conv_layer_3(x)
 
         encoder = Model([state_input, time_input], encoded, name="encoder")
-        
+
         if verbosity > 10:
             encoder.summary(60)
 
-        # Call ESN layer in the laten space
-        if self.esn != None:
-            
+        # Call ESN layer in the latent space
+        if (self.esn != None and
+            self.use_feedthrough):
+
             c = conv_layer_1(feedthrough)
             if conv_arch == '7_conv_layers':
                 c = conv_layer_2(c)
             if use_dropout:
                 c = dropout_layer(c)
             control = conv_layer_3(c)
-            
+
             encoded = self.esn(encoded, time_input, control)
 
         # Decoder ------------------------------------------------------
@@ -122,20 +128,22 @@ class AutoEncoder(keras_tuner.HyperModel):
                                    strides=(2,2),
                                    activation=activation,
                                    padding="same")(encoded)
+
         if conv_arch == '7_conv_layers':
             y = layers.Conv2DTranspose(num_filters, kernel_size,
                                        strides=(2,2), activation=activation,
                                        padding="same")(y)
-
         if use_dropout:
             y = layers.Dropout(self.dropout_rate)(y)
 
         y = layers.Conv2DTranspose(num_filters, kernel_size,
-                                   strides=(2,2), activation=activation,
-                                    padding="same")(y)
+                                   strides=(2,2),
+                                   activation=activation,
+                                   padding="same")(y)
 
-        if not use_feedthrough:
-            y = layers.Conv2D(num_channels, kernel_size, activation="sigmoid",
+        if not self.use_feedthrough:
+            y = layers.Conv2D(num_channels, kernel_size,
+                              activation="sigmoid",
                               padding="same")(y)
 
         # Crop the decoded output
@@ -147,7 +155,21 @@ class AutoEncoder(keras_tuner.HyperModel):
         else:
             raise Exception(f'invalid conv_arch {conv_arch}')
 
-        if use_feedthrough:
+        if self.feedthrough_only:
+            output = layers.Conv2D(num_filters, kernel_size,
+                                   strides = (1,1),
+                                   activation=activation,
+                                   padding="same")(feedthrough)
+
+            output = layers.Conv2D(num_channels, kernel_size,
+                                   activation="sigmoid",
+                                   padding="same")(output)
+
+            inputs_decoder=[feedthrough]
+            inputs_autoencoder=[feedthrough]
+            outputs = [masking_layer(output)]
+
+        elif self.use_feedthrough:
             z = layers.Conv2D(num_filters, kernel_size,
                               strides = (1,1),
                               activation=activation,
@@ -166,7 +188,6 @@ class AutoEncoder(keras_tuner.HyperModel):
             inputs_decoder=[encoded, feedthrough]
             inputs_autoencoder=[state_input, time_input, feedthrough]
             outputs = [masking_layer(output)]
-
         else:
             inputs_decoder=[encoded]
             inputs_autoencoder=[state_input, time_input]
@@ -241,14 +262,30 @@ class TriggerESN(keras.callbacks.Callback):
     This is very flexible but for now we just want to trigger training
     at the beginning of an epoch and train every x epochs
 
+    Either select a stride <train_every> or train in selected epochs
+    <train_in_epochs>.
+
     """
 
-    def __init__(self, esn, train_every=1):
+    def __init__(self, esn, train_every=1,
+                 train_in_epochs=[],
+                 num_samples=0):
         super().__init__()
         self.esn = esn
         self.train_every = train_every
+        self.train_in_epochs = train_in_epochs
+        self.num_samples = num_samples
 
     def on_epoch_begin(self, epoch, logs=None):
+
+        # synchronize the size of the training data between AE and ESN
+        self.esn.num_samples = self.num_samples
+
+        # the first epoch is used to populate the storage in the ESN
         if epoch == 0: return
-        if not epoch % self.train_every:
+
+        if len(self.train_in_epochs) > 0:
+            if epoch in self.train_in_epochs:
+                self.esn.esn_ready_to_train[1] = True
+        elif not epoch % self.train_every:
             self.esn.esn_ready_to_train[1] = True

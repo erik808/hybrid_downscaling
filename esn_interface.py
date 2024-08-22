@@ -11,12 +11,13 @@ hyperparams = { 'external' : {'model_type'      : 'ESNc',
                               'test_length'     : 4*24*10,
                               'reshape_order'   : 'C',
                               'decode_pred'     : True,
+                              'bypass_mode'     : True,
                               'control_amp'     : 1 },
 
-                'internal' : { 'Nr'                 : 5000,
+                'internal' : { 'Nr'                 : 1000,
                                'scalingType'        : 'none',
                                'rhoMax'             : 1.2,
-                               'alpha'              : 0.7,
+                               'alpha'              : 0.5,
                                'avgDegree'          : 100,
                                'entriesPerRow'      : 100,
                                'noiseAmplitude'     : 0.1,
@@ -26,7 +27,6 @@ hyperparams = { 'external' : {'model_type'      : 'ESNc',
                                'inputMatrixType'    : 'balancedSparse',
                                'fCutoff'            : 0.0,
                                'Wconstruction'      : 'avgDegree'} }
-
 
 class ESN_interface():
 
@@ -202,35 +202,37 @@ class ESN_interface():
 
         return xk, sk, yk
 
-@keras.saving.register_keras_serializable(name="ESN_embedded")
+# @keras.saving.register_keras_serializable(name="ESN_embedded")
 class ESN_embedded(layers.Layer):
-    """ to embed an ESN into a keras/torch implementation """
+    """ This class is used to embed an ESN into a keras model """
 
     def __init__(self, esn_params,
-                 total_num_samples, **kwargs):
+                 num_samples=0,
+                 **kwargs):
         super(ESN_embedded, self).__init__(**kwargs)
         self.esn_params = esn_params
-        self.total_num_samples = total_num_samples
-        self.populate_lookup = np.zeros((self.total_num_samples,1))
+        self.num_samples = num_samples
         self.needs_initializing = True
-        
+
         # part is set here, part externally
         self.esn_ready_to_train = [False, False]
         self.esn_trained = False
         self.last_sk = []
-        print('Initialized embedded ESN instance')
+        self.model_type = self.esn_params['external']['model_type']
+        self.bypass_mode = self.esn_params['external']['bypass_mode']
 
-    def get_config(self):
-        config = super(ESN_embedded, self).get_config()
-        config.update({
-            'esn_params' : keras.saving.serialize_keras_object(self.esn_params)})
-        return config
 
-    @classmethod
-    def from_config(cls, config):
-        esn_params_cfg = config.pop('esn_params')
-        esn_params = keras.saving.deserialize_keras_object(esn_params_cfg)
-        return cls(mask, **config)
+    # def get_config(self):
+    #     config = super(ESN_embedded, self).get_config()
+    #     config.update({
+    #         'esn_params' : keras.saving.serialize_keras_object(self.esn_params)})
+    #     return config
+
+    # @classmethod
+    # def from_config(cls, config):
+    #     esn_params_cfg = config.pop('esn_params')
+    #     esn_params = keras.saving.deserialize_keras_object(esn_params_cfg)
+    #     return cls(mask, **config)
 
     def call(self, inputs, time, control_ft):
         try:
@@ -240,67 +242,109 @@ class ESN_embedded(layers.Layer):
         except TypeError as e:
             return inputs
 
-        breakpoint()
+        if self.bypass_mode:
+            return inputs
 
         if self.needs_initializing:
-            self.initialize(values)
-            
-        self.populate_storage(values, timeid)
+            self.initialize(values, control)
+
+        self.populate_storage(values, timeid, control)
 
         if np.all(self.esn_ready_to_train):
             self.train()
 
         elif self.esn_trained:
             # replace values in inputs with prediction outputs
-            outputs = torch.tensor(self.predict(values, timeid))
+            outputs = torch.tensor(self.predict(values, timeid, control))
             inputs = ops.where(outputs != 0, outputs, inputs)
+            breakpoint()
 
         return inputs
 
-    def initialize(self, values):
+    def initialize(self, values, control):
 
         _, self.enclat, self.enclon, self.filters = \
             values.shape
 
-        self.N_feats = self.enclat * self.enclon * self.filters
-        self.storage = np.zeros((self.total_num_samples, self.N_feats))
+        self.values_dim = self.enclat * self.enclon * self.filters
+
+        _, self.enclat_ct, self.enclon_ct, self.filters_ct = \
+            control.shape
+
+        self.control_dim = self.enclat_ct * self.enclon_ct * self.filters_ct
+
+        if self.model_type in ['ESNc', 'DMDc']:
+            self.total_feats = self.values_dim + self.control_dim
+        else:
+            self.total_feats = self.values_dim
+
+        self.storage = np.zeros((self.num_samples, self.total_feats))
+
+        self.populate_lookup = np.zeros((self.num_samples,1))
+
+        print('Initialized embedded ESN')
+        if self.bypass_mode: print('Bypass mode: ESN inactive')
 
         self.needs_initializing = False
 
-    def populate_storage(self, values, timeid):
+    def populate_storage(self, values, timeid, control):
         reshape_order = self.esn_params['external']['reshape_order']
 
         T, _, _, _ = \
             values.shape
 
         # not going to populate storage if timeid beyond range
-        if np.any(timeid >= self.storage.shape[0]):            
+        if np.any(timeid >= self.storage.shape[0]):
             return
 
         if not np.all(self.populate_lookup[timeid,:]):
             self.populate_lookup[timeid,:] = 1
-            self.storage[timeid, :] = \
-                values.reshape(T, -1, order=reshape_order)            
+
+            if self.model_type in ['ESNc', 'DMDc']:
+                self.storage[timeid, :] = \
+                    np.hstack((values.reshape(T, -1, order=reshape_order),
+                               control.reshape(T, -1, order=reshape_order)))
+            else:
+                self.storage[timeid, :] = \
+                    values.reshape(T, -1, order=reshape_order)
 
         if np.all(self.populate_lookup):
             # we did the whole epoch, now we can train the ESN
             self.esn_ready_to_train[0] = True
             # reset lookup table for filling the storage in the next
             # epoch
-            self.populate_lookup = np.zeros((self.total_num_samples,1))
+            self.populate_lookup = np.zeros((self.num_samples,1))
 
     def train(self):
         print('\nTraining embedded ESN')
         Nr = self.esn_params['internal']['Nr']
-        Nu = self.storage.shape[1]
-        Ny = self.storage.shape[1]
+        Nu = self.total_feats
+        Ny = self.values_dim
+
+        # adjust a few parameters based on the model type
+        if self.model_type in ['DMD', 'DMDc', 'corr_only']:
+            self.esn_params['internal']['dmdMode'] = True
+        else:
+            self.esn_params['internal']['dmdMode'] = False
+
+        if self.model_type in ['DMD', 'DMDc', 'corr_only', 'ESNc']:
+            self.esn_params['internal']['feedThrough'] = True
+        else:
+            self.esn_params['internal']['feedThrough'] = False
+
+        if self.model_type in ['ESNc']:
+            self.esn_params['internal']['ftRange'] = \
+                range(self.values_dim,
+                      self.total_feats)
+
+
         self.esn = ESN(Nr, Nu, Ny)
         self.esn.setPars(self.esn_params['internal'])
         self.esn.initialize()
 
         # FIXME factorize with rest of ESN interface
         trainU = self.storage[:-1,]
-        trainY = self.storage[1:,]
+        trainY = self.storage[1:,:self.values_dim]
 
         self.esn.train(trainU, trainY)
 
@@ -310,35 +354,45 @@ class ESN_embedded(layers.Layer):
 
         self.last_sk = self.esn.X[-1,:].copy()
 
-    def predict(self, values, timeid):
+    def predict(self, values, timeid, control):
 
         outputs = np.zeros_like(values)
 
         # perform a step for every (value, timeid) pair
         for i, tid in enumerate(timeid):
-            outputs[i,:,:,:] = self.step(values[i,:], tid)\
+            outputs[i,:,:,:] = self.step(values[i,:], tid, control[i,:])\
                                    .reshape(self.enclat,
                                             self.enclon,
                                             self.filters)
         return outputs
 
-    def step(self, values, timeid):
+    def step(self, values, timeid, control):
         reshape_order = self.esn_params['external']['reshape_order']
 
-        # TODO factorize with rest of ESN interface
+        # TODO factorize with rest of ESN interface, maybe through a
+        # third class that does things.. not sure
         timeid = np.max([1,timeid])
 
         # get the correct esn state:
-        Nt, Nr = self.esn.X.shape        
+        Nt, Nr = self.esn.X.shape
         if np.any(Nt > timeid-1):
             sk = self.esn.X[timeid-1,:]
         elif len(self.last_sk) > 0:
             sk = self.last_sk
         else:
-            breakpoint()
             raise Exception('something is wrong with the ESN states')
 
-        u_in  = values.reshape(-1,order=reshape_order)
+        # prepare input data for different model types
+        xk = values.reshape(-1, order=reshape_order)
+        Pxk = control.reshape(-1, order=reshape_order)
+        if self.model_type in ['ESNc', 'DMDc']:
+            u_in = np.append(xk.squeeze(),
+                             Pxk.squeeze())
+        elif self.model_type in ['ESN', 'DMD']:
+            u_in  = xk.squeeze()
+        else:
+            raise Exception('model type not implemented')
+
         u_in  = np.expand_dims(u_in, axis=0)
         u_in  = self.esn.scaleInput(u_in)
         sk    = self.esn.update(sk, u_in)

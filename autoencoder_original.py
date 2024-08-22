@@ -59,7 +59,7 @@ log_file = files['log']
 data, params, scalers, _  = dm.create_training_data(False)
 
 # truncate
-history = data['train']['HR'].shape[0] # use all data
+history = data['train']['HR'].shape[0] # use all data we have
 # history = 3000
 future = 1000
 

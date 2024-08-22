@@ -42,18 +42,18 @@ class AutoEncoder(keras_tuner.HyperModel):
         self.log('AutoEncoder\n', 'w')
 
     def build_model(self,
-                    conv_arch='7_conv_layers',
+                    conv_arch='default',
                     learning_rate=0.002,
                     use_dropout=False,
                     activation='relu',
                     optimizer='adam',
-                    verbosity=20,
+                    verbosity=20,                    
                     use_feedthrough=False,
                     feedthrough_only=False,
                     use_timeinput=True,
                     feedthrough_type='multiply'
                     ):
-
+        
         self.use_feedthrough = use_feedthrough
         self.feedthrough_only = feedthrough_only
         self.feedthrough_type = feedthrough_type
@@ -96,13 +96,13 @@ class AutoEncoder(keras_tuner.HyperModel):
                                      activation=activation,
                                      padding="same", name="conv_layer_3")
 
-        dropout_layer = layers.Dropout(self.dropout_rate, name="dropout")
+        dropout_layer_1 = layers.Dropout(self.dropout_rate,
+                                         name="dropout_1")
 
         x = conv_layer_1(state_input)
-        if conv_arch == '7_conv_layers':
-            x = conv_layer_2(x)
+        x = conv_layer_2(x)
         if use_dropout:
-            x = dropout_layer(x)
+            x = dropout_layer_1(x)
         encoded = conv_layer_3(x)
 
         encoder = Model([state_input, time_input], encoded, name="encoder")
@@ -115,8 +115,7 @@ class AutoEncoder(keras_tuner.HyperModel):
             self.use_feedthrough):
 
             c = conv_layer_1(feedthrough)
-            if conv_arch == '7_conv_layers':
-                c = conv_layer_2(c)
+            c = conv_layer_2(c)
             if use_dropout:
                 c = dropout_layer(c)
             control = conv_layer_3(c)
@@ -124,36 +123,37 @@ class AutoEncoder(keras_tuner.HyperModel):
             encoded = self.esn(encoded, time_input, control)
 
         # Decoder ------------------------------------------------------
-        y = layers.Conv2DTranspose(num_filters, kernel_size,
-                                   strides=(2,2),
-                                   activation=activation,
-                                   padding="same")(encoded)
+        convt_layer_1 = layers.Conv2DTranspose(num_filters, kernel_size,
+                                               strides=(2,2),
+                                               activation=activation,
+                                               padding="same")
+        
+        convt_layer_2 = layers.Conv2DTranspose(num_filters, kernel_size,
+                                               strides=(2,2),
+                                               activation=activation,
+                                               padding="same")
 
-        if conv_arch == '7_conv_layers':
-            y = layers.Conv2DTranspose(num_filters, kernel_size,
-                                       strides=(2,2), activation=activation,
-                                       padding="same")(y)
+        convt_layer_3 = layers.Conv2DTranspose(num_filters, kernel_size,
+                                               strides=(2,2),
+                                               activation=activation,
+                                               padding="same")
+
+        dropout_layer_2 = layers.Dropout(self.dropout_rate,
+                                         name="dropout_2")
+        
+        y = convt_layer_1(encoded)
+        y = convt_layer_2(y)        
         if use_dropout:
-            y = layers.Dropout(self.dropout_rate)(y)
-
-        y = layers.Conv2DTranspose(num_filters, kernel_size,
-                                   strides=(2,2),
-                                   activation=activation,
-                                   padding="same")(y)
+            y = dropout_layer_2(y)
+        y = convt_layer_3(y)
 
         if not self.use_feedthrough:
             y = layers.Conv2D(num_channels, kernel_size,
                               activation="sigmoid",
                               padding="same")(y)
 
-        # Crop the decoded output
-        if conv_arch == '7_conv_layers':
-            cropped = layers.Cropping2D(cropping=((1,2),(3,4)))(y)
-
-        elif conv_arch == '5_conv_layers':
-            cropped = layers.Cropping2D(cropping=((2,1),(2,1)))(y)
-        else:
-            raise Exception(f'invalid conv_arch {conv_arch}')
+        # Crop the decoded output        
+        cropped = layers.Cropping2D(cropping=((1,2),(3,4)))(y)
 
         if self.feedthrough_only:
             output = layers.Conv2D(num_filters, kernel_size,

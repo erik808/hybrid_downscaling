@@ -86,9 +86,9 @@ class PlotMachine():
         plt.tight_layout()
         plt.savefig(fig_name)
 
-    def plot_prediction_error(self, X, Y, Z):
+    def plot_prediction_error(self, X, Y, Z, add_name=''):
         timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
-        fig_name = f'{self.results_dir}/errors_{timestamp}.png'
+        fig_name = f'{self.results_dir}/errors_{timestamp}{add_name}.png'
 
         RSE_Y = np.sqrt(np.sum(np.square(X-Y),axis=(1,2,3)))
         RSE_Z = np.sqrt(np.sum(np.square(X-Z),axis=(1,2,3)))
@@ -102,3 +102,5 @@ class PlotMachine():
         print(fig_name)
         plt.tight_layout()
         plt.savefig(fig_name)
+
+        return RSE_Y, RSE_Z

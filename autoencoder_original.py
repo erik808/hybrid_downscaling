@@ -20,6 +20,7 @@ import ae_model
 reload(ae_model)
 from ae_model import AutoEncoder
 from ae_model import TriggerESN
+from ae_model import CustomValidation
 
 import esn_interface
 reload(esn_interface)
@@ -44,10 +45,10 @@ feedthrough_only = False
 
 if new_model:
     load_models_from_file=False
-    model_id = datetime.now().strftime('%Y%m%d_%H%M%S')
-    add_id = '_testing'
-    # model_id = 'tuning'
-    # add_id = ''
+    # model_id = datetime.now().strftime('%Y%m%d_%H%M%S')
+    # add_id = '_testing'
+    model_id = 'testing'
+    add_id = ''
 else:
     load_models_from_file=True
     add_id = ''
@@ -61,7 +62,8 @@ data, params, scalers, _  = dm.create_training_data(False)
 # truncate
 history = data['train']['HR'].shape[0] # use all data we have
 # history = 10001
-future = 400
+history = 1000
+future = 1000
 
 # input training data
 train_data_inp = data['train']['HR'][:-1,][-history:,]
@@ -97,7 +99,7 @@ if CNN_mode == 'snapshots':
     train_data_inp = train_data_otp
     # snapshot mode does not give any predictions:
     do_prediction = False
-    
+
 elif CNN_mode == 'timesteps':
     # make sure the ESN is not bypassed in this mode
     esn_params['external']['bypass_mode'] = False
@@ -168,10 +170,9 @@ tic = time.time()
 
 # really necessary to expand to 4 dims?
 T_train = np.expand_dims(np.arange(train_data_inp.shape[0]), axis=[1,2,3])
-T_test = np.expand_dims(np.arange(train_data_inp.shape[0],
-                                  train_data_inp.shape[0] + test_data.shape[0]),
-                        axis=[1,2,3])
-
+T_test  = np.expand_dims(np.arange(train_data_inp.shape[0],
+                                   train_data_inp.shape[0] + test_data.shape[0]),
+                         axis=[1,2,3])
 if feedthrough_only:
     X_train = [train_data_ft]
 elif use_feedthrough:
@@ -185,21 +186,35 @@ esn_callback = TriggerESN(esn,
                           train_in_epochs=[0],
                           num_samples=X_train[0].shape[0])
 
-if CNN_mode == 'timesteps':
-    validation_data=None
-elif CNN_mode == 'snapshots':
-    validation_data=[]
 
+if CNN_mode == 'timesteps':
+    # normal validation does not work with embedded ESN
+    validation_data=None
+
+    # we create a custom validation using a callback at every epoch
+    # end
+    initial_xk = np.expand_dims(train_data_otp[-1,:,:,:], axis=0)
+    plotmachine = PlotMachine(results_dir=dirs['results'])
+    validation_callback = \
+        CustomValidation(test_data=(test_data, T_test, test_data_ft),
+                         initial_xk=initial_xk,
+                         plotmachine=plotmachine)
+
+    callbacks=[esn_callback, validation_callback]
+    
+elif CNN_mode == 'snapshots':
+    X_test = [test_data, T_test, test_data_ft]
+    Y_test = test_data
+    validation_data=(X_test, Y_test)
+    callbacks=None
 
 hist = autoencoder.fit(x=X_train,
                        y=Y_train,
                        epochs=epochs,
                        batch_size=batch_size,
                        shuffle=shuffle,
-                       validation_data=None, # validation does not
-                                             # work with embedded
-                                             # ESN
-                       callbacks=[esn_callback]
+                       validation_data=validation_data,
+                       callbacks=callbacks
                        )
 toc = time.time()
 print(f'total training time: {(toc-tic)/60}m')
@@ -242,27 +257,33 @@ if do_prediction:
         predictions[i,:,:,:] = xk
 
     # Create dictionary for output visualization
-    xr_HR_true_fun = lambda i : scalers['HR'].inverse_transform(test_data[i,:,:,:]\
-                                                                .reshape(1,-1))\
-                                             .reshape(Nlat, Nlon, num_channels)
+    xr_HR_true_fun = lambda i : \
+        scalers['HR'].inverse_transform(test_data[i,:,:,:]\
+                                        .reshape(1,-1))\
+                     .reshape(Nlat, Nlon, num_channels)
 
     # instant kinetic energy
-    Kt_HR_true_fun = lambda i : np.sqrt(np.square(xr_HR_true_fun(i)).sum(axis=2))
-
-    xr_HR_pred_fun = lambda i : scalers['HR'].inverse_transform(predictions[i,:,:,:]\
-                                                                .reshape(1,-1))\
-                                             .reshape(Nlat, Nlon, num_channels)
+    Kt_HR_true_fun = lambda i : \
+        np.sqrt(np.square(xr_HR_true_fun(i)).sum(axis=2))
+    
+    xr_HR_pred_fun = lambda i : \
+        scalers['HR'].inverse_transform(predictions[i,:,:,:]\
+                                        .reshape(1,-1))\
+                     .reshape(Nlat, Nlon, num_channels)
 
     # instant kinetic energy
-    Kt_HR_pred_fun = lambda i : np.sqrt(np.square(xr_HR_pred_fun(i)).sum(axis=2))
-
+    Kt_HR_pred_fun = lambda i : \
+        np.sqrt(np.square(xr_HR_pred_fun(i)).sum(axis=2))
+    
     # Create dictionary for output visualization
-    xr_LR_true_fun = lambda i : scalers['HR'].inverse_transform(test_data_ft[i,:,:,:]\
-                                                                .reshape(1,-1))\
-                                             .reshape(Nlat, Nlon, num_channels)
+    xr_LR_true_fun = lambda i : \
+        scalers['HR'].inverse_transform(test_data_ft[i,:,:,:]\
+                                        .reshape(1,-1))\
+                     .reshape(Nlat, Nlon, num_channels)
 
     # instant kinetic energy
-    Kt_LR_true_fun = lambda i : np.sqrt(np.square(xr_LR_true_fun(i)).sum(axis=2))
+    Kt_LR_true_fun = lambda i : \
+        np.sqrt(np.square(xr_LR_true_fun(i)).sum(axis=2))
 
 
     xr_HR_diff_fun = lambda i : xr_HR_true_fun(i) - xr_HR_pred_fun(i)

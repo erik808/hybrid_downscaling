@@ -285,3 +285,47 @@ class TriggerESN(keras.callbacks.Callback):
                 self.esn.esn_ready_to_train[1] = True
         elif not epoch % self.train_every:
             self.esn.esn_ready_to_train[1] = True
+
+
+class CustomValidation(keras.callbacks.Callback):
+    """
+    """
+
+    def __init__(self, test_data, initial_xk, plotmachine):
+        super().__init__()
+
+
+        self.initial_xk = initial_xk
+        self.test_data = test_data[0]
+        self.N_steps = self.test_data.shape[0]
+        self.T_test = test_data[1]
+        self.test_data_ft = test_data[2]
+        self.plotmachine = plotmachine
+
+
+    def on_epoch_end(self, epoch, logs=None):
+        print(f'\nCustomValidation: perform {self.N_steps} prediction steps')
+        predictions = np.zeros_like(self.test_data)
+
+        breakpoint()
+        xk = self.initial_xk
+        pb_i = keras.utils.Progbar(self.N_steps,
+                                   stateful_metrics=['error', 'base'])
+
+        error, base = (0,0)
+        for i in range(self.N_steps):
+            Pxk = np.expand_dims(self.test_data_ft[i,:,:,:], axis=0)
+            tid = np.expand_dims(self.T_test[i,:,:,:], axis=0)
+            xk = self.model.predict([xk, tid, Pxk], verbose=0)
+            predictions[i,:,:,:] = xk
+            xk_true = np.expand_dims(self.test_data[i,:,:,:], axis=0)
+            error += np.sqrt(np.sum(np.square(xk - xk_true)))
+            base += np.sqrt(np.sum(np.square(Pxk - xk_true)))
+            values = [('<error>', error/(i+1)),
+                      ('<base>', base/(i+1))]
+            pb_i.add(1, values=values)
+
+        self.plotmachine.plot_prediction_error(self.test_data,
+                                               predictions,
+                                               self.test_data_ft,
+                                               f'_epoch_{epoch}')

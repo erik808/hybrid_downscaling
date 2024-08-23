@@ -11,6 +11,7 @@ class PlotMachine():
                  time_array=None,
                  results_dir=None,
                  movie_dir=None):
+
         self.figsize=figsize
         self.output_dict=output_dict
         self.time_array=time_array

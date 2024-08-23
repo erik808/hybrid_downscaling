@@ -30,15 +30,15 @@ reload(plot_utils)
 from plot_utils import PlotMachine
 
 # setup config
-new_experiment=True
+new_experiment=False
 do_prediction = True
 use_feedthrough = True
 feedthrough_only = False
 
 # CNN_modes:
 #  'snapshots' : train an instanteous model
-#  'timestep'  : train a time-stepping model
-CNN_mode = 'snapshots'
+#  'timesteps' : train a time-stepping model
+CNN_mode = 'timesteps'
 
 if new_experiment:
     load_models_from_file=False
@@ -49,7 +49,7 @@ if new_experiment:
 else:
     load_models_from_file=True
     add_id = ''
-    experiment_id = '20240822_161620_embedded_ESN'
+    experiment_id = '20240823_103949_testing'
 
 dirs, files = dm.setup_directories(experiment_id, add_id)
 
@@ -97,7 +97,9 @@ if CNN_mode == 'snapshots':
     train_data_inp = train_data_otp
     # snapshot mode does not give any predictions:
     do_prediction = False
-    
+elif CNN_mode == 'timesteps':
+    esn_params['external']['bypass_mode'] = False
+
 esn = ESN_embedded(esn_params=esn_params)
 
 ae = AutoEncoder(test_vec=train_data_inp[0,:,:,:],
@@ -114,6 +116,7 @@ if load_models_from_file:
     autoencoder = keras.models.load_model(model_path_autoencoder)
     esn = autoencoder.get_layer('esn_embedded')
     esn.esn_params = esn_params
+    breakpoint()
     encoder = keras.models.load_model(model_path_encoder)
     decoder = keras.models.load_model(model_path_decoder)
 
@@ -144,9 +147,9 @@ tb_callback = keras.callbacks.TensorBoard(
     embeddings_metadata=None,
 )
 
-# callback to trigger ESN training    
-epochs = 20
-batch_size = 2
+# callback to trigger ESN training
+epochs = 10
+batch_size = 4
 shuffle = True
 tic = time.time()
 
@@ -168,6 +171,12 @@ Y_train = train_data_otp
 esn_callback = TriggerESN(esn,
                           train_in_epochs=[1],
                           num_samples=X_train[0].shape[0])
+
+if CNN_mode == 'timesteps':
+    validation_data=None
+elif CNN_mode == 'snapshots':
+    validation_data=[]
+
 
 hist = autoencoder.fit(x=X_train,
                        y=Y_train,
@@ -216,7 +225,7 @@ if do_prediction:
             xk = autoencoder.predict([xk, tid, Pxk], verbose=0)
         else:
             xk = autoencoder.predict([xk, tid], verbose=0)
-            
+
         predictions[i,:,:,:] = xk
 
     # Create dictionary for output visualization
@@ -275,10 +284,12 @@ if do_prediction:
                                  'vmin' : -0.2,
                                  'vmax' : 0.2,
                                  'cmap' : 'RdBu'},
+
                    'res pred' : {'values' : Rs_pred_fun,
                                  'vmin' : -0.2,
                                  'vmax' : 0.2,
                                  'cmap' : 'RdBu'},
+
                    # 'res dif' : {'values' : Rs_diff_fun,
                    #              'vmin' : -0.05,
                    #              'vmax' : 0.05,
@@ -289,7 +300,7 @@ if do_prediction:
                               results_dir=dirs['results'],
                               movie_dir=dirs['movies'],
                               time_array=test_time)
-    
+
     plotmachine.plot_prediction_error(test_data, predictions, test_data_ft)
     plotmachine.plot_single_frame(100)
     plotmachine.create_movie()
@@ -297,7 +308,5 @@ if do_prediction:
 
 else: # only pot the history
     print('print history')
-    plotmachine = PlotMachine(results_dir=dirs['results'])    
+    plotmachine = PlotMachine(results_dir=dirs['results'])
     plotmachine.plot_history(hist)
-
-    

@@ -218,6 +218,9 @@ class ESN_embedded(layers.Layer):
         self.esn_ready_to_train = [False, False]
         self.esn_trained = False
         self.last_sk = []
+
+        self.setPars(self.esn_params)
+        
         self.model_type = self.esn_params['external']['model_type']
         self.bypass_mode = self.esn_params['external']['bypass_mode']
 
@@ -233,6 +236,13 @@ class ESN_embedded(layers.Layer):
     #     esn_params_cfg = config.pop('esn_params')
     #     esn_params = keras.saving.deserialize_keras_object(esn_params_cfg)
     #     return cls(mask, **config)
+
+    def setPars(self, params):
+        self.model_type = params['external']['model_type']
+        self.bypass_mode = params['external']['bypass_mode']
+        self.reshape_order = \
+            self.esn_params['external']['reshape_order']
+
 
     def call(self, inputs, time, control_ft):
         try:
@@ -288,10 +298,7 @@ class ESN_embedded(layers.Layer):
         self.needs_initializing = False
 
     def populate_storage(self, values, timeid, control):
-        reshape_order = self.esn_params['external']['reshape_order']
-
-        T, _, _, _ = \
-            values.shape
+        T, _, _, _ =  values.shape
 
         # not going to populate storage if timeid beyond range
         if np.any(timeid >= self.storage.shape[0]):
@@ -302,11 +309,13 @@ class ESN_embedded(layers.Layer):
 
             if self.model_type in ['ESNc', 'DMDc']:
                 self.storage[timeid, :] = \
-                    np.hstack((values.reshape(T, -1, order=reshape_order),
-                               control.reshape(T, -1, order=reshape_order)))
+                    np.hstack((values.reshape(T, -1,
+                                              order=self.reshape_order),
+                               control.reshape(T, -1,
+                                               order=self.reshape_order)))
             else:
                 self.storage[timeid, :] = \
-                    values.reshape(T, -1, order=reshape_order)
+                    values.reshape(T, -1, order=self.reshape_order)
 
         if np.all(self.populate_lookup):
             # we did the whole epoch, now we can train the ESN
@@ -367,7 +376,6 @@ class ESN_embedded(layers.Layer):
         return outputs
 
     def step(self, values, timeid, control):
-        reshape_order = self.esn_params['external']['reshape_order']
 
         # TODO factorize with rest of ESN interface, maybe through a
         # third class that does things.. not sure
@@ -383,8 +391,8 @@ class ESN_embedded(layers.Layer):
             raise Exception('something is wrong with the ESN states')
 
         # prepare input data for different model types
-        xk = values.reshape(-1, order=reshape_order)
-        Pxk = control.reshape(-1, order=reshape_order)
+        xk = values.reshape(-1, order=self.reshape_order)
+        Pxk = control.reshape(-1, order=self.reshape_order)
         if self.model_type in ['ESNc', 'DMDc']:
             u_in = np.append(xk.squeeze(),
                              Pxk.squeeze())

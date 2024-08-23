@@ -11,7 +11,7 @@ hyperparams = { 'external' : {'model_type'      : 'ESNc',
                               'test_length'     : 4*24*10,
                               'reshape_order'   : 'C',
                               'decode_pred'     : True,
-                              'bypass_mode'     : True,
+                              'bypass_mode'     : False,
                               'control_amp'     : 1 },
 
                 'internal' : { 'Nr'                 : 1000,
@@ -242,11 +242,11 @@ class ESN_embedded(layers.Layer):
         except TypeError as e:
             return inputs
 
-        if self.bypass_mode:
-            return inputs
-
         if self.needs_initializing:
             self.initialize(values, control)
+
+        if self.bypass_mode:
+            return inputs
 
         self.populate_storage(values, timeid, control)
 

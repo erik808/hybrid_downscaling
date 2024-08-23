@@ -31,15 +31,19 @@ from plot_utils import PlotMachine
 
 # setup config
 new_experiment=True
-training_mode='normal'
 do_prediction = True
 use_feedthrough = True
-feedthrough_only = True
+feedthrough_only = False
+
+# CNN_modes:
+#  'snapshots' : train an instanteous model
+#  'timestep'  : train a time-stepping model
+CNN_mode = 'snapshots'
 
 if new_experiment:
     load_models_from_file=False
     experiment_id = datetime.now().strftime('%Y%m%d_%H%M%S')
-    add_id = '_feedthrough_only'
+    add_id = '_testing'
     # experiment_id = 'tuning'
     # add_id = ''
 else:
@@ -50,10 +54,7 @@ else:
 dirs, files = dm.setup_directories(experiment_id, add_id)
 
 models_dir = dirs['models']
-tuning_dir = dirs['tuning']
-results_dir = dirs['results']
-movie_dir = dirs['movies']
-checkpoints_dir = dirs['checkpoints']
+
 log_file = files['log']
 
 data, params, scalers, _  = dm.create_training_data(False)
@@ -87,6 +88,16 @@ model_path_encoder = f'{models_dir}/encoder_res.keras'
 model_path_decoder = f'{models_dir}/decoder_res.keras'
 
 esn_params = esn_interface.hyperparams
+
+if CNN_mode == 'snapshots':
+    # Disable ESN
+    esn_params['external']['bypass_mode'] = True
+    # Get rid of time shift in training data, train with the '1:'
+    # range.
+    train_data_inp = train_data_otp
+    # snapshot mode does not give any predictions:
+    do_prediction = False
+    
 esn = ESN_embedded(esn_params=esn_params)
 
 ae = AutoEncoder(test_vec=train_data_inp[0,:,:,:],
@@ -110,75 +121,72 @@ print('--------------------------------------')
 print(f'experiment: {experiment_id}{add_id}')
 print('--------------------------------------')
 
-if training_mode == 'normal':
-    checkpoint_filepath = f'{checkpoints_dir}/checkpoint.model.keras'
+checkpoints_dir = dirs['checkpoints']
+checkpoint_filepath = f'{checkpoints_dir}/checkpoint.model.keras'
 
-    # callback to create checkpoints
-    mdl_callback = keras.callbacks.ModelCheckpoint(
-        filepath=checkpoint_filepath,
-        monitor='val_loss',
-        mode='min',
-        save_best_only=True)
+# callback to create checkpoints
+mdl_callback = keras.callbacks.ModelCheckpoint(
+    filepath=checkpoint_filepath,
+    monitor='val_loss',
+    mode='min',
+    save_best_only=True)
 
-    # callback for extra output to tensorboard
-    tb_callback = keras.callbacks.TensorBoard(
-        log_dir=models_dir,
-        histogram_freq=1,
-        write_graph=False,
-        write_images=True,
-        write_steps_per_second=True,
-        update_freq="epoch",
-        profile_batch=0,
-        embeddings_freq=0,
-        embeddings_metadata=None,
-    )
+# callback for extra output to tensorboard
+tb_callback = keras.callbacks.TensorBoard(
+    log_dir=models_dir,
+    histogram_freq=1,
+    write_graph=False,
+    write_images=True,
+    write_steps_per_second=True,
+    update_freq="epoch",
+    profile_batch=0,
+    embeddings_freq=0,
+    embeddings_metadata=None,
+)
 
-    # callback to trigger ESN training    
-    epochs = 20
-    batch_size = 2
-    shuffle = True
-    tic = time.time()
+# callback to trigger ESN training    
+epochs = 20
+batch_size = 2
+shuffle = True
+tic = time.time()
 
-    # really necessary to expand to 4 dims?
-    T_train = np.expand_dims(np.arange(train_data_inp.shape[0]), axis=[1,2,3])
-    T_test = np.expand_dims(np.arange(train_data_inp.shape[0],
-                                      train_data_inp.shape[0] + test_data.shape[0]),
-                            axis=[1,2,3])
+# really necessary to expand to 4 dims?
+T_train = np.expand_dims(np.arange(train_data_inp.shape[0]), axis=[1,2,3])
+T_test = np.expand_dims(np.arange(train_data_inp.shape[0],
+                                  train_data_inp.shape[0] + test_data.shape[0]),
+                        axis=[1,2,3])
 
-    if feedthrough_only:
-        X_train = [train_data_ft]
-    elif use_feedthrough:
-        X_train = [train_data_inp, T_train, train_data_ft]
-    else:
-        X_train = [train_data_inp, T_train]
-
-    Y_train = train_data_otp
-
-    esn_callback = TriggerESN(esn,
-                              train_in_epochs=[1],
-                              num_samples=X_train[0].shape[0])
-    
-    hist = autoencoder.fit(x=X_train,
-                           y=Y_train,
-                           epochs=epochs,
-                           batch_size=batch_size,
-                           shuffle=shuffle,
-                           validation_data=None, # validation does not
-                                                 # work with embedded
-                                                 # ESN
-                           callbacks=[esn_callback]
-                           )
-    toc = time.time()
-    print(f'total training time: {(toc-tic)/60}m')
-
-    # save models
-    autoencoder.save(model_path_autoencoder)
-    encoder.save(model_path_encoder)
-    decoder.save(model_path_decoder)
-
+if feedthrough_only:
+    X_train = [train_data_ft]
+elif use_feedthrough:
+    X_train = [train_data_inp, T_train, train_data_ft]
 else:
-    print('-- Skipping training --')
-    pass
+    X_train = [train_data_inp, T_train]
+
+Y_train = train_data_otp
+
+esn_callback = TriggerESN(esn,
+                          train_in_epochs=[1],
+                          num_samples=X_train[0].shape[0])
+
+hist = autoencoder.fit(x=X_train,
+                       y=Y_train,
+                       epochs=epochs,
+                       batch_size=batch_size,
+                       shuffle=shuffle,
+                       validation_data=None, # validation does not
+                                             # work with embedded
+                                             # ESN
+                       callbacks=[esn_callback]
+                       )
+toc = time.time()
+print(f'total training time: {(toc-tic)/60}m')
+
+# save models
+autoencoder.save(model_path_autoencoder)
+encoder.save(model_path_encoder)
+decoder.save(model_path_decoder)
+
 
 # save modeldata
 timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
@@ -277,16 +285,19 @@ if do_prediction:
                    #              'cmap' : 'RdBu'},
                    }
 
-    import plot_utils
-    reload(plot_utils)
-    from plot_utils import PlotMachine
-
     plotmachine = PlotMachine(output_dict=output_dict,
-                              results_dir=results_dir,
-                              movie_dir=movie_dir,
+                              results_dir=dirs['results'],
+                              movie_dir=dirs['movies'],
                               time_array=test_time)
-
+    
     plotmachine.plot_prediction_error(test_data, predictions, test_data_ft)
     plotmachine.plot_single_frame(100)
     plotmachine.create_movie()
     plotmachine.plot_history(hist)
+
+else: # only pot the history
+    print('print history')
+    plotmachine = PlotMachine(results_dir=dirs['results'])    
+    plotmachine.plot_history(hist)
+
+    

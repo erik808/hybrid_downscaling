@@ -14,10 +14,10 @@ hyperparams = { 'external' : {'model_type'      : 'ESNc',
                               'bypass_mode'     : False,
                               'control_amp'     : 1 },
 
-                'internal' : { 'Nr'                 : 1000,
+                'internal' : { 'Nr'                 : 10000,
                                'scalingType'        : 'none',
                                'rhoMax'             : 1.2,
-                               'alpha'              : 0.5,
+                               'alpha'              : 0.7,
                                'avgDegree'          : 100,
                                'entriesPerRow'      : 100,
                                'noiseAmplitude'     : 0.1,
@@ -209,21 +209,15 @@ class ESN_embedded(layers.Layer):
     def __init__(self, esn_params,
                  num_samples=0,
                  **kwargs):
+
         super(ESN_embedded, self).__init__(**kwargs)
-        self.esn_params = esn_params
-        self.num_samples = num_samples
-        self.needs_initializing = True
+
+        self.setPars(esn_params, num_samples)
 
         # part is set here, part externally
         self.esn_ready_to_train = [False, False]
         self.esn_trained = False
         self.last_sk = []
-
-        self.setPars(self.esn_params)
-        
-        self.model_type = self.esn_params['external']['model_type']
-        self.bypass_mode = self.esn_params['external']['bypass_mode']
-
 
     # def get_config(self):
     #     config = super(ESN_embedded, self).get_config()
@@ -237,18 +231,21 @@ class ESN_embedded(layers.Layer):
     #     esn_params = keras.saving.deserialize_keras_object(esn_params_cfg)
     #     return cls(mask, **config)
 
-    def setPars(self, params):
-        self.model_type = params['external']['model_type']
-        self.bypass_mode = params['external']['bypass_mode']
-        self.reshape_order = \
-            self.esn_params['external']['reshape_order']
+    def setPars(self, pars, num_samples=0):
 
+        self.esn_params = pars
+        self.num_samples = num_samples
+        self.model_type = pars['external']['model_type']
+        self.bypass_mode = pars['external']['bypass_mode']
+        self.reshape_order = pars['external']['reshape_order']
+        self.needs_initializing = True
 
     def call(self, inputs, time, control_ft):
         try:
             values = inputs.detach().numpy()
             timeid = time.detach().numpy()[:,0,0,0].astype(int)
             control = control_ft.detach().numpy()
+
         except TypeError as e:
             return inputs
 
@@ -266,8 +263,7 @@ class ESN_embedded(layers.Layer):
         elif self.esn_trained:
             # replace values in inputs with prediction outputs
             outputs = torch.tensor(self.predict(values, timeid, control))
-            inputs = ops.where(outputs != 0, outputs, inputs)
-            breakpoint()
+            inputs = ops.where(outputs != np.nan, outputs, inputs)
 
         return inputs
 
@@ -364,7 +360,6 @@ class ESN_embedded(layers.Layer):
         self.last_sk = self.esn.X[-1,:].copy()
 
     def predict(self, values, timeid, control):
-
         outputs = np.zeros_like(values)
 
         # perform a step for every (value, timeid) pair

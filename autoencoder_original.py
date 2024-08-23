@@ -30,39 +30,38 @@ reload(plot_utils)
 from plot_utils import PlotMachine
 
 # setup config
-new_experiment=False
-do_prediction = True
-use_feedthrough = True
-feedthrough_only = False
+new_model=False
 
 # CNN_modes:
 #  'snapshots' : train an instanteous model
 #  'timesteps' : train a time-stepping model
 CNN_mode = 'timesteps'
+# CNN_mode = 'snapshots'
 
-if new_experiment:
+do_prediction = True
+use_feedthrough = True
+feedthrough_only = False
+
+if new_model:
     load_models_from_file=False
-    experiment_id = datetime.now().strftime('%Y%m%d_%H%M%S')
+    model_id = datetime.now().strftime('%Y%m%d_%H%M%S')
     add_id = '_testing'
-    # experiment_id = 'tuning'
+    # model_id = 'tuning'
     # add_id = ''
 else:
     load_models_from_file=True
     add_id = ''
-    experiment_id = '20240823_103949_testing'
+    model_id = '20240823_133518_testing'
 
-dirs, files = dm.setup_directories(experiment_id, add_id)
+dirs, files = dm.setup_directories(model_id, add_id)
 
-models_dir = dirs['models']
-
-log_file = files['log']
 
 data, params, scalers, _  = dm.create_training_data(False)
 
 # truncate
 history = data['train']['HR'].shape[0] # use all data we have
-# history = 3000
-future = 1000
+# history = 10001
+future = 400
 
 # input training data
 train_data_inp = data['train']['HR'][:-1,][-history:,]
@@ -83,6 +82,7 @@ num_channels = params['num_channels']
 ## Build an autoencoder with Keras using the functional API
 keras.utils.clear_session(free_memory=True)
 
+models_dir = dirs['models']
 model_path_autoencoder = f'{models_dir}/autoencoder_res.keras'
 model_path_encoder = f'{models_dir}/encoder_res.keras'
 model_path_decoder = f'{models_dir}/decoder_res.keras'
@@ -97,11 +97,14 @@ if CNN_mode == 'snapshots':
     train_data_inp = train_data_otp
     # snapshot mode does not give any predictions:
     do_prediction = False
+    
 elif CNN_mode == 'timesteps':
+    # make sure the ESN is not bypassed in this mode
     esn_params['external']['bypass_mode'] = False
 
 esn = ESN_embedded(esn_params=esn_params)
 
+log_file = files['log']
 ae = AutoEncoder(test_vec=train_data_inp[0,:,:,:],
                  mask=mask,
                  log_file=log_file,
@@ -112,16 +115,26 @@ autoencoder, encoder, decoder = \
                    feedthrough_only=feedthrough_only,
                    feedthrough_type='multiply')
 
+
 if load_models_from_file:
     autoencoder = keras.models.load_model(model_path_autoencoder)
     esn = autoencoder.get_layer('esn_embedded')
-    esn.esn_params = esn_params
-    breakpoint()
+    # overwrite parameters
+
     encoder = keras.models.load_model(model_path_encoder)
+    num_samples = train_data_inp.shape[0]
+    timeids = np.arange(num_samples)
+    timetns = np.expand_dims(timeids, axis=[1,2,3])
+    print('create training data for embedded ESN')
+    values  = encoder.predict([train_data_inp, timetns])
+    control = encoder.predict([train_data_inp, timetns])
+    esn.setPars(esn_params, num_samples=num_samples)
+    esn.initialize(values, control)
+    esn.populate_storage(values, timeids, control)
     decoder = keras.models.load_model(model_path_decoder)
 
 print('--------------------------------------')
-print(f'experiment: {experiment_id}{add_id}')
+print(f'experiment: {model_id}{add_id}')
 print('--------------------------------------')
 
 checkpoints_dir = dirs['checkpoints']
@@ -169,7 +182,7 @@ else:
 Y_train = train_data_otp
 
 esn_callback = TriggerESN(esn,
-                          train_in_epochs=[1],
+                          train_in_epochs=[0],
                           num_samples=X_train[0].shape[0])
 
 if CNN_mode == 'timesteps':

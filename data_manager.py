@@ -167,7 +167,9 @@ def load_training_data(split_factor=4/5,
 
     return data, params, scalers
 
-def create_training_data(compute_data=True, encoder=None):
+def create_training_data(compute_data=True,
+                         encoder=None,
+                         residual_mode=False):
     if compute_data:
         print('Create training data')
         orig_data, params, scalers  = load_training_data()
@@ -214,6 +216,12 @@ def create_training_data(compute_data=True, encoder=None):
             enc_data = data_enc['data']
         else:
             enc_data = None
+
+    if residual_mode:
+        orig_data['train']['R'] = (orig_data['train']['HR'] -
+                                   orig_data['train']['LR'])
+        orig_data['test']['R'] = (orig_data['test']['HR'] -
+                                  orig_data['test']['LR'])
 
     return orig_data, params, scalers, enc_data
 

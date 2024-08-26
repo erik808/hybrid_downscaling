@@ -307,7 +307,6 @@ class CustomValidation(keras.callbacks.Callback):
         print(f'\nCustomValidation: perform {self.N_steps} prediction steps')
         predictions = np.zeros_like(self.test_data)
 
-        breakpoint()
         xk = self.initial_xk
         pb_i = keras.utils.Progbar(self.N_steps,
                                    stateful_metrics=['error', 'base'])

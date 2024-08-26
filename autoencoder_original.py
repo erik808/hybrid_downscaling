@@ -30,40 +30,53 @@ import plot_utils
 reload(plot_utils)
 from plot_utils import PlotMachine
 
-# setup config
-new_model=False
+#-------------------------------------------------------
+#-------------------------------------------------------
+# Experiment settings
+
+# If True, train and predict residuals: R such that X_LR + R = X_HR
+residual_mode = False ### TODO maybe in data_manager, or here, or ....
 
 # CNN_modes:
 #  'snapshots' : train an instanteous model
 #  'timesteps' : train a time-stepping model
-CNN_mode = 'timesteps'
-# CNN_mode = 'snapshots'
+# CNN_mode = 'timesteps'
+CNN_mode = 'snapshots'
 
-do_prediction = True
+
 use_feedthrough = True
 feedthrough_only = False
 
-if new_model:
-    load_models_from_file=False
-    # model_id = datetime.now().strftime('%Y%m%d_%H%M%S')
-    # add_id = '_testing'
-    model_id = 'testing'
-    add_id = ''
+
+# Save/load settings
+load_existing_model = False
+overwrite_existing_model = False
+
+# Visualization settings
+plot_prediction = True
+
+#-------------------------------------------------------
+#-------------------------------------------------------
+
+if load_existing_model:
+    model_id = '20240823_133518'
+    add_id = '_testing'
 else:
-    load_models_from_file=True
-    add_id = ''
-    model_id = '20240823_133518_testing'
+    model_id = datetime.now().strftime('%Y%m%d_%H%M%S')
+    add_id = '_snapshot_model'
 
+# setup new or existing directories
 dirs, files = dm.setup_directories(model_id, add_id)
+models_dir = dirs['models']
 
-
-data, params, scalers, _  = dm.create_training_data(False)
+data, params, scalers, _  = \
+    dm.create_training_data(False,
+                            residual_mode=residual_mode)
 
 # truncate
-history = data['train']['HR'].shape[0] # use all data we have
-# history = 10001
-history = 1000
-future = 1000
+# history = data['train']['HR'].shape[0] # use all data we have
+history = 10000
+future = 400
 
 # input training data
 train_data_inp = data['train']['HR'][:-1,][-history:,]
@@ -84,11 +97,6 @@ num_channels = params['num_channels']
 ## Build an autoencoder with Keras using the functional API
 keras.utils.clear_session(free_memory=True)
 
-models_dir = dirs['models']
-model_path_autoencoder = f'{models_dir}/autoencoder_res.keras'
-model_path_encoder = f'{models_dir}/encoder_res.keras'
-model_path_decoder = f'{models_dir}/decoder_res.keras'
-
 esn_params = esn_interface.hyperparams
 
 if CNN_mode == 'snapshots':
@@ -98,7 +106,7 @@ if CNN_mode == 'snapshots':
     # range.
     train_data_inp = train_data_otp
     # snapshot mode does not give any predictions:
-    do_prediction = False
+    plot_prediction = False
 
 elif CNN_mode == 'timesteps':
     # make sure the ESN is not bypassed in this mode
@@ -117,13 +125,16 @@ autoencoder, encoder, decoder = \
                    feedthrough_only=feedthrough_only,
                    feedthrough_type='multiply')
 
+if load_existing_model:
+    load_path_autoencoder = f'{models_dir}/aencodr_{model_id}.keras'
+    load_path_encoder     = f'{models_dir}/encoder_{model_id}.keras'
+    load_path_decoder     = f'{models_dir}/decoder_{model_id}.keras'
 
-if load_models_from_file:
-    autoencoder = keras.models.load_model(model_path_autoencoder)
+    autoencoder = keras.models.load_model(load_path_autoencoder)
     esn = autoencoder.get_layer('esn_embedded')
     # overwrite parameters
 
-    encoder = keras.models.load_model(model_path_encoder)
+    encoder = keras.models.load_model(load_path_encoder)
     num_samples = train_data_inp.shape[0]
     timeids = np.arange(num_samples)
     timetns = np.expand_dims(timeids, axis=[1,2,3])
@@ -133,7 +144,7 @@ if load_models_from_file:
     esn.setPars(esn_params, num_samples=num_samples)
     esn.initialize(values, control)
     esn.populate_storage(values, timeids, control)
-    decoder = keras.models.load_model(model_path_decoder)
+    decoder = keras.models.load_model(load_path_decoder)
 
 print('--------------------------------------')
 print(f'experiment: {model_id}{add_id}')
@@ -163,7 +174,7 @@ tb_callback = keras.callbacks.TensorBoard(
 )
 
 # callback to trigger ESN training
-epochs = 10
+epochs = 50
 batch_size = 4
 shuffle = True
 tic = time.time()
@@ -171,7 +182,8 @@ tic = time.time()
 # really necessary to expand to 4 dims?
 T_train = np.expand_dims(np.arange(train_data_inp.shape[0]), axis=[1,2,3])
 T_test  = np.expand_dims(np.arange(train_data_inp.shape[0],
-                                   train_data_inp.shape[0] + test_data.shape[0]),
+                                   train_data_inp.shape[0] +
+                                   test_data.shape[0]),
                          axis=[1,2,3])
 if feedthrough_only:
     X_train = [train_data_ft]
@@ -201,12 +213,15 @@ if CNN_mode == 'timesteps':
                          plotmachine=plotmachine)
 
     callbacks=[esn_callback, validation_callback]
-    
+
 elif CNN_mode == 'snapshots':
     X_test = [test_data, T_test, test_data_ft]
     Y_test = test_data
     validation_data=(X_test, Y_test)
     callbacks=None
+
+
+# TRAINING --------------------------------------------
 
 hist = autoencoder.fit(x=X_train,
                        y=Y_train,
@@ -219,13 +234,11 @@ hist = autoencoder.fit(x=X_train,
 toc = time.time()
 print(f'total training time: {(toc-tic)/60}m')
 
-# save models
-autoencoder.save(model_path_autoencoder)
-encoder.save(model_path_encoder)
-decoder.save(model_path_decoder)
+
+# SAVING -----------------------------------------------
 
 
-# save modeldata
+# save model and metadata
 timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
 mdata_file = f'{models_dir}/mdata_{timestamp}.dill'
 container = {'hist' : hist,
@@ -234,17 +247,40 @@ container = {'hist' : hist,
              'encoder' : encoder,
              'decoder' : decoder,
              'autoencoder' : autoencoder}
-
 with open(mdata_file, 'wb') as file:
     dill.dump(container, file)
 
-if do_prediction:
+# save models
+if (load_existing_model and
+    overwrite_existing_model):
+    save_path_autoencoder = load_path_autoencoder
+    save_path_encoder = load_path_encoder
+    save_path_decoder = load_path_decoder
+elif not load_existing_model:
+    save_path_autoencoder = f'{models_dir}/aencodr_{model_id}.keras'
+    save_path_encoder     = f'{models_dir}/encoder_{model_id}.keras'
+    save_path_decoder     = f'{models_dir}/decoder_{model_id}.keras'
+else:
+    save_path_autoencoder = f'{models_dir}/aencodr_{timestamp}.keras'
+    save_path_encoder     = f'{models_dir}/encoder_{timestamp}.keras'
+    save_path_decoder     = f'{models_dir}/decoder_{timestamp}.keras'
+
+print(f'saving autoencoder to {save_path_autoencoder}')
+print(f'saving encoder to {save_path_encoder}')
+print(f'saving decoder to {save_path_decoder}')
+autoencoder.save(save_path_autoencoder)
+encoder.save(save_path_encoder)
+decoder.save(save_path_decoder)
+
+# PLOTTING --------------------------------------------
+if plot_prediction:
     print('create predictions')
 
     predictions = np.zeros_like(test_data)
     xk = np.expand_dims(train_data_otp[-1,:,:,:], axis=0)
-    for i in range(T_test.shape[0]):
-        print(f'{i} / {T_test.shape[0]}')
+    N_steps=T_test.shape[0]
+    pb_i = keras.utils.Progbar(N_steps)
+    for i in range(N_steps):
         Pxk = np.expand_dims(test_data_ft[i,:,:,:], axis=0)
         tid = np.expand_dims(T_test[i,:,:,:], axis=0)
         if feedthrough_only:
@@ -255,6 +291,7 @@ if do_prediction:
             xk = autoencoder.predict([xk, tid], verbose=0)
 
         predictions[i,:,:,:] = xk
+        pb_i.add(1)
 
     # Create dictionary for output visualization
     xr_HR_true_fun = lambda i : \
@@ -265,7 +302,7 @@ if do_prediction:
     # instant kinetic energy
     Kt_HR_true_fun = lambda i : \
         np.sqrt(np.square(xr_HR_true_fun(i)).sum(axis=2))
-    
+
     xr_HR_pred_fun = lambda i : \
         scalers['HR'].inverse_transform(predictions[i,:,:,:]\
                                         .reshape(1,-1))\
@@ -274,7 +311,7 @@ if do_prediction:
     # instant kinetic energy
     Kt_HR_pred_fun = lambda i : \
         np.sqrt(np.square(xr_HR_pred_fun(i)).sum(axis=2))
-    
+
     # Create dictionary for output visualization
     xr_LR_true_fun = lambda i : \
         scalers['HR'].inverse_transform(test_data_ft[i,:,:,:]\

@@ -73,15 +73,31 @@ class PlotMachine():
         timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
         fig_name = f'{self.results_dir}/history_{timestamp}.png'
         plt.close('all')
+        plt.subplot(2,1,1)
         plt.semilogy(hist.history['loss'],'.-',
                      label='loss')
 
-        if 'val_loss' in hist.history:
-            plt.semilogy(hist.history['val_loss'],'.-',
-                         label='validation loss')
         plt.grid()
         plt.legend()
         plt.gca().set_xlabel('epoch')
+
+        if 'val_loss' in hist.history:
+            plt.subplot(2,1,1)
+            plt.semilogy(hist.history['val_loss'],'.-',
+                         label='validation loss')
+
+        plt.subplot(2,1,2)
+        if 'val_error' in hist.history:            
+            plt.semilogy(hist.history['val_error'],'.-',
+                         label='validation error')
+
+        if 'val_base' in hist.history:            
+            plt.semilogy(hist.history['val_base'],'.-',
+                         label='validation baseline')            
+        plt.grid()
+        plt.legend()
+        plt.gca().set_xlabel('epoch')
+
         print(fig_name)
         plt.tight_layout()
         plt.savefig(fig_name)

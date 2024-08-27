@@ -41,14 +41,18 @@ residual_mode = False ### TODO maybe in data_manager, or here, or ....
 # CNN_modes:
 #  'snapshots' : train an instanteous model
 #  'timesteps' : train a time-stepping model
-# CNN_mode = 'timesteps'
-CNN_mode = 'snapshots'
+CNN_mode = 'timesteps'
+# CNN_mode = 'snapshots'
+
+# enable or disable embedded ESN,
+# disabled by default in snapshots mode
+use_embedded_ESN = True
 
 use_feedthrough = True
 feedthrough_only = False
 
 # Save/load settings
-load_existing_model = False
+load_existing_model = True
 overwrite_existing_model = False
 
 # Visualization settings
@@ -58,14 +62,16 @@ plot_prediction = True
 #-------------------------------------------------------
 
 if load_existing_model:
-    model_id = '20240823_133518'
-    add_id = '_testing'
+    folder_id = '20240826_172109'
+    add_id    = '_snapshot_model'
+    model_id  = '20240827_101950'
 else:
-    model_id = datetime.now().strftime('%Y%m%d_%H%M%S')
+    folder_id = datetime.now().strftime('%Y%m%d_%H%M%S')
     add_id = '_snapshot_model'
+    model_id = folder_id
 
 # setup new or existing directories
-dirs, files = dm.setup_directories(model_id, add_id)
+dirs, files = dm.setup_directories(folder_id, add_id)
 models_dir = dirs['models']
 
 data, params, scalers, _  = \
@@ -74,7 +80,7 @@ data, params, scalers, _  = \
 
 # truncate
 # history = data['train']['HR'].shape[0] # use all data we have
-history = 10000
+history = 1000
 future = 400
 
 # input training data
@@ -100,16 +106,15 @@ esn_params = esn_interface.hyperparams
 
 if CNN_mode == 'snapshots':
     # Disable ESN
-    esn_params['external']['bypass_mode'] = True
+    use_embedded_ESN = False
+    
     # Get rid of time shift in training data, train with the '1:'
     # range.
     train_data_inp = train_data_otp
     # snapshot mode does not give any predictions:
     plot_prediction = False
 
-elif CNN_mode == 'timesteps':
-    # make sure the ESN is not bypassed in this mode
-    esn_params['external']['bypass_mode'] = False
+esn_params['external']['bypass_mode'] = not use_embedded_ESN
 
 esn = ESN_embedded(esn_params=esn_params)
 
@@ -145,9 +150,9 @@ if load_existing_model:
     esn.populate_storage(values, timeids, control)
     decoder = keras.models.load_model(load_path_decoder)
 
-print('--------------------------------------')
-print(f'experiment: {model_id}{add_id}')
-print('--------------------------------------')
+print('----------------------------------------------------------')
+print(f'experiment: {folder_id}{add_id},\nloading model: {model_id}')
+print('---------------------------------------------------------')
 
 checkpoints_dir = dirs['checkpoints']
 checkpoint_filepath = f'{checkpoints_dir}/checkpoint.model.keras'
@@ -172,8 +177,7 @@ tb_callback = keras.callbacks.TensorBoard(
     embeddings_metadata=None,
 )
 
-# callback to trigger ESN training
-epochs = 50
+epochs = 5
 batch_size = 4
 shuffle = True
 tic = time.time()
@@ -197,9 +201,8 @@ esn_callback = TriggerESN(esn,
                           train_in_epochs=[0],
                           num_samples=X_train[0].shape[0])
 
-
 if CNN_mode == 'timesteps':
-    # normal validation does not work with embedded ESN
+    # normal validation is not valid for timestepping mode
     validation_data=None
 
     # we create a custom validation using a callback at every epoch
@@ -375,3 +378,4 @@ else: # only pot the history
     print('print history')
     plotmachine = PlotMachine(results_dir=dirs['results'])
     plotmachine.plot_history(hist)
+    plt.pause(1)

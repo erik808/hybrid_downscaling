@@ -320,11 +320,13 @@ class CustomValidation(keras.callbacks.Callback):
             xk_true = np.expand_dims(self.test_data[i,:,:,:], axis=0)
             error += np.sqrt(np.sum(np.square(xk - xk_true)))
             base += np.sqrt(np.sum(np.square(Pxk - xk_true)))
-            values = [('<error>', error/(i+1)),
-                      ('<base>', base/(i+1))]
+            values = [('error', error/(i+1)),
+                      ('base', base/(i+1))]
             pb_i.add(1, values=values)
 
         self.plotmachine.plot_prediction_error(self.test_data,
                                                predictions,
                                                self.test_data_ft,
                                                f'_epoch_{epoch}')
+        logs['val_error']=error/(i+1)
+        logs['val_base']=base/(i+1)

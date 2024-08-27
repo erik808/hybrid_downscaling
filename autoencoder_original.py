@@ -1,3 +1,4 @@
+
 import os
 import dill
 
@@ -43,10 +44,8 @@ residual_mode = False ### TODO maybe in data_manager, or here, or ....
 # CNN_mode = 'timesteps'
 CNN_mode = 'snapshots'
 
-
 use_feedthrough = True
 feedthrough_only = False
-
 
 # Save/load settings
 load_existing_model = False
@@ -237,7 +236,6 @@ print(f'total training time: {(toc-tic)/60}m')
 
 # SAVING -----------------------------------------------
 
-
 # save model and metadata
 timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
 mdata_file = f'{models_dir}/mdata_{timestamp}.dill'
@@ -252,18 +250,14 @@ with open(mdata_file, 'wb') as file:
 
 # save models
 if (load_existing_model and
-    overwrite_existing_model):
-    save_path_autoencoder = load_path_autoencoder
-    save_path_encoder = load_path_encoder
-    save_path_decoder = load_path_decoder
-elif not load_existing_model:
-    save_path_autoencoder = f'{models_dir}/aencodr_{model_id}.keras'
-    save_path_encoder     = f'{models_dir}/encoder_{model_id}.keras'
-    save_path_decoder     = f'{models_dir}/decoder_{model_id}.keras'
-else:
+    not overwrite_existing_model):
     save_path_autoencoder = f'{models_dir}/aencodr_{timestamp}.keras'
     save_path_encoder     = f'{models_dir}/encoder_{timestamp}.keras'
     save_path_decoder     = f'{models_dir}/decoder_{timestamp}.keras'
+else:
+    save_path_autoencoder = f'{models_dir}/aencodr_{model_id}.keras'
+    save_path_encoder     = f'{models_dir}/encoder_{model_id}.keras'
+    save_path_decoder     = f'{models_dir}/decoder_{model_id}.keras'
 
 print(f'saving autoencoder to {save_path_autoencoder}')
 print(f'saving encoder to {save_path_encoder}')

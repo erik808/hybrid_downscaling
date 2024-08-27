@@ -60,7 +60,6 @@ plot_prediction = True
 
 #-------------------------------------------------------
 #-------------------------------------------------------
-
 if load_existing_model:
     folder_id = '20240826_172109'
     add_id    = '_snapshot_model'
@@ -80,7 +79,7 @@ data, params, scalers, _  = \
 
 # truncate
 # history = data['train']['HR'].shape[0] # use all data we have
-history = 1000
+history = 20000
 future = 400
 
 # input training data
@@ -177,7 +176,7 @@ tb_callback = keras.callbacks.TensorBoard(
     embeddings_metadata=None,
 )
 
-epochs = 5
+epochs = 50
 batch_size = 4
 shuffle = True
 tic = time.time()
@@ -198,7 +197,8 @@ else:
 Y_train = train_data_otp
 
 esn_callback = TriggerESN(esn,
-                          train_in_epochs=[0],
+                          train_every=3,
+                          # train_in_epochs=[0],
                           num_samples=X_train[0].shape[0])
 
 if CNN_mode == 'timesteps':
@@ -357,11 +357,6 @@ if plot_prediction:
                                  'vmin' : -0.2,
                                  'vmax' : 0.2,
                                  'cmap' : 'RdBu'},
-
-                   # 'res dif' : {'values' : Rs_diff_fun,
-                   #              'vmin' : -0.05,
-                   #              'vmax' : 0.05,
-                   #              'cmap' : 'RdBu'},
                    }
 
     plotmachine = PlotMachine(output_dict=output_dict,

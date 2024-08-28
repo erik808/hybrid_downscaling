@@ -70,7 +70,7 @@ def load_u_data():
 
     return da_HR, da_LR, mask
 
-def load_uv_data():
+def load_uv_data(coarsen_in_time=False):
     bt_HR = xr.open_dataset(HR_bathy_file)
     ds_HR = xr.open_mfdataset(HR_data_files, parallel=True)
     ds_LR = xr.open_dataset(LR_data_file)
@@ -93,24 +93,33 @@ def load_uv_data():
                                 'latitude':'lat'})\
                                 .fillna(0.0)
 
-    def create_da_LR(da_HR):
+    def create_da_LR(da_HR,
+                     coarsen_in_time=False,
+                     coarse_time_freq='4h'):
         print('Regridding HR to LR')
         da_HR_LR = interp_HR_LR(da_HR.values)
-        print('Regridding LR to HR')
-        da_HR_LR_HR_tmp = interp_LR_HR(da_HR_LR)
-
         da_HR_LR = xr.DataArray(da_HR_LR, dims=['time','lat','lon'],
                                 coords={'time':ds_HR.time,
                                         'lat':ds_LR.latitude.values,
                                         'lon':ds_LR.longitude.values})
+        if coarsen_in_time:
+            da_HR_LR_resamp = da_HR_LR.resample(time=coarse_time_freq)\
+                                      .first()
+            da_HR_LR = da_HR_LR_resamp.interp(time=da_HR_LR.time,
+                                              method='cubic')
 
+        print('Regridding LR to HR')
         da_HR_LR_HR = xr.zeros_like(da_HR)
+        da_HR_LR_HR_tmp = interp_LR_HR(da_HR_LR.values)
         da_HR_LR_HR[:,:,:] = da_HR_LR_HR_tmp
+
+        # remove nans
         da_LR = da_HR_LR_HR.fillna(0.0)
+
         return da_LR
 
-    da_LR_uo = create_da_LR(da_HR_uo)
-    da_LR_vo = create_da_LR(da_HR_vo)
+    da_LR_uo = create_da_LR(da_HR_uo, coarsen_in_time)
+    da_LR_vo = create_da_LR(da_HR_vo, coarsen_in_time)
 
     da_HR = {'uo': da_HR_uo,
              'vo': da_HR_vo}
@@ -121,12 +130,13 @@ def load_uv_data():
 
 
 def load_training_data(split_factor=4/5,
-                       scaling_range=(0,1)):
+                       scaling_range=(0,1),
+                       coarsen_in_time=False):
     # assume everything has this shape
     params = {}
     data = {}
 
-    da_HR, da_LR, da_mask = load_uv_data()
+    da_HR, da_LR, da_mask = load_uv_data(coarsen_in_time)
 
     # create a torch mask
     params['mask'] = torch.tensor(da_mask.values)[None,:,:,None]
@@ -169,10 +179,15 @@ def load_training_data(split_factor=4/5,
 
 def create_training_data(compute_data=True,
                          encoder=None,
-                         residual_mode=False):
+                         residual_mode=False,
+                         coarsen_in_time=False):
+
+    enc_data={}
     if compute_data:
         print('Create training data')
-        orig_data, params, scalers  = load_training_data()
+        orig_data, params, scalers  = \
+            load_training_data(split_factor=4/5,
+                               coarsen_in_time=coarsen_in_time)
 
         container = {'data' : orig_data,
                      'params' : params,
@@ -217,7 +232,7 @@ def create_training_data(compute_data=True,
         else:
             enc_data = None
 
-    if residual_mode:
+    if residual_mode: ### TODO
         orig_data['train']['R'] = (orig_data['train']['HR'] -
                                    orig_data['train']['LR'])
         orig_data['test']['R'] = (orig_data['test']['HR'] -

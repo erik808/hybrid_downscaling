@@ -74,12 +74,13 @@ dirs, files = dm.setup_directories(folder_id, add_id)
 models_dir = dirs['models']
 
 data, params, scalers, _  = \
-    dm.create_training_data(False,
-                            residual_mode=residual_mode)
+    dm.create_training_data(compute_data=True,
+                            residual_mode=residual_mode,
+                            coarsen_in_time=True)
 
 # truncate
 # history = data['train']['HR'].shape[0] # use all data we have
-history = 20000
+history = 5000
 future = 400
 
 # input training data
@@ -112,21 +113,7 @@ if CNN_mode == 'snapshots':
     train_data_inp = train_data_otp
     # snapshot mode does not give any predictions:
     plot_prediction = False
-
-esn_params['external']['bypass_mode'] = not use_embedded_ESN
-
-esn = ESN_embedded(esn_params=esn_params)
-
-log_file = files['log']
-ae = AutoEncoder(test_vec=train_data_inp[0,:,:,:],
-                 mask=mask,
-                 log_file=log_file,
-                 esn=esn)
-
-autoencoder, encoder, decoder = \
-    ae.build_model(use_feedthrough=use_feedthrough,
-                   feedthrough_only=feedthrough_only,
-                   feedthrough_type='multiply')
+    
 
 if load_existing_model:
     load_path_autoencoder = f'{models_dir}/aencodr_{model_id}.keras'
@@ -148,6 +135,24 @@ if load_existing_model:
     esn.initialize(values, control)
     esn.populate_storage(values, timeids, control)
     decoder = keras.models.load_model(load_path_decoder)
+    
+    autoencoder.summary()
+    encoder.summary()
+    decoder.summary()
+else:
+    
+    esn_params['external']['bypass_mode'] = not use_embedded_ESN
+    esn = ESN_embedded(esn_params=esn_params)
+
+    ae = AutoEncoder(test_vec=train_data_inp[0,:,:,:],
+                     mask=mask,
+                     log_file=files['log'],
+                     esn=esn)
+
+    autoencoder, encoder, decoder = \
+    ae.build_model(use_feedthrough=use_feedthrough,
+                   feedthrough_only=feedthrough_only,
+                   feedthrough_type='multiply')
 
 print('----------------------------------------------------------')
 print(f'experiment: {folder_id}{add_id},\nloading model: {model_id}')
@@ -176,8 +181,8 @@ tb_callback = keras.callbacks.TensorBoard(
     embeddings_metadata=None,
 )
 
-epochs = 50
-batch_size = 4
+epochs = 5
+batch_size = 16
 shuffle = True
 tic = time.time()
 
@@ -197,8 +202,8 @@ else:
 Y_train = train_data_otp
 
 esn_callback = TriggerESN(esn,
-                          train_every=3,
-                          # train_in_epochs=[0],
+#                          train_every=10,
+                          train_in_epochs=[0,10],
                           num_samples=X_train[0].shape[0])
 
 if CNN_mode == 'timesteps':

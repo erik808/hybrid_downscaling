@@ -3,13 +3,13 @@ import numpy as np
 import xarray as xr
 import xesmf as xe
 import torch
+import keras
 import dill
+import pytide
 from sklearn.preprocessing import MinMaxScaler
+from multiprocess import Pool
 
 data_dir      = 'data'
-dill_file     = f'{data_dir}/ae_esn_training_data.dill'
-dill_file_enc = f'{data_dir}/ae_esn_training_data_encoded.dill'
-
 
 HR_data_files = (f'{data_dir}/cmems_mod_nws_phy_anfc_0.027deg-2D_PT15M-i_'
                  f'uo-vo_4.23E-7.78E_56.81N-58.70N_2023-/*.nc')
@@ -70,7 +70,8 @@ def load_u_data():
 
     return da_HR, da_LR, mask
 
-def load_uv_data(coarsen_in_time=False):
+def load_uv_data(coarsen_in_time=False,
+                 detide=False):
     bt_HR = xr.open_dataset(HR_bathy_file)
     ds_HR = xr.open_mfdataset(HR_data_files, parallel=True)
     ds_LR = xr.open_dataset(LR_data_file)
@@ -92,6 +93,51 @@ def load_uv_data(coarsen_in_time=False):
     da_HR_vo = ds_HR.vo.rename({'longitude':'lon',
                                 'latitude':'lat'})\
                                 .fillna(0.0)
+
+
+    def detide_da(da):
+        da.load()        
+        wt = pytide.WaveTable(["M2", "S2", "N2", "K1",
+                               "O1", "Q1", "M4",
+                               "K2", "P1", "Mf", "Mm" ])
+
+        dates = da.time.values
+        f, vu = wt.compute_nodal_modulations(dates)
+        latlons = np.where(mask==1)
+
+        ind_range = range(len(latlons[0]))
+        pb = keras.utils.Progbar(len(ind_range))
+
+        def detide_point(i):
+            if not i % 200:
+                pb.update(i)
+
+            vals = da[:, latlons[0][i], latlons[1][i]].values
+            waves = wt.harmonic_analysis(vals, f, vu)
+            vals_tide = wt.tide_from_tide_series(dates, waves)
+            vals_detide = vals - vals_tide
+            return vals_detide
+
+        print('Detiding:')
+        with Pool(8) as p:
+            results = p.map(detide_point, ind_range)
+
+        pb.update(ind_range.stop, finalize=True)
+
+        pb = keras.utils.Progbar(len(ind_range))
+        da_dt = xr.zeros_like(da)
+        print('Filling data array:')
+        for i in ind_range:
+            da_dt[:, latlons[0][i], latlons[1][i]] = results[i]
+            pb.add(1)
+        pb.update(ind_range.stop, finalize=True)
+
+        return da_dt
+
+    if detide:
+        da_HR_uo_dt = detide_da(da_HR_uo)
+        da_HR_vo_dt = detide_da(da_HR_vo)
+
 
     def create_da_LR(da_HR,
                      coarsen_in_time=False,
@@ -131,12 +177,14 @@ def load_uv_data(coarsen_in_time=False):
 
 def load_training_data(split_factor=4/5,
                        scaling_range=(0,1),
-                       coarsen_in_time=False):
+                       coarsen_in_time=False,
+                       detide=False):
     # assume everything has this shape
     params = {}
     data = {}
 
-    da_HR, da_LR, da_mask = load_uv_data(coarsen_in_time)
+    da_HR, da_LR, da_mask = load_uv_data(coarsen_in_time=coarsen_in_time,
+                                         detide=detide)
 
     # create a torch mask
     params['mask'] = torch.tensor(da_mask.values)[None,:,:,None]
@@ -180,14 +228,20 @@ def load_training_data(split_factor=4/5,
 def create_training_data(compute_data=True,
                          encoder=None,
                          residual_mode=False,
-                         coarsen_in_time=False):
+                         coarsen_in_time=False,
+                         detide=False):
+
+    postfix = '_detided' if detide else ''
+    dill_file     = f'{data_dir}/ae_esn_training_data{postfix}.dill'
+    dill_file_enc = f'{data_dir}/ae_esn_training_data{postfix}_encoded.dill'
 
     enc_data={}
     if compute_data:
         print('Create training data')
         orig_data, params, scalers  = \
             load_training_data(split_factor=4/5,
-                               coarsen_in_time=coarsen_in_time)
+                               coarsen_in_time=coarsen_in_time,
+                               detide=detide)
 
         container = {'data' : orig_data,
                      'params' : params,

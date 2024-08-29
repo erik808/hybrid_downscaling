@@ -68,7 +68,6 @@ class PlotMachine():
         # print(fig_name)
         plt.savefig(fig_name)
 
-
     def plot_history(self, hist):
         timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
         fig_name = f'{self.results_dir}/history_{timestamp}.png'

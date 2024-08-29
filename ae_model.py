@@ -64,7 +64,7 @@ class AutoEncoder(keras_tuner.HyperModel):
 
         Nlat, Nlon, num_channels = self.test_vec.shape
         num_filters = 32
-        num_filters_red = 32
+        num_filters_red = 16
         kernel_size = (3,3)
 
         masking_layer = Masking(self.mask, name="masking_layer")
@@ -82,10 +82,16 @@ class AutoEncoder(keras_tuner.HyperModel):
                                        name="feedthrough_input")
 
         # Encoder ------------------------------------------------------
+        conv_layer_0 = layers.Conv2D(num_filters_red, kernel_size,
+                                     strides = (1,1),
+                                     activation=activation,
+                                     padding="same", name="conv_layer_0")
+        
         conv_layer_1 = layers.Conv2D(num_filters, kernel_size,
                                      strides = (2,2),
                                      activation=activation,
                                      padding="same", name="conv_layer_1")
+        
         conv_layer_2 = layers.Conv2D(num_filters, kernel_size,
                                      strides = (2,2),
                                      activation=activation,
@@ -99,7 +105,8 @@ class AutoEncoder(keras_tuner.HyperModel):
         dropout_layer_1 = layers.Dropout(self.dropout_rate,
                                          name="dropout_1")
 
-        x = conv_layer_1(state_input)
+        x = conv_layer_0(state_input)
+        x = conv_layer_1(x)
         x = conv_layer_2(x)
         if use_dropout:
             x = dropout_layer_1(x)
@@ -111,7 +118,8 @@ class AutoEncoder(keras_tuner.HyperModel):
         if (self.esn != None and
             self.use_feedthrough):
 
-            c = conv_layer_1(feedthrough)
+            c = conv_layer_0(feedthrough)
+            c = conv_layer_1(c)
             c = conv_layer_2(c)
             if use_dropout:
                 c = dropout_layer(c)
@@ -120,7 +128,7 @@ class AutoEncoder(keras_tuner.HyperModel):
             encoded = self.esn(encoded, time_input, control)
 
         # Decoder layers
-        convt_layer_1 = layers.Conv2DTranspose(num_filters, kernel_size,
+        convt_layer_1 = layers.Conv2DTranspose(num_filters_red, kernel_size,
                                                strides=(2,2),
                                                activation=activation,
                                                padding="same",
@@ -131,6 +139,12 @@ class AutoEncoder(keras_tuner.HyperModel):
                                                activation=activation,
                                                padding="same",
                                                name='convt_layer_2')
+
+        convt_layer_2_1 = layers.Conv2DTranspose(num_filters, kernel_size,
+                                                 strides=(1,1),
+                                                 activation=activation,
+                                                 padding="same",
+                                                 name='convt_layer_2_1')
 
         convt_layer_3 = layers.Conv2DTranspose(num_filters, kernel_size,
                                                strides=(2,2),
@@ -158,6 +172,7 @@ class AutoEncoder(keras_tuner.HyperModel):
         # Decoder:
         y = convt_layer_1(encoded)
         y = convt_layer_2(y)
+        y = convt_layer_2_1(y)
         if use_dropout:  y = dropout_layer_2(y)
         y = convt_layer_3(y)
         cropped_y = cropping_layer(y)
@@ -211,12 +226,6 @@ class AutoEncoder(keras_tuner.HyperModel):
             optim = keras.optimizers.SGD(learning_rate=learning_rate)
 
         autoencoder.compile(optimizer=optim, loss=loss)
-
-        # logging
-        if verbosity > 10:
-            encoder.summary(60)
-            decoder.summary(60)
-            autoencoder.summary(60)
 
         self.log(locals(), 'a')
         self.log_model(autoencoder, 'a')
@@ -291,9 +300,8 @@ class CustomValidation(keras.callbacks.Callback):
     """
     """
 
-    def __init__(self, test_data, initial_xk, plotmachine):
+    def __init__(self, test_data, initial_xk, plotmachine, pars):
         super().__init__()
-
 
         self.initial_xk = initial_xk
         self.test_data = test_data[0]
@@ -301,10 +309,9 @@ class CustomValidation(keras.callbacks.Callback):
         self.T_test = test_data[1]
         self.test_data_ft = test_data[2]
         self.plotmachine = plotmachine
+        self.pars = pars
 
-
-    def on_epoch_end(self, epoch, logs=None):
-        print(f'\nCustomValidation: perform {self.N_steps} prediction steps')
+    def on_epoch_end(self, epoch, logs=None):        
         predictions = np.zeros_like(self.test_data)
 
         xk = self.initial_xk
@@ -313,10 +320,20 @@ class CustomValidation(keras.callbacks.Callback):
 
         error, base = (0,0)
         for i in range(self.N_steps):
+
+            
             Pxk = np.expand_dims(self.test_data_ft[i,:,:,:], axis=0)
             tid = np.expand_dims(self.T_test[i,:,:,:], axis=0)
-            xk = self.model.predict([xk, tid, Pxk], verbose=0)
+
+            if self.pars['feedthrough_only']:
+                xk = self.model.predict([Pxk], verbose=0)
+            elif self.pars['use_feedthrough']:
+                xk = self.model.predict([xk, tid, Pxk], verbose=0)
+            else:
+                xk = self.model.predict([xk, tid], verbose=0)
+                
             predictions[i,:,:,:] = xk
+            
             xk_true = np.expand_dims(self.test_data[i,:,:,:], axis=0)
             error += (np.sum(np.square(xk - xk_true)))
             base += (np.sum(np.square(Pxk - xk_true)))

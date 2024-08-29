@@ -41,8 +41,8 @@ residual_mode = False ### TODO maybe in data_manager, or here, or ....
 # CNN_modes:
 #  'snapshots' : train an instanteous model
 #  'timesteps' : train a time-stepping model
-CNN_mode = 'timesteps'
-# CNN_mode = 'snapshots'
+#CNN_mode = 'timesteps'
+CNN_mode = 'snapshots'
 
 # enable or disable embedded ESN,
 # disabled by default in snapshots mode
@@ -61,9 +61,11 @@ plot_prediction = True
 #-------------------------------------------------------
 #-------------------------------------------------------
 if load_existing_model:
-    folder_id = '20240826_172109'
+    # 20240828_144827_snapshot_model/results/history_20240828_145013.png
+    # 20240829_090516_snapshot_model/models/aencodr_20240829_090516.ker
+    folder_id = '20240829_090516'
     add_id    = '_snapshot_model'
-    model_id  = '20240827_101950'
+    model_id  = '20240829_105429'
 else:
     folder_id = datetime.now().strftime('%Y%m%d_%H%M%S')
     add_id = '_snapshot_model'
@@ -76,11 +78,12 @@ models_dir = dirs['models']
 data, params, scalers, _  = \
     dm.create_training_data(compute_data=True,
                             residual_mode=residual_mode,
-                            coarsen_in_time=True)
+                            coarsen_in_time=True,
+                            detide=True)
 
 # truncate
 # history = data['train']['HR'].shape[0] # use all data we have
-history = 5000
+history = 10000
 future = 400
 
 # input training data
@@ -107,13 +110,14 @@ esn_params = esn_interface.hyperparams
 if CNN_mode == 'snapshots':
     # Disable ESN
     use_embedded_ESN = False
-    
+
     # Get rid of time shift in training data, train with the '1:'
     # range.
     train_data_inp = train_data_otp
     # snapshot mode does not give any predictions:
     plot_prediction = False
-    
+
+if feedthrough_only: use_embedded_ESN = False
 
 if load_existing_model:
     load_path_autoencoder = f'{models_dir}/aencodr_{model_id}.keras'
@@ -135,12 +139,9 @@ if load_existing_model:
     esn.initialize(values, control)
     esn.populate_storage(values, timeids, control)
     decoder = keras.models.load_model(load_path_decoder)
-    
-    autoencoder.summary()
-    encoder.summary()
-    decoder.summary()
+
 else:
-    
+
     esn_params['external']['bypass_mode'] = not use_embedded_ESN
     esn = ESN_embedded(esn_params=esn_params)
 
@@ -154,8 +155,10 @@ else:
                    feedthrough_only=feedthrough_only,
                    feedthrough_type='multiply')
 
+autoencoder.summary()
+
 print('----------------------------------------------------------')
-print(f'experiment: {folder_id}{add_id},\nloading model: {model_id}')
+print(f'experiment: {folder_id}{add_id}, model: {model_id}')
 print('---------------------------------------------------------')
 
 checkpoints_dir = dirs['checkpoints']
@@ -181,8 +184,8 @@ tb_callback = keras.callbacks.TensorBoard(
     embeddings_metadata=None,
 )
 
-epochs = 5
-batch_size = 16
+epochs = 50
+batch_size = 4
 shuffle = True
 tic = time.time()
 
@@ -192,6 +195,7 @@ T_test  = np.expand_dims(np.arange(train_data_inp.shape[0],
                                    train_data_inp.shape[0] +
                                    test_data.shape[0]),
                          axis=[1,2,3])
+
 if feedthrough_only:
     X_train = [train_data_ft]
 elif use_feedthrough:
@@ -202,8 +206,8 @@ else:
 Y_train = train_data_otp
 
 esn_callback = TriggerESN(esn,
-#                          train_every=10,
-                          train_in_epochs=[0,10],
+                          # train_every=1,
+                          train_in_epochs=[0,5,10,20,30],
                           num_samples=X_train[0].shape[0])
 
 if CNN_mode == 'timesteps':
@@ -217,7 +221,9 @@ if CNN_mode == 'timesteps':
     validation_callback = \
         CustomValidation(test_data=(test_data, T_test, test_data_ft),
                          initial_xk=initial_xk,
-                         plotmachine=plotmachine)
+                         plotmachine=plotmachine,
+                         pars = {'feedthrough_only': feedthrough_only,
+                                 'use_feedthrough': use_feedthrough})
 
     callbacks=[esn_callback, validation_callback]
 
@@ -227,9 +233,7 @@ elif CNN_mode == 'snapshots':
     validation_data=(X_test, Y_test)
     callbacks=None
 
-
 # TRAINING --------------------------------------------
-
 hist = autoencoder.fit(x=X_train,
                        y=Y_train,
                        epochs=epochs,
@@ -241,9 +245,7 @@ hist = autoencoder.fit(x=X_train,
 toc = time.time()
 print(f'total training time: {(toc-tic)/60}m')
 
-
 # SAVING -----------------------------------------------
-
 # save model and metadata
 timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
 mdata_file = f'{models_dir}/mdata_{timestamp}.dill'
@@ -378,4 +380,3 @@ else: # only pot the history
     print('print history')
     plotmachine = PlotMachine(results_dir=dirs['results'])
     plotmachine.plot_history(hist)
-    plt.pause(1)

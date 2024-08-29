@@ -14,19 +14,19 @@ hyperparams = { 'external' : {'model_type'      : 'ESNc',
                               'bypass_mode'     : False,
                               'control_amp'     : 1 },
 
-                'internal' : { 'Nr'                 : 2000,
+                'internal' : { 'Nr'                 : 5000,
                                'scalingType'        : 'none',
-                               'rhoMax'             : 0.5,
-                               'alpha'              : 0.2,
-                               'avgDegree'          : 5,
-                               'entriesPerRow'      : 100,
+                               'rhoMax'             : 1.2,
+                               'alpha'              : 0.9,
+                               'avgDegree'          : 50,
+                               'entriesPerRow'      : 50,
                                'noiseAmplitude'     : 0,
-                               'tikhonov_lambda'    : 1,
+                               'tikhonov_lambda'    : 10,
                                'squaredStates'      : 'even',
                                'reservoirStateInit' : 'zero',
                                'inputMatrixType'    : 'balancedSparse',
-                               'fCutoff'            : 0.02,
-                               'Wconstruction'      : 'avgDegree'} }
+                               'fCutoff'            : 0.01,
+                               'Wconstruction'      : 'entriesPerRow'} }
 
 class ESN_interface():
 

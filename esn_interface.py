@@ -15,7 +15,7 @@ hyperparams = { 'external' : {'model_type'      : 'ESNc',
                               'control_amp'     : 1 },
 
                 'internal' : { 'Nr'                 : 5000,
-                               'scalingType'        : 'none',
+                               'scalingType'        : 'minMax1',
                                'rhoMax'             : 1.2,
                                'alpha'              : 0.9,
                                'avgDegree'          : 50,

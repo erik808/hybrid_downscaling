@@ -41,6 +41,24 @@ class AutoEncoder(keras_tuner.HyperModel):
         self.esn = esn
         self.log('AutoEncoder\n', 'w')
 
+        self.num_filters = 32
+        self.num_filters_red = 16
+        self.kernel_size = (3,3)
+        self.num_resblocks = 2
+        
+    def ResBlock(self, inputs):
+        x = layers.Conv2D(self.num_filters,
+                          self.kernel_size,
+                          padding="same",
+                          activation="relu",
+                          name="residual_block_conv2d_a")(inputs)
+        x = layers.Conv2D(self.num_filters,
+                          self.kernel_size,
+                          padding="same",
+                          name="residual_block_conv2d_b")(x)
+        x = layers.Add(name="residal_block_add")([inputs, x])
+        return x
+    
     def build_model(self,
                     conv_arch='default',
                     learning_rate=0.002,
@@ -63,9 +81,6 @@ class AutoEncoder(keras_tuner.HyperModel):
         self.use_dropout = use_dropout
 
         Nlat, Nlon, num_channels = self.test_vec.shape
-        num_filters = 32
-        num_filters_red = 16
-        kernel_size = (3,3)
 
         masking_layer = Masking(self.mask, name="masking_layer")
         masking_layer_ft = Masking(self.mask, name="masking_layer_ft")
@@ -82,22 +97,26 @@ class AutoEncoder(keras_tuner.HyperModel):
                                        name="feedthrough_input")
 
         # Encoder ------------------------------------------------------
-        conv_layer_0 = layers.Conv2D(num_filters_red, kernel_size,
+        conv_layer_0 = layers.Conv2D(self.num_filters_red,
+                                     self.kernel_size,
                                      strides = (1,1),
                                      activation=activation,
                                      padding="same", name="conv_layer_0")
         
-        conv_layer_1 = layers.Conv2D(num_filters, kernel_size,
+        conv_layer_1 = layers.Conv2D(self.num_filters,
+                                     self.kernel_size,
                                      strides = (2,2),
                                      activation=activation,
                                      padding="same", name="conv_layer_1")
         
-        conv_layer_2 = layers.Conv2D(num_filters, kernel_size,
+        conv_layer_2 = layers.Conv2D(self.num_filters,
+                                     self.kernel_size,
                                      strides = (2,2),
                                      activation=activation,
                                      padding="same", name="conv_layer_2")
 
-        conv_layer_3 = layers.Conv2D(num_filters_red, kernel_size,
+        conv_layer_3 = layers.Conv2D(self.num_filters_red,
+                                     self.kernel_size,
                                      strides = (2,2),
                                      activation=activation,
                                      padding="same", name="conv_layer_3")
@@ -105,8 +124,7 @@ class AutoEncoder(keras_tuner.HyperModel):
         dropout_layer_1 = layers.Dropout(self.dropout_rate,
                                          name="dropout_1")
 
-        x = conv_layer_0(state_input)
-        x = conv_layer_1(x)
+        x = conv_layer_1(state_input)
         x = conv_layer_2(x)
         if use_dropout:
             x = dropout_layer_1(x)
@@ -118,8 +136,7 @@ class AutoEncoder(keras_tuner.HyperModel):
         if (self.esn != None and
             self.use_feedthrough):
 
-            c = conv_layer_0(feedthrough)
-            c = conv_layer_1(c)
+            c = conv_layer_1(feedthrough)
             c = conv_layer_2(c)
             if use_dropout:
                 c = dropout_layer(c)
@@ -128,25 +145,29 @@ class AutoEncoder(keras_tuner.HyperModel):
             encoded = self.esn(encoded, time_input, control)
 
         # Decoder layers
-        convt_layer_1 = layers.Conv2DTranspose(num_filters_red, kernel_size,
+        convt_layer_1 = layers.Conv2DTranspose(self.num_filters,
+                                               self.kernel_size,
                                                strides=(2,2),
                                                activation=activation,
                                                padding="same",
-                                               name='convt_layer_1')
+                                               name='convt_layer_1')        
 
-        convt_layer_2 = layers.Conv2DTranspose(num_filters, kernel_size,
+        convt_layer_2 = layers.Conv2DTranspose(self.num_filters,
+                                               self.kernel_size,
                                                strides=(2,2),
                                                activation=activation,
                                                padding="same",
                                                name='convt_layer_2')
 
-        convt_layer_2_1 = layers.Conv2DTranspose(num_filters, kernel_size,
+        convt_layer_2_1 = layers.Conv2DTranspose(self.num_filters,
+                                                 self.kernel_size,
                                                  strides=(1,1),
                                                  activation=activation,
                                                  padding="same",
                                                  name='convt_layer_2_1')
 
-        convt_layer_3 = layers.Conv2DTranspose(num_filters, kernel_size,
+        convt_layer_3 = layers.Conv2DTranspose(self.num_filters,
+                                               self.kernel_size,
                                                strides=(2,2),
                                                activation=activation,
                                                padding="same",
@@ -158,21 +179,24 @@ class AutoEncoder(keras_tuner.HyperModel):
         cropping_layer = layers.Cropping2D(cropping=((1,2),(3,4)),
                                            name='cropping_layer')
 
-        feedthrough_layer_1 = layers.Conv2D(num_filters, kernel_size,
+        feedthrough_layer_1 = layers.Conv2D(self.num_filters,
+                                            self.kernel_size,
                                             strides = (1,1),
                                             activation=activation,
                                             padding="same",
                                             name='feedthrough_layer_1')
 
-        output_layer = layers.Conv2D(num_channels, kernel_size,
+        output_layer = layers.Conv2D(num_channels, self.kernel_size,
                                      activation="sigmoid",
                                      padding="same",
                                      name='output_layer')
 
         # Decoder:
         y = convt_layer_1(encoded)
+        for i in range(self.num_resblocks):
+            y = self.ResBlock(y)
         y = convt_layer_2(y)
-        y = convt_layer_2_1(y)
+        # y = convt_layer_2_1(y)
         if use_dropout:  y = dropout_layer_2(y)
         y = convt_layer_3(y)
         cropped_y = cropping_layer(y)

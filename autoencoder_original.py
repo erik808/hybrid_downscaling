@@ -41,7 +41,7 @@ residual_mode = False ### TODO maybe in data_manager, or here, or ....
 # CNN_modes:
 #  'snapshots' : train an instanteous model
 #  'timesteps' : train a time-stepping model
-#CNN_mode = 'timesteps'
+# CNN_mode = 'timesteps'
 CNN_mode = 'snapshots'
 
 # enable or disable embedded ESN,
@@ -52,7 +52,7 @@ use_feedthrough = True
 feedthrough_only = False
 
 # Save/load settings
-load_existing_model = True
+load_existing_model = False
 overwrite_existing_model = False
 
 # Visualization settings
@@ -63,9 +63,9 @@ plot_prediction = True
 if load_existing_model:
     # 20240828_144827_snapshot_model/results/history_20240828_145013.png
     # 20240829_090516_snapshot_model/models/aencodr_20240829_090516.ker
-    folder_id = '20240829_090516'
+    folder_id = '20240829_201040'
     add_id    = '_snapshot_model'
-    model_id  = '20240829_105429'
+    model_id  = '20240829_201040'
 else:
     folder_id = datetime.now().strftime('%Y%m%d_%H%M%S')
     add_id = '_snapshot_model'
@@ -82,8 +82,8 @@ data, params, scalers, _  = \
                             detide=True)
 
 # truncate
-# history = data['train']['HR'].shape[0] # use all data we have
-history = 10000
+history = data['train']['HR'].shape[0] # use all data we have
+# history = 10000
 future = 400
 
 # input training data

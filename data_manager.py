@@ -71,7 +71,9 @@ def load_u_data():
     return da_HR, da_LR, mask
 
 def load_uv_data(coarsen_in_time=False,
-                 detide=False):
+                 detide=False,
+                 differences=False):
+    
     bt_HR = xr.open_dataset(HR_bathy_file)
     ds_HR = xr.open_mfdataset(HR_data_files, parallel=True)
     ds_LR = xr.open_dataset(LR_data_file)
@@ -89,6 +91,7 @@ def load_uv_data(coarsen_in_time=False,
     da_HR_uo = ds_HR.uo.rename({'longitude':'lon',
                                 'latitude':'lat'})\
                                 .fillna(0.0)
+        
 
     da_HR_vo = ds_HR.vo.rename({'longitude':'lon',
                                 'latitude':'lat'})\
@@ -129,19 +132,22 @@ def load_uv_data(coarsen_in_time=False,
         print('Filling data array:')
         for i in ind_range:
             da_dt[:, latlons[0][i], latlons[1][i]] = results[i]
-            pb.add(1)
-        pb.update(ind_range.stop, finalize=True)
+            pb.add(1)            
 
         return da_dt
 
     if detide:
-        da_HR_uo_dt = detide_da(da_HR_uo)
-        da_HR_vo_dt = detide_da(da_HR_vo)
+        da_HR_uo = detide_da(da_HR_uo)
+        da_HR_vo = detide_da(da_HR_vo)
 
+    if differences:        
+        da_HR_uo = da_HR_uo.diff('time')
+        da_HR_vo = da_HR_vo.diff('time')        
 
     def create_da_LR(da_HR,
                      coarsen_in_time=False,
-                     coarse_time_freq='4h'):
+                     coarse_time_freq='24h'):
+        
         print('Regridding HR to LR')
         da_HR_LR = interp_HR_LR(da_HR.values)
         da_HR_LR = xr.DataArray(da_HR_LR, dims=['time','lat','lon'],
@@ -150,9 +156,9 @@ def load_uv_data(coarsen_in_time=False,
                                         'lon':ds_LR.longitude.values})
         if coarsen_in_time:
             da_HR_LR_resamp = da_HR_LR.resample(time=coarse_time_freq)\
-                                      .first()
+                                      .mean()
             da_HR_LR = da_HR_LR_resamp.interp(time=da_HR_LR.time,
-                                              method='cubic')
+                                              method='linear')
 
         print('Regridding LR to HR')
         da_HR_LR_HR = xr.zeros_like(da_HR)
@@ -178,13 +184,15 @@ def load_uv_data(coarsen_in_time=False,
 def load_training_data(split_factor=4/5,
                        scaling_range=(0,1),
                        coarsen_in_time=False,
-                       detide=False):
+                       detide=False,
+                       differences=False):
     # assume everything has this shape
     params = {}
     data = {}
 
     da_HR, da_LR, da_mask = load_uv_data(coarsen_in_time=coarsen_in_time,
-                                         detide=detide)
+                                         detide=detide,
+                                         differences=differences)
 
     # create a torch mask
     params['mask'] = torch.tensor(da_mask.values)[None,:,:,None]
@@ -229,7 +237,8 @@ def create_training_data(compute_data=True,
                          encoder=None,
                          residual_mode=False,
                          coarsen_in_time=False,
-                         detide=False):
+                         detide=False,
+                         differences=False):
 
     postfix = '_detided' if detide else ''
     dill_file     = f'{data_dir}/ae_esn_training_data{postfix}.dill'
@@ -241,7 +250,8 @@ def create_training_data(compute_data=True,
         orig_data, params, scalers  = \
             load_training_data(split_factor=4/5,
                                coarsen_in_time=coarsen_in_time,
-                               detide=detide)
+                               detide=detide,
+                               differences=differences)
 
         container = {'data' : orig_data,
                      'params' : params,

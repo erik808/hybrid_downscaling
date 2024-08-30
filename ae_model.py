@@ -45,20 +45,22 @@ class AutoEncoder(keras_tuner.HyperModel):
         self.num_filters_red = 16
         self.kernel_size = (3,3)
         self.num_resblocks = 2
-        
+        self.resblock_ctr = 0
+
     def ResBlock(self, inputs):
+        self.resblock_ctr += 1
         x = layers.Conv2D(self.num_filters,
                           self.kernel_size,
                           padding="same",
                           activation="relu",
-                          name="residual_block_conv2d_a")(inputs)
+                          name=f"residual_block_conv2d_a_{self.resblock_ctr}")(inputs)
         x = layers.Conv2D(self.num_filters,
                           self.kernel_size,
                           padding="same",
-                          name="residual_block_conv2d_b")(x)
-        x = layers.Add(name="residal_block_add")([inputs, x])
+                          name=f"residual_block_conv2d_b_{self.resblock_ctr}")(x)
+        x = layers.Add(name=f"residal_block_add_{self.resblock_ctr}")([inputs, x])
         return x
-    
+
     def build_model(self,
                     conv_arch='default',
                     learning_rate=0.002,
@@ -66,13 +68,13 @@ class AutoEncoder(keras_tuner.HyperModel):
                     activation='relu',
                     optimizer='adam',
                     verbosity=20,
-                    use_feedthrough=False,
+                    use_feedthrough=False,                    
                     feedthrough_only=False,
                     use_timeinput=True,
                     feedthrough_type='multiply'
                     ):
 
-        self.use_feedthrough = use_feedthrough
+        self.use_feedthrough = use_feedthrough        
         self.feedthrough_only = feedthrough_only
         self.feedthrough_type = feedthrough_type
         if self.feedthrough_only: self.use_feedthrough = True
@@ -102,13 +104,13 @@ class AutoEncoder(keras_tuner.HyperModel):
                                      strides = (1,1),
                                      activation=activation,
                                      padding="same", name="conv_layer_0")
-        
+
         conv_layer_1 = layers.Conv2D(self.num_filters,
                                      self.kernel_size,
                                      strides = (2,2),
                                      activation=activation,
                                      padding="same", name="conv_layer_1")
-        
+
         conv_layer_2 = layers.Conv2D(self.num_filters,
                                      self.kernel_size,
                                      strides = (2,2),
@@ -150,7 +152,7 @@ class AutoEncoder(keras_tuner.HyperModel):
                                                strides=(2,2),
                                                activation=activation,
                                                padding="same",
-                                               name='convt_layer_1')        
+                                               name='convt_layer_1')
 
         convt_layer_2 = layers.Conv2DTranspose(self.num_filters,
                                                self.kernel_size,
@@ -216,6 +218,8 @@ class AutoEncoder(keras_tuner.HyperModel):
                 output = layers.Concatenate()([cropped_y, z])
             elif feedthrough_type == 'multiply':
                 output = layers.Multiply()([cropped_y, z])
+            elif feedthrough_type == 'ignore':
+                output = cropped_y
             else:
                 raise Exception('specify feedthrough_type when using feedthrough')
 
@@ -335,19 +339,26 @@ class CustomValidation(keras.callbacks.Callback):
         self.plotmachine = plotmachine
         self.pars = pars
 
-    def on_epoch_end(self, epoch, logs=None):        
+    def on_epoch_end(self, epoch, logs=None):
         predictions = np.zeros_like(self.test_data)
 
-        xk = self.initial_xk
+        xk   = self.initial_xk[0]
+        xkm1 = self.initial_xk[1]
         pb_i = keras.utils.Progbar(self.N_steps,
                                    stateful_metrics=['error', 'base'])
 
         error, base = (0,0)
         for i in range(self.N_steps):
 
-            
-            Pxk = np.expand_dims(self.test_data_ft[i,:,:,:], axis=0)
-            tid = np.expand_dims(self.T_test[i,:,:,:], axis=0)
+            xk_LR = np.expand_dims(self.test_data_ft[i,], axis=0)
+            if self.pars['residual_mode']:
+                # secant predictor in residual mode
+                Pxk = 2*xk - xkm1 - xk_LR
+            else:                    
+                Pxk = xk_LR
+                
+            tid = np.expand_dims(self.T_test[i,], axis=0)
+            xkm1 = xk
 
             if self.pars['feedthrough_only']:
                 xk = self.model.predict([Pxk], verbose=0)
@@ -355,15 +366,20 @@ class CustomValidation(keras.callbacks.Callback):
                 xk = self.model.predict([xk, tid, Pxk], verbose=0)
             else:
                 xk = self.model.predict([xk, tid], verbose=0)
-                
-            predictions[i,:,:,:] = xk
+
+            pred = xk + xk_LR if residual_mode else xk
+            predictions[i,] = pred
+
+            breakpoint()
+            # CHECK SANITY!!
             
-            xk_true = np.expand_dims(self.test_data[i,:,:,:], axis=0)
-            error += (np.sum(np.square(xk - xk_true)))
-            base += (np.sum(np.square(Pxk - xk_true)))
+            xk_true = np.expand_dims(self.test_data[i,], axis=0)
+            error += (np.sum(np.square(pred - xk_true)))
+            base += (np.sum(np.square(xk_LR - xk_true)))
             values = [('error', np.sqrt(error/(i+1))),
                       ('base', np.sqrt(base/(i+1)))]
-            pb_i.add(1, values=values)
+            pb_i.add(1, values=values)            
+        
 
         self.plotmachine.plot_prediction_error(self.test_data,
                                                predictions,
@@ -371,3 +387,5 @@ class CustomValidation(keras.callbacks.Callback):
                                                f'_epoch_{epoch}')
         logs['val_error']=np.sqrt(error/(i+1))
         logs['val_base']=np.sqrt(base/(i+1))
+
+        return predictions

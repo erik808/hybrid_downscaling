@@ -1,4 +1,3 @@
-
 import os
 import dill
 
@@ -36,13 +35,13 @@ from plot_utils import PlotMachine
 # Experiment settings
 
 # If True, train and predict residuals: R such that X_LR + R = X_HR
-residual_mode = False ### TODO maybe in data_manager, or here, or ....
+residual_mode = True ### TODO maybe in data_manager, or here, or ....
 
 # CNN_modes:
 #  'snapshots' : train an instanteous model
 #  'timesteps' : train a time-stepping model
-# CNN_mode = 'timesteps'
-CNN_mode = 'snapshots'
+CNN_mode = 'timesteps'
+# CNN_mode = 'snapshots'
 
 # enable or disable embedded ESN,
 # disabled by default in snapshots mode
@@ -59,16 +58,15 @@ overwrite_existing_model = False
 plot_prediction = True
 
 #-------------------------------------------------------
-#-------------------------------------------------------
 if load_existing_model:
     # 20240828_144827_snapshot_model/results/history_20240828_145013.png
     # 20240829_090516_snapshot_model/models/aencodr_20240829_090516.ker
-    folder_id = '20240829_201040'
+    folder_id = '20240830_103023'
     add_id    = '_snapshot_model'
-    model_id  = '20240829_201040'
+    model_id  = '20240830_103023'
 else:
     folder_id = datetime.now().strftime('%Y%m%d_%H%M%S')
-    add_id = '_snapshot_model'
+    add_id = '_feedthrough_only' if feedthrough_only else '_testing'
     model_id = folder_id
 
 # setup new or existing directories
@@ -80,24 +78,33 @@ data, params, scalers, _  = \
                             residual_mode=residual_mode,
                             coarsen_in_time=True,
                             detide=True)
-
 # truncate
-history = data['train']['HR'].shape[0] # use all data we have
+# history = data['train']['HR'].shape[0] # use all data we have
 # history = 10000
+history = 1000
 future = 400
 
-# input training data
-train_data_inp = data['train']['HR'][:-1,][-history:,]
-# output training data, shifted by 1
-train_data_otp = data['train']['HR'][1:,][-history:,]
-# feedthrough data, shifted by 1
-train_data_ft = data['train']['LR'][1:,][-history:,]
+if residual_mode:
+    # input training data
+    # output training data, shifted by 1
+    # feedthrough data, shifted by 1
+    train_data_inp = data['train']['R'][:-1,][-history:,]
+    train_data_otp = data['train']['R'][1:,][-history:,]
+    train_data_ft  = data['train']['FT'][1:,][-history:,]
+    test_data      = data['test']['R'][:future,]
+    test_data_ft   = data['test']['FT'][:future,]
+    test_time      = data['test']['time'][:future,]
+else:
+    train_data_inp = data['train']['HR'][:-1,][-history:,]
+    train_data_otp = data['train']['HR'][1:,][-history:,]
+    train_data_ft  = data['train']['LR'][1:,][-history:,]
+    test_data      = data['test']['HR'][:future,]
+    test_data_ft   = data['test']['LR'][:future,]
+    test_time      = data['test']['time'][:future,]        
 
-test_data     = data['test']['HR'][:future,]
-test_data_ft  = data['test']['LR'][:future,]
-test_time     = data['test']['time'][:future,]
+
 mask = params['mask']
-Nt = params['Nt']
+Nt   = params['Nt']
 Nlon = params['Nlon']
 Nlat = params['Nlat']
 num_channels = params['num_channels']
@@ -184,7 +191,7 @@ tb_callback = keras.callbacks.TensorBoard(
     embeddings_metadata=None,
 )
 
-epochs = 50
+epochs = 3
 batch_size = 4
 shuffle = True
 tic = time.time()
@@ -206,8 +213,8 @@ else:
 Y_train = train_data_otp
 
 esn_callback = TriggerESN(esn,
-                          # train_every=1,
-                          train_in_epochs=[0,5,10,20,30],
+                          # train_every=2,
+                          train_in_epochs=[5,10,20,30],
                           num_samples=X_train[0].shape[0])
 
 if CNN_mode == 'timesteps':
@@ -216,22 +223,26 @@ if CNN_mode == 'timesteps':
 
     # we create a custom validation using a callback at every epoch
     # end
-    initial_xk = np.expand_dims(train_data_otp[-1,:,:,:], axis=0)
+    initial_xk   = np.expand_dims(train_data_otp[-1,:,:,:], axis=0)
+    initial_xkm1 = np.expand_dims(train_data_otp[-2,:,:,:], axis=0)
     plotmachine = PlotMachine(results_dir=dirs['results'])
+    if residual_mode: test_data = data['test']['HR'][:future,]
+    if residual_mode: test_data_ft = data['test']['LR'][:future,]
     validation_callback = \
         CustomValidation(test_data=(test_data, T_test, test_data_ft),
-                         initial_xk=initial_xk,
+                         initial_xk=(initial_xk, initial_xkm1),
                          plotmachine=plotmachine,
                          pars = {'feedthrough_only': feedthrough_only,
-                                 'use_feedthrough': use_feedthrough})
+                                 'use_feedthrough': use_feedthrough,
+                                 'residual_mode': residual_mode})
 
-    callbacks=[esn_callback, validation_callback]
+    callbacks = [esn_callback, validation_callback]
 
 elif CNN_mode == 'snapshots':
     X_test = [test_data, T_test, test_data_ft]
     Y_test = test_data
-    validation_data=(X_test, Y_test)
-    callbacks=None
+    validation_data = (X_test, Y_test)
+    callbacks = None
 
 # TRAINING --------------------------------------------
 hist = autoencoder.fit(x=X_train,
@@ -280,6 +291,9 @@ decoder.save(save_path_decoder)
 if plot_prediction:
     print('create predictions')
 
+    breakpoint()
+    out = validation_callback.on_epoch_end(epochs+1)
+    
     predictions = np.zeros_like(test_data)
     xk = np.expand_dims(train_data_otp[-1,:,:,:], axis=0)
     N_steps=T_test.shape[0]
@@ -335,34 +349,38 @@ if plot_prediction:
     Rs_pred_fun = lambda i : predictions[i,:,:,0] - test_data_ft[i,:,:,0]
     Rs_diff_fun = lambda i : Rs_true_fun(i) - Rs_pred_fun(i)
 
+    vmax = Kt_HR_true_fun(0).max()
+    vmin_diff = Kt_HR_diff_fun(0).min()
+    vmax_diff = Kt_HR_diff_fun(0).max()
+
     output_dict = {'Kt_HR true' : {'values' : Kt_HR_true_fun,
                                    'vmin' : 0,
-                                   'vmax' : .8,
+                                   'vmax' : vmax,
                                    'cmap' : 'viridis'},
 
                    'Kt_HR pred' : {'values' : Kt_HR_pred_fun,
                                    'vmin' : 0,
-                                   'vmax' : .8,
+                                   'vmax' : vmax,
                                    'cmap' : 'viridis'},
 
                    'Kt_LR true' : {'values' : Kt_LR_true_fun,
                                    'vmin' : 0,
-                                   'vmax' : .8,
+                                   'vmax' : vmax,
                                    'cmap' : 'viridis'},
 
                    'Kt_HR diff' : {'values' : Kt_HR_diff_fun,
-                                   'vmin' : -0.2,
-                                   'vmax' : 0.2,
+                                   'vmin' : vmin_diff,
+                                   'vmax' : vmax_diff,
                                    'cmap' : 'RdBu'},
 
                    'res true' : {'values' : Rs_true_fun,
-                                 'vmin' : -0.2,
-                                 'vmax' : 0.2,
+                                 'vmin' : vmin_diff,
+                                 'vmax' : vmax_diff,
                                  'cmap' : 'RdBu'},
 
                    'res pred' : {'values' : Rs_pred_fun,
-                                 'vmin' : -0.2,
-                                 'vmax' : 0.2,
+                                 'vmin' : vmin_diff,
+                                 'vmax' : vmax_diff,
                                  'cmap' : 'RdBu'},
                    }
 

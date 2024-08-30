@@ -73,7 +73,7 @@ def load_u_data():
 def load_uv_data(coarsen_in_time=False,
                  detide=False,
                  differences=False):
-    
+
     bt_HR = xr.open_dataset(HR_bathy_file)
     ds_HR = xr.open_mfdataset(HR_data_files, parallel=True)
     ds_LR = xr.open_dataset(LR_data_file)
@@ -91,7 +91,7 @@ def load_uv_data(coarsen_in_time=False,
     da_HR_uo = ds_HR.uo.rename({'longitude':'lon',
                                 'latitude':'lat'})\
                                 .fillna(0.0)
-        
+
 
     da_HR_vo = ds_HR.vo.rename({'longitude':'lon',
                                 'latitude':'lat'})\
@@ -99,7 +99,7 @@ def load_uv_data(coarsen_in_time=False,
 
 
     def detide_da(da):
-        da.load()        
+        da.load()
         wt = pytide.WaveTable(["M2", "S2", "N2", "K1",
                                "O1", "Q1", "M4",
                                "K2", "P1", "Mf", "Mm" ])
@@ -121,8 +121,8 @@ def load_uv_data(coarsen_in_time=False,
             vals_detide = vals - vals_tide
             return vals_detide
 
-        print('Detiding:')
-        with Pool(8) as p:
+        print(f'Detiding:')
+        with Pool(4) as p:
             results = p.map(detide_point, ind_range)
 
         pb.update(ind_range.stop, finalize=True)
@@ -132,7 +132,7 @@ def load_uv_data(coarsen_in_time=False,
         print('Filling data array:')
         for i in ind_range:
             da_dt[:, latlons[0][i], latlons[1][i]] = results[i]
-            pb.add(1)            
+            pb.add(1)
 
         return da_dt
 
@@ -140,25 +140,26 @@ def load_uv_data(coarsen_in_time=False,
         da_HR_uo = detide_da(da_HR_uo)
         da_HR_vo = detide_da(da_HR_vo)
 
-    if differences:        
+    if differences:
+        print('Replace data with forward differences')
         da_HR_uo = da_HR_uo.diff('time')
-        da_HR_vo = da_HR_vo.diff('time')        
+        da_HR_vo = da_HR_vo.diff('time')
 
     def create_da_LR(da_HR,
                      coarsen_in_time=False,
-                     coarse_time_freq='24h'):
-        
+                     coarse_time_freq='6h'):
+
         print('Regridding HR to LR')
         da_HR_LR = interp_HR_LR(da_HR.values)
         da_HR_LR = xr.DataArray(da_HR_LR, dims=['time','lat','lon'],
-                                coords={'time':ds_HR.time,
+                                coords={'time':da_HR.time,
                                         'lat':ds_LR.latitude.values,
                                         'lon':ds_LR.longitude.values})
         if coarsen_in_time:
             da_HR_LR_resamp = da_HR_LR.resample(time=coarse_time_freq)\
-                                      .mean()
+                                      .first()
             da_HR_LR = da_HR_LR_resamp.interp(time=da_HR_LR.time,
-                                              method='linear')
+                                              method='cubic')
 
         print('Regridding LR to HR')
         da_HR_LR_HR = xr.zeros_like(da_HR)
@@ -185,7 +186,8 @@ def load_training_data(split_factor=4/5,
                        scaling_range=(0,1),
                        coarsen_in_time=False,
                        detide=False,
-                       differences=False):
+                       differences=False,
+                       residual_mode=False):
     # assume everything has this shape
     params = {}
     data = {}
@@ -198,38 +200,70 @@ def load_training_data(split_factor=4/5,
     params['mask'] = torch.tensor(da_mask.values)[None,:,:,None]
 
     # do the assembling into channels here
-    data_HR_stacked = np.stack([da_HR['uo'].values,
-                                da_HR['vo'].values], axis=3)
-    data_LR_stacked = np.stack([da_LR['uo'].values,
-                                da_LR['vo'].values], axis=3)
+    data_HR = np.stack([da_HR['uo'].values,
+                        da_HR['vo'].values], axis=3)
+    data_LR = np.stack([da_LR['uo'].values,
+                        da_LR['vo'].values], axis=3)
 
-    Nt, Nlat, Nlon, num_channels = data_HR_stacked.shape
+
+    # StandardScaler doesnt work that well
+    scaler = MinMaxScaler(feature_range=scaling_range)
+    scalers = {}
+    scalers['HR'] = scaler
+
+    if residual_mode:
+        # create residual and secant predictor data
+        data_R  = (data_HR - data_LR)[2:,]
+        secant  = 2*data_HR[1:-1,] - data_HR[:-2,]
+        data_FT = secant - data_LR[2:,]
+
+
+    Nt, Nlat, Nlon, num_channels = \
+        data_R.shape if residual_mode else data_HR.shape
+
     params.update({'Nt':Nt,
                    'Nlat':Nlat,
                    'Nlon':Nlon,
                    'num_channels':num_channels})
 
-    # StandardScaler doesnt work that well
-    scaler_HR = MinMaxScaler(feature_range=scaling_range)
-    scalers = {}
-    scalers['HR'] = scaler_HR
-
-    data_HR = scaler_HR.fit_transform(data_HR_stacked.reshape(Nt, -1))\
-                       .reshape(Nt, Nlat, Nlon, num_channels)
-    data_LR = scaler_HR.transform(data_LR_stacked.reshape(Nt, -1))\
-                       .reshape(Nt, Nlat, Nlon, num_channels)
+    if residual_mode:
+        data_R  = scaler.fit_transform(data_R.reshape(Nt, -1))\
+                        .reshape(Nt, Nlat, Nlon, num_channels)
+        data_FT = scaler.transform(data_FT.reshape(Nt, -1))\
+                        .reshape(Nt, Nlat, Nlon, num_channels)
+        data_LR = scaler.transform(data_LR[2:,].reshape(Nt, -1))\
+                        .reshape(Nt, Nlat, Nlon, num_channels)
+        data_HR = scaler.transform(data_HR[2:,].reshape(Nt, -1))\
+                        .reshape(Nt, Nlat, Nlon, num_channels)
+    else:
+        data_HR = scaler.fit_transform(data_HR.reshape(Nt, -1))\
+                        .reshape(Nt, Nlat, Nlon, num_channels)
+        data_LR = scaler.transform(data_LR.reshape(Nt, -1))\
+                        .reshape(Nt, Nlat, Nlon, num_channels)
 
     split = int(Nt*split_factor)
     train_range = range(0, split)
     test_range = range(split, Nt)
 
-    data['train'] = {'HR'   : data_HR[train_range,:,:,:],
-                     'LR'   : data_LR[train_range,:,:,:],
-                     'time' : da_LR['uo'].time.values[train_range]}
+    if residual_mode:
+        data['train'] = {'R'    : data_R[train_range,],
+                         'FT'   : data_FT[train_range,],                         
+                         'time' : da_LR['uo'].time.values[2:][train_range]}
 
-    data['test']  = {'HR'   : data_HR[test_range,:,:,:],
-                     'LR'   : data_LR[test_range,:,:,:],
-                     'time' : da_LR['uo'].time.values[test_range]}
+        data['test']  = {'R'    : data_R[test_range,],
+                         'FT'   : data_FT[test_range,],
+                         'LR'   : data_LR[test_range,],
+                         'HR'   : data_HR[test_range,],
+                         'time' : da_LR['uo'].time.values[2:][test_range]}
+    else:
+
+        data['train'] = {'HR'   : data_HR[train_range,],
+                         'LR'   : data_LR[train_range,],
+                         'time' : da_LR['uo'].time.values[train_range]}
+
+        data['test']  = {'HR'   : data_HR[test_range,],
+                         'LR'   : data_LR[test_range,],
+                         'time' : da_LR['uo'].time.values[test_range]}
 
     return data, params, scalers
 
@@ -241,6 +275,8 @@ def create_training_data(compute_data=True,
                          differences=False):
 
     postfix = '_detided' if detide else ''
+    postfix += '_diff' if differences else ''
+    postfix += '_residuals' if residual_mode else ''
     dill_file     = f'{data_dir}/ae_esn_training_data{postfix}.dill'
     dill_file_enc = f'{data_dir}/ae_esn_training_data{postfix}_encoded.dill'
 
@@ -248,10 +284,11 @@ def create_training_data(compute_data=True,
     if compute_data:
         print('Create training data')
         orig_data, params, scalers  = \
-            load_training_data(split_factor=4/5,
+            load_training_data(split_factor=1/2,
                                coarsen_in_time=coarsen_in_time,
                                detide=detide,
-                               differences=differences)
+                               differences=differences,
+                               residual_mode=residual_mode)
 
         container = {'data' : orig_data,
                      'params' : params,
@@ -295,12 +332,6 @@ def create_training_data(compute_data=True,
             enc_data = data_enc['data']
         else:
             enc_data = None
-
-    if residual_mode: ### TODO
-        orig_data['train']['R'] = (orig_data['train']['HR'] -
-                                   orig_data['train']['LR'])
-        orig_data['test']['R'] = (orig_data['test']['HR'] -
-                                  orig_data['test']['LR'])
 
     return orig_data, params, scalers, enc_data
 

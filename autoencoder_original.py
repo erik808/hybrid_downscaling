@@ -40,8 +40,8 @@ residual_mode = True ### TODO maybe in data_manager, or here, or ....
 # CNN_modes:
 #  'snapshots' : train an instanteous model
 #  'timesteps' : train a time-stepping model
-CNN_mode = 'timesteps'
-# CNN_mode = 'snapshots'
+# CNN_mode = 'timesteps'
+CNN_mode = 'snapshots'
 
 # enable or disable embedded ESN,
 # disabled by default in snapshots mode
@@ -74,14 +74,14 @@ dirs, files = dm.setup_directories(folder_id, add_id)
 models_dir = dirs['models']
 
 data, params, scalers, _  = \
-    dm.create_training_data(compute_data=True,
+    dm.create_training_data(compute_data=False,
                             residual_mode=residual_mode,
                             coarsen_in_time=True,
                             detide=True)
 # truncate
 # history = data['train']['HR'].shape[0] # use all data we have
-# history = 10000
-history = 1000
+history = 10000
+# history = 1000
 future = 400
 
 if residual_mode:
@@ -100,7 +100,7 @@ else:
     train_data_ft  = data['train']['LR'][1:,][-history:,]
     test_data      = data['test']['HR'][:future,]
     test_data_ft   = data['test']['LR'][:future,]
-    test_time      = data['test']['time'][:future,]        
+    test_time      = data['test']['time'][:future,]
 
 
 mask = params['mask']
@@ -191,7 +191,7 @@ tb_callback = keras.callbacks.TensorBoard(
     embeddings_metadata=None,
 )
 
-epochs = 3
+epochs = 50
 batch_size = 4
 shuffle = True
 tic = time.time()
@@ -293,7 +293,7 @@ if plot_prediction:
 
     breakpoint()
     out = validation_callback.on_epoch_end(epochs+1)
-    
+
     predictions = np.zeros_like(test_data)
     xk = np.expand_dims(train_data_otp[-1,:,:,:], axis=0)
     N_steps=T_test.shape[0]

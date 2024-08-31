@@ -182,6 +182,49 @@ def load_uv_data(coarsen_in_time=False,
     return da_HR, da_LR, mask
 
 
+class CustomScaler():
+
+    def __init__(self, scaling_type = 'standardize_per_feature'):
+        self.scaling_type = scaling_type
+        self.shift = None
+        self.scale = None
+        self.fitted = False
+
+    def fit(self, data):
+        if self.scaling_type == 'standardize_per_feature':
+            self.shift = np.mean(data, axis=0)
+            self.scale = np.mean(data, axis=0)
+
+        elif self.scaling_type == 'standardize_over_all_features':
+            self.shift = np.mean(data)
+            self.scale = np.mean(data)
+
+        elif self.scaling_type == 'minmax_per_feature':
+            self.scale = 1.0 / (np.max(data, axis=0) - np.min(data, axis=0))
+            self.shift = np.min(data, axis=0)
+        elif self.scaling_type == 'minmax_over_all_features':
+            self.scale = 1.0 / (np.max(data) - np.min(data))
+            self.shift = np.min(data)
+
+        self.fitted = True
+
+    def transform(self, data):
+        if not self.fitted: raise Exception('scaler not fitted')
+        return (data - self.shift) * self.scale
+
+    def fit_transform(self, data):
+        self.fit(data)
+        return self.transform(data)
+
+    def inverse_transform(self, data):
+        if not fitted: raise Exception('scaler not fitted')
+        return (x / self.scale) + self.shift
+
+
+
+
+
+
 def load_training_data(split_factor=4/5,
                        scaling_range=(0,1),
                        coarsen_in_time=False,
@@ -205,9 +248,9 @@ def load_training_data(split_factor=4/5,
     data_LR = np.stack([da_LR['uo'].values,
                         da_LR['vo'].values], axis=3)
 
-
     # StandardScaler doesnt work that well
-    scaler = MinMaxScaler(feature_range=scaling_range)
+    # scaler = MinMaxScaler(feature_range=scaling_range)
+    scaler = CustomScaler(scaling_type='minmax_over_all_features')
     scalers = {}
     scalers['HR'] = scaler
 
@@ -247,7 +290,7 @@ def load_training_data(split_factor=4/5,
 
     if residual_mode:
         data['train'] = {'R'    : data_R[train_range,],
-                         'FT'   : data_FT[train_range,],                         
+                         'FT'   : data_FT[train_range,],
                          'time' : da_LR['uo'].time.values[2:][train_range]}
 
         data['test']  = {'R'    : data_R[test_range,],
@@ -256,7 +299,6 @@ def load_training_data(split_factor=4/5,
                          'HR'   : data_HR[test_range,],
                          'time' : da_LR['uo'].time.values[2:][test_range]}
     else:
-
         data['train'] = {'HR'   : data_HR[train_range,],
                          'LR'   : data_LR[train_range,],
                          'time' : da_LR['uo'].time.values[train_range]}

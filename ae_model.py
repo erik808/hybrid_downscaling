@@ -58,7 +58,7 @@ class AutoEncoder(keras_tuner.HyperModel):
                           self.kernel_size,
                           padding="same",
                           name=f"residual_block_conv2d_b_{self.resblock_ctr}")(x)
-        x = layers.Add(name=f"residal_block_add_{self.resblock_ctr}")([inputs, x])
+        x = layers.Add(name=f"residual_block_add_{self.resblock_ctr}")([inputs, x])
         return x
 
     def build_model(self,
@@ -367,25 +367,21 @@ class CustomValidation(keras.callbacks.Callback):
             else:
                 xk = self.model.predict([xk, tid], verbose=0)
 
-            pred = xk + xk_LR if residual_mode else xk
+            pred = xk + xk_LR if self.pars['residual_mode'] else xk
             predictions[i,] = pred
-
-            breakpoint()
-            # CHECK SANITY!!
-            
             xk_true = np.expand_dims(self.test_data[i,], axis=0)
             error += (np.sum(np.square(pred - xk_true)))
             base += (np.sum(np.square(xk_LR - xk_true)))
             values = [('error', np.sqrt(error/(i+1))),
                       ('base', np.sqrt(base/(i+1)))]
-            pb_i.add(1, values=values)            
-        
+            pb_i.add(1, values=values)                        
 
         self.plotmachine.plot_prediction_error(self.test_data,
                                                predictions,
                                                self.test_data_ft,
                                                f'_epoch_{epoch}')
-        logs['val_error']=np.sqrt(error/(i+1))
-        logs['val_base']=np.sqrt(base/(i+1))
+        
+        logs['error']=np.sqrt(error/(i+1))
+        logs['base']=np.sqrt(base/(i+1))
 
         return predictions

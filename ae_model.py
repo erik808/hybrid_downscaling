@@ -49,16 +49,20 @@ class AutoEncoder(keras_tuner.HyperModel):
 
     def ResBlock(self, inputs):
         self.resblock_ctr += 1
+        name_conv_a = f"residual_block_conv2d_a_{self.resblock_ctr}"
+        name_conv_b = f"residual_block_conv2d_b_{self.resblock_ctr}"
+        name_add_layer = f"residual_add_{self.resblock_ctr}"
+
         x = layers.Conv2D(self.num_filters,
                           self.kernel_size,
                           padding="same",
                           activation="relu",
-                          name=f"residual_block_conv2d_a_{self.resblock_ctr}")(inputs)
+                          name=name_conv_a)(inputs)
         x = layers.Conv2D(self.num_filters,
                           self.kernel_size,
                           padding="same",
-                          name=f"residual_block_conv2d_b_{self.resblock_ctr}")(x)
-        x = layers.Add(name=f"residual_block_add_{self.resblock_ctr}")([inputs, x])
+                          name=name_conv_b)(x)
+        x = layers.Add(name=name_add_layer)([inputs, x])
         return x
 
     def build_model(self,
@@ -68,13 +72,13 @@ class AutoEncoder(keras_tuner.HyperModel):
                     activation='relu',
                     optimizer='adam',
                     verbosity=20,
-                    use_feedthrough=False,                    
+                    use_feedthrough=False,
                     feedthrough_only=False,
                     use_timeinput=True,
                     feedthrough_type='multiply'
                     ):
 
-        self.use_feedthrough = use_feedthrough        
+        self.use_feedthrough = use_feedthrough
         self.feedthrough_only = feedthrough_only
         self.feedthrough_type = feedthrough_type
         if self.feedthrough_only: self.use_feedthrough = True
@@ -201,7 +205,8 @@ class AutoEncoder(keras_tuner.HyperModel):
         # y = convt_layer_2_1(y)
         if use_dropout:  y = dropout_layer_2(y)
         y = convt_layer_3(y)
-        cropped_y = cropping_layer(y)
+        # cropped_y = cropping_layer(y)
+        cropped_y = y
 
         if self.feedthrough_only:
             output = feedthrough_layer_1(feedthrough)
@@ -221,7 +226,8 @@ class AutoEncoder(keras_tuner.HyperModel):
             elif feedthrough_type == 'ignore':
                 output = cropped_y
             else:
-                raise Exception('specify feedthrough_type when using feedthrough')
+                raise Exception('specify feedthrough_type when'
+                                ' using feedthrough')
 
             output = output_layer(output)
             inputs_decoder=[encoded, feedthrough]
@@ -328,7 +334,7 @@ class CustomValidation(keras.callbacks.Callback):
     """
     """
 
-    def __init__(self, test_data, initial_xk, plotmachine, pars):
+    def __init__(self, test_data, initial_xk, plotmachine, pars, scalers):
         super().__init__()
 
         self.initial_xk = initial_xk
@@ -338,9 +344,11 @@ class CustomValidation(keras.callbacks.Callback):
         self.test_data_ft = test_data[2]
         self.plotmachine = plotmachine
         self.pars = pars
+        self.scalers = scalers
+        self.predictions = []
 
     def on_epoch_end(self, epoch, logs=None):
-        predictions = np.zeros_like(self.test_data)
+        self.predictions = np.zeros_like(self.test_data)
 
         xk   = self.initial_xk[0]
         xkm1 = self.initial_xk[1]
@@ -350,13 +358,14 @@ class CustomValidation(keras.callbacks.Callback):
         error, base = (0,0)
         for i in range(self.N_steps):
 
+            breakpoint()
             xk_LR = np.expand_dims(self.test_data_ft[i,], axis=0)
             if self.pars['residual_mode']:
                 # secant predictor in residual mode
                 Pxk = 2*xk - xkm1 - xk_LR
-            else:                    
+            else:
                 Pxk = xk_LR
-                
+
             tid = np.expand_dims(self.T_test[i,], axis=0)
             xkm1 = xk
 
@@ -367,21 +376,23 @@ class CustomValidation(keras.callbacks.Callback):
             else:
                 xk = self.model.predict([xk, tid], verbose=0)
 
-            pred = xk + xk_LR if self.pars['residual_mode'] else xk
-            predictions[i,] = pred
+            if self.pars['residual_mode']:
+                xk = self.scalers['R']\
+                         .inverse_transform(xk.reshape(1,-1))\
+                         .reshape(xk.shape) + xk_LR
+
+            self.predictions[i,] = xk
             xk_true = np.expand_dims(self.test_data[i,], axis=0)
-            error += (np.sum(np.square(pred - xk_true)))
+            error += (np.sum(np.square(xk - xk_true)))
             base += (np.sum(np.square(xk_LR - xk_true)))
             values = [('error', np.sqrt(error/(i+1))),
                       ('base', np.sqrt(base/(i+1)))]
-            pb_i.add(1, values=values)                        
+            pb_i.add(1, values=values)
 
         self.plotmachine.plot_prediction_error(self.test_data,
-                                               predictions,
+                                               self.predictions,
                                                self.test_data_ft,
                                                f'_epoch_{epoch}')
-        
+
         logs['error']=np.sqrt(error/(i+1))
         logs['base']=np.sqrt(base/(i+1))
-
-        return predictions

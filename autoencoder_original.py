@@ -35,13 +35,13 @@ from plot_utils import PlotMachine
 # Experiment settings
 
 # If True, train and predict residuals: R such that X_LR + R = X_HR
-residual_mode = True ### TODO maybe in data_manager, or here, or ....
+residual_mode = True
 
 # CNN_modes:
 #  'snapshots' : train an instanteous model
 #  'timesteps' : train a time-stepping model
-# CNN_mode = 'timesteps'
-CNN_mode = 'snapshots'
+CNN_mode = 'timesteps'
+# CNN_mode = 'snapshots'
 
 # enable or disable embedded ESN,
 # disabled by default in snapshots mode
@@ -51,7 +51,7 @@ use_feedthrough = True
 feedthrough_only = False
 
 # Save/load settings
-load_existing_model = False
+load_existing_model = True
 overwrite_existing_model = False
 
 # Visualization settings
@@ -61,13 +61,15 @@ plot_prediction = True
 if load_existing_model:
     # 20240828_144827_snapshot_model/results/history_20240828_145013.png
     # 20240829_090516_snapshot_model/models/aencodr_20240829_090516.ker
-    folder_id = '20240830_103023'
+    folder_id = '20240902_144950'
     add_id    = '_snapshot_model'
-    model_id  = '20240830_103023'
+    model_id  = '20240902_144950'
 else:
     folder_id = datetime.now().strftime('%Y%m%d_%H%M%S')
-    add_id = '_feedthrough_only' if feedthrough_only else '_testing'
     model_id = folder_id
+    add_id = '_feedthrough_only' if feedthrough_only else ''
+    add_id = '_snapshot_model' if CNN_mode == 'snapshots' else add_id
+    add_id = '_timestep_model' if CNN_mode == 'timesteps' else add_id
 
 # setup new or existing directories
 dirs, files = dm.setup_directories(folder_id, add_id)
@@ -77,7 +79,7 @@ data, params, scalers, _  = \
     dm.create_training_data(compute_data=False,
                             residual_mode=residual_mode,
                             coarsen_in_time=True,
-                            detide=True)
+                            detide=False)
 # truncate
 # history = data['train']['HR'].shape[0] # use all data we have
 history = 10000
@@ -86,11 +88,12 @@ future = 400
 
 if residual_mode:
     # input training data
-    # output training data, shifted by 1
-    # feedthrough data, shifted by 1
     train_data_inp = data['train']['R'][:-1,][-history:,]
+    # output training data, shifted by 1
     train_data_otp = data['train']['R'][1:,][-history:,]
+    # feedthrough data, shifted by 1
     train_data_ft  = data['train']['FT'][1:,][-history:,]
+    
     test_data      = data['test']['R'][:future,]
     test_data_ft   = data['test']['FT'][:future,]
     test_time      = data['test']['time'][:future,]
@@ -134,19 +137,18 @@ if load_existing_model:
     autoencoder = keras.models.load_model(load_path_autoencoder)
     esn = autoencoder.get_layer('esn_embedded')
     # overwrite parameters
-
     encoder = keras.models.load_model(load_path_encoder)
     num_samples = train_data_inp.shape[0]
     timeids = np.arange(num_samples)
     timetns = np.expand_dims(timeids, axis=[1,2,3])
     print('create training data for embedded ESN')
-    values  = encoder.predict([train_data_inp, timetns])
-    control = encoder.predict([train_data_inp, timetns])
+    values  = esn.pixel_shuffle(encoder.predict([train_data_inp, timetns]))
+    control = esn.pixel_shuffle(encoder.predict([train_data_inp, timetns]))
     esn.setPars(esn_params, num_samples=num_samples)
     esn.initialize(values, control)
-    esn.populate_storage(values, timeids, control)
+    esn.populate_storage(values, timeids, control)    
     decoder = keras.models.load_model(load_path_decoder)
-
+    
 else:
 
     esn_params['external']['bypass_mode'] = not use_embedded_ESN
@@ -191,7 +193,7 @@ tb_callback = keras.callbacks.TensorBoard(
     embeddings_metadata=None,
 )
 
-epochs = 50
+epochs = 10
 batch_size = 4
 shuffle = True
 tic = time.time()
@@ -213,8 +215,7 @@ else:
 Y_train = train_data_otp
 
 esn_callback = TriggerESN(esn,
-                          # train_every=2,
-                          train_in_epochs=[5,10,20,30],
+                          train_in_epochs=[0,5],
                           num_samples=X_train[0].shape[0])
 
 if CNN_mode == 'timesteps':
@@ -223,18 +224,20 @@ if CNN_mode == 'timesteps':
 
     # we create a custom validation using a callback at every epoch
     # end
-    initial_xk   = np.expand_dims(train_data_otp[-1,:,:,:], axis=0)
-    initial_xkm1 = np.expand_dims(train_data_otp[-2,:,:,:], axis=0)
+    initial_xk   = np.expand_dims(data['train']['HR'][-1,:,:,:], axis=0)
+    initial_xkm1 = np.expand_dims(data['train']['HR'][-2,:,:,:], axis=0)
     plotmachine = PlotMachine(results_dir=dirs['results'])
     if residual_mode: test_data = data['test']['HR'][:future,]
     if residual_mode: test_data_ft = data['test']['LR'][:future,]
+    
     validation_callback = \
         CustomValidation(test_data=(test_data, T_test, test_data_ft),
                          initial_xk=(initial_xk, initial_xkm1),
                          plotmachine=plotmachine,
                          pars = {'feedthrough_only': feedthrough_only,
                                  'use_feedthrough': use_feedthrough,
-                                 'residual_mode': residual_mode})
+                                 'residual_mode': residual_mode},
+                         scalers = scalers)
 
     callbacks = [esn_callback, validation_callback]
 
@@ -291,25 +294,7 @@ decoder.save(save_path_decoder)
 if plot_prediction:
     print('create predictions')
 
-    breakpoint()
-    out = validation_callback.on_epoch_end(epochs+1)
-
-    predictions = np.zeros_like(test_data)
-    xk = np.expand_dims(train_data_otp[-1,:,:,:], axis=0)
-    N_steps=T_test.shape[0]
-    pb_i = keras.utils.Progbar(N_steps)
-    for i in range(N_steps):
-        Pxk = np.expand_dims(test_data_ft[i,:,:,:], axis=0)
-        tid = np.expand_dims(T_test[i,:,:,:], axis=0)
-        if feedthrough_only:
-            xk = autoencoder.predict([Pxk], verbose=0)
-        elif use_feedthrough:
-            xk = autoencoder.predict([xk, tid, Pxk], verbose=0)
-        else:
-            xk = autoencoder.predict([xk, tid], verbose=0)
-
-        predictions[i,:,:,:] = xk
-        pb_i.add(1)
+    predictions = validation_callback.predictions
 
     # Create dictionary for output visualization
     xr_HR_true_fun = lambda i : \

@@ -92,11 +92,9 @@ def load_uv_data(coarsen_in_time=False,
                                 'latitude':'lat'})\
                                 .fillna(0.0)
 
-
     da_HR_vo = ds_HR.vo.rename({'longitude':'lon',
                                 'latitude':'lat'})\
                                 .fillna(0.0)
-
 
     def detide_da(da):
         da.load()
@@ -147,7 +145,7 @@ def load_uv_data(coarsen_in_time=False,
 
     def create_da_LR(da_HR,
                      coarsen_in_time=False,
-                     coarse_time_freq='6h'):
+                     coarse_time_freq='2h'):
 
         print('Regridding HR to LR')
         da_HR_LR = interp_HR_LR(da_HR.values)
@@ -174,17 +172,19 @@ def load_uv_data(coarsen_in_time=False,
     da_LR_uo = create_da_LR(da_HR_uo, coarsen_in_time)
     da_LR_vo = create_da_LR(da_HR_vo, coarsen_in_time)
 
-    da_HR = {'uo': da_HR_uo,
-             'vo': da_HR_vo}
-    da_LR = {'uo': da_LR_uo,
-             'vo': da_LR_vo}
+
+    da_HR = {'uo': da_HR_uo[:,3:-2,:-1],
+             'vo': da_HR_vo[:,3:-2,:-1]}
+    da_LR = {'uo': da_LR_uo[:,3:-2,:-1],
+             'vo': da_LR_vo[:,3:-2,:-1]}
+    mask = mask[3:-2,:-1]
 
     return da_HR, da_LR, mask
 
 
 class CustomScaler():
 
-    def __init__(self, scaling_type = 'standardize_per_feature'):
+    def __init__(self, scaling_type = 'minmax_per_feature'):
         self.scaling_type = scaling_type
         self.shift = None
         self.scale = None
@@ -202,6 +202,7 @@ class CustomScaler():
         elif self.scaling_type == 'minmax_per_feature':
             self.scale = 1.0 / (np.max(data, axis=0) - np.min(data, axis=0))
             self.shift = np.min(data, axis=0)
+
         elif self.scaling_type == 'minmax_over_all_features':
             self.scale = 1.0 / (np.max(data) - np.min(data))
             self.shift = np.min(data)
@@ -219,10 +220,6 @@ class CustomScaler():
     def inverse_transform(self, data):
         if not fitted: raise Exception('scaler not fitted')
         return (x / self.scale) + self.shift
-
-
-
-
 
 
 def load_training_data(split_factor=4/5,
@@ -248,55 +245,51 @@ def load_training_data(split_factor=4/5,
     data_LR = np.stack([da_LR['uo'].values,
                         da_LR['vo'].values], axis=3)
 
-    # StandardScaler doesnt work that well
-    # scaler = MinMaxScaler(feature_range=scaling_range)
-    scaler = CustomScaler(scaling_type='minmax_over_all_features')
+    # scaler = CustomScaler(scaling_type='minmax_per_feature')
     scalers = {}
-    scalers['HR'] = scaler
+    scalers['HR'] = MinMaxScaler(feature_range=scaling_range)
+    scalers['R'] = MinMaxScaler(feature_range=scaling_range)
+
+    Nt, Nlat, Nlon, num_channels = data_HR.shape
+
+    data_HR = scalers['HR'].fit_transform(data_HR.reshape(Nt, -1))\
+                           .reshape(Nt, Nlat, Nlon, num_channels)
+    data_LR = scalers['HR'].transform(data_LR.reshape(Nt, -1))\
+                           .reshape(Nt, Nlat, Nlon, num_channels)
 
     if residual_mode:
         # create residual and secant predictor data
         data_R  = (data_HR - data_LR)[2:,]
         secant  = 2*data_HR[1:-1,] - data_HR[:-2,]
         data_FT = secant - data_LR[2:,]
+        Nt_R = data_R.shape[0]
+        data_R = scalers['R'].fit_transform(data_R.reshape(Nt_R, -1))\
+                               .reshape(Nt_R, Nlat, Nlon, num_channels)
+        data_FT = scalers['R'].transform(data_FT.reshape(Nt_R, -1))\
+                               .reshape(Nt_R, Nlat, Nlon, num_channels)
 
+    Nt = Nt_R if residual_mode else Nt
 
-    Nt, Nlat, Nlon, num_channels = \
-        data_R.shape if residual_mode else data_HR.shape
-
-    params.update({'Nt':Nt,
-                   'Nlat':Nlat,
-                   'Nlon':Nlon,
-                   'num_channels':num_channels})
-
-    if residual_mode:
-        data_R  = scaler.fit_transform(data_R.reshape(Nt, -1))\
-                        .reshape(Nt, Nlat, Nlon, num_channels)
-        data_FT = scaler.transform(data_FT.reshape(Nt, -1))\
-                        .reshape(Nt, Nlat, Nlon, num_channels)
-        data_LR = scaler.transform(data_LR[2:,].reshape(Nt, -1))\
-                        .reshape(Nt, Nlat, Nlon, num_channels)
-        data_HR = scaler.transform(data_HR[2:,].reshape(Nt, -1))\
-                        .reshape(Nt, Nlat, Nlon, num_channels)
-    else:
-        data_HR = scaler.fit_transform(data_HR.reshape(Nt, -1))\
-                        .reshape(Nt, Nlat, Nlon, num_channels)
-        data_LR = scaler.transform(data_LR.reshape(Nt, -1))\
-                        .reshape(Nt, Nlat, Nlon, num_channels)
+    params.update({'Nt'   : Nt,
+                   'Nlat' : Nlat,
+                   'Nlon' : Nlon,
+                   'num_channels' : num_channels})
 
     split = int(Nt*split_factor)
     train_range = range(0, split)
+    spinup_range = range(split-10,split)
     test_range = range(split, Nt)
 
     if residual_mode:
         data['train'] = {'R'    : data_R[train_range,],
                          'FT'   : data_FT[train_range,],
+                         'HR'   : data_HR[2:,][spinup_range,],
                          'time' : da_LR['uo'].time.values[2:][train_range]}
 
         data['test']  = {'R'    : data_R[test_range,],
                          'FT'   : data_FT[test_range,],
-                         'LR'   : data_LR[test_range,],
-                         'HR'   : data_HR[test_range,],
+                         'LR'   : data_LR[2:,][test_range,],
+                         'HR'   : data_HR[2:,][test_range,],
                          'time' : da_LR['uo'].time.values[2:][test_range]}
     else:
         data['train'] = {'HR'   : data_HR[train_range,],
@@ -326,7 +319,7 @@ def create_training_data(compute_data=True,
     if compute_data:
         print('Create training data')
         orig_data, params, scalers  = \
-            load_training_data(split_factor=1/2,
+            load_training_data(split_factor=4/5,
                                coarsen_in_time=coarsen_in_time,
                                detide=detide,
                                differences=differences,

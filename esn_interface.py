@@ -14,18 +14,18 @@ hyperparams = { 'external' : {'model_type'      : 'ESN',
                               'bypass_mode'     : False,
                               'control_amp'     : 1 },
 
-                'internal' : { 'Nr'                 : 5000,
+                'internal' : { 'Nr'                 : 10000,
                                'scalingType'        : 'none',
-                               'rhoMax'             : 0.7,
-                               'alpha'              : 0.3,
-                               'avgDegree'          : 5,
+                               'rhoMax'             : 1.2,
+                               'alpha'              : 0.8,
+                               'avgDegree'          : 100,
                                'entriesPerRow'      : 50,
                                'noiseAmplitude'     : 0,
-                               'tikhonov_lambda'    : 1,
+                               'tikhonov_lambda'    : 10,
                                'squaredStates'      : 'even',
                                'reservoirStateInit' : 'zero',
                                'inputMatrixType'    : 'balancedSparse',
-                               'fCutoff'            : 0.01,
+                               'fCutoff'            : 0.001,
                                'Wconstruction'      : 'avgDegree'} }
 
 class ESN_interface():
@@ -239,21 +239,52 @@ class ESN_embedded(layers.Layer):
         self.bypass_mode = pars['external']['bypass_mode']
         self.reshape_order = pars['external']['reshape_order']
         self.needs_initializing = True
+        self.upscale_factor = 0
+
+    def pixel_shuffle(self, input_tensor):
+        
+        numpy_mode = not isinstance(input_tensor, torch.Tensor)
+
+        if numpy_mode: # convert to torch
+            input_tensor = torch.tensor(input_tensor)
+            
+        ret = input_tensor.transpose(3,1).transpose(3,2)
+        num_channels = ret.shape[1]        
+        self.upscale_factor = np.sqrt(num_channels)
+        assert self.upscale_factor.is_integer()
+        ret = torch.nn.functional.pixel_shuffle(ret,
+                                                int(self.upscale_factor))
+
+        # revert to numpy
+        if numpy_mode: return ret.detach().numpy()
+        else: return ret
+            
+
+    def pixel_unshuffle(self, input_tensor):
+        assert self.upscale_factor > 0
+        ret = torch.nn.functional.pixel_unshuffle(input_tensor,
+                                                     int(self.upscale_factor))
+        ret = ret.transpose(2,3).transpose(1,3)
+        return ret
+
 
     def call(self, inputs, time, control_ft):
+        inputs = self.pixel_shuffle(inputs)
+        control_ft = self.pixel_shuffle(control_ft)
+        
         try:
             values = inputs.detach().numpy()
             timeid = time.detach().numpy()[:,0,0,0].astype(int)
             control = control_ft.detach().numpy()
 
         except TypeError as e:
-            return inputs
+            return self.pixel_unshuffle(inputs)
 
         if self.needs_initializing:
             self.initialize(values, control)
 
         if self.bypass_mode:
-            return inputs
+            return self.pixel_unshuffle(inputs)
 
         self.populate_storage(values, timeid, control)
 
@@ -265,7 +296,7 @@ class ESN_embedded(layers.Layer):
             outputs = torch.tensor(self.predict(values, timeid, control))
             inputs = ops.where(outputs != np.nan, outputs, inputs)
 
-        return inputs
+        return self.pixel_unshuffle(inputs)
 
     def initialize(self, values, control):
 
@@ -295,11 +326,9 @@ class ESN_embedded(layers.Layer):
 
     def populate_storage(self, values, timeid, control):
         T, _, _, _ =  values.shape
-
         # not going to populate storage if timeid beyond range
         if np.any(timeid >= self.storage.shape[0]):
             return
-
         if not np.all(self.populate_lookup[timeid,:]):
             self.populate_lookup[timeid,:] = 1
 
@@ -363,11 +392,9 @@ class ESN_embedded(layers.Layer):
         outputs = np.zeros_like(values)
 
         # perform a step for every (value, timeid) pair
-        for i, tid in enumerate(timeid):
-            outputs[i,:,:,:] = self.step(values[i,:], tid, control[i,:])\
-                                   .reshape(self.enclat,
-                                            self.enclon,
-                                            self.filters)
+        for i, tid in enumerate(timeid):            
+            outputs[i,] = self.step(values[i,], tid, control[i,])
+
         return outputs
 
     def step(self, values, timeid, control):
@@ -404,4 +431,4 @@ class ESN_embedded(layers.Layer):
         yk    = self.esn.unscaleOutput(u_out).squeeze()
         self.last_sk = sk
 
-        return yk
+        return yk.reshape(values.shape, order=self.reshape_order)

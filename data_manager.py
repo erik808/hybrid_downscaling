@@ -5,7 +5,9 @@ import xesmf as xe
 import torch
 import keras
 import dill
+import time
 import pytide
+from scipy.ndimage import gaussian_filter
 from sklearn.preprocessing import MinMaxScaler
 from multiprocess import Pool
 
@@ -72,7 +74,8 @@ def load_u_data():
 
 def load_uv_data(coarsen_in_time=False,
                  detide=False,
-                 differences=False):
+                 differences=False,
+                 coarsening_method='gaussian_filter'):
 
     bt_HR = xr.open_dataset(HR_bathy_file)
     ds_HR = xr.open_mfdataset(HR_data_files, parallel=True)
@@ -169,8 +172,32 @@ def load_uv_data(coarsen_in_time=False,
 
         return da_LR
 
-    da_LR_uo = create_da_LR(da_HR_uo, coarsen_in_time)
-    da_LR_vo = create_da_LR(da_HR_vo, coarsen_in_time)
+
+    def filter_HR_data(da, sigma):
+        tic = time.time()
+        print(f'Apply Gaussian filter with '
+              f'sigma={sigma} to {da.name}...', end='')
+        out_da = xr.zeros_like(da)
+        # assume 3D
+        out_da[:,:,:] = gaussian_filter(da.values, sigma=sigma)
+        toc = time.time()
+
+        out_da = out_da.where(mask==1)
+        out_da = out_da.fillna(0.0)
+        print(f' done ({toc-tic:.1f}s)')
+        return out_da
+
+    if coarsening_method == 'regridding':
+        da_LR_uo = create_da_LR(da_HR_uo, coarsen_in_time)
+        da_LR_vo = create_da_LR(da_HR_vo, coarsen_in_time)
+
+    elif coarsening_method == 'gaussian_filter':
+        sigma = [8,2,2]
+        da_LR_uo = filter_HR_data(da_HR_uo, sigma)
+        da_LR_vo = filter_HR_data(da_HR_vo, sigma)
+    else:
+        raise Exception('invalid coarsening_method {coarsening_method}')
+
 
 
     da_HR = {'uo': da_HR_uo[:,3:-2,:-1],
@@ -252,10 +279,40 @@ def load_training_data(split_factor=4/5,
 
     Nt, Nlat, Nlon, num_channels = data_HR.shape
 
+    import matplotlib.pyplot as plt
+    plt.close('all')
+    data_R  = (data_HR - data_LR)
+
+    plt.figure(figsize=(8,10))
+
+    plt.subplot(4,2,1)
+    a = plt.imshow(data_R[100,:,:,0])
+    plt.colorbar(a, shrink=0.5)
+
+    plt.subplot(4,2,2)
+    a = plt.imshow(data_R.min(axis=0)[:,:,0])
+    plt.colorbar(a, shrink=0.5)
+
+    plt.subplot(4,2,3)
+    a = plt.imshow(data_HR[100,:,:,0])
+    plt.colorbar(a, shrink=0.5)
+
+    plt.subplot(4,2,4)
+    a = plt.imshow(data_LR[100,:,:,0])
+    plt.colorbar(a, shrink=0.5)
+
+    plt.subplot(4,2,7)
+    plt.plot(np.sum(np.square(data_HR[:200,:,:,0]), axis=(1,2)))
+    plt.plot(np.sum(np.square(data_LR[:200,:,:,0]), axis=(1,2)))
+
+
     data_HR = scalers['HR'].fit_transform(data_HR.reshape(Nt, -1))\
                            .reshape(Nt, Nlat, Nlon, num_channels)
+
     data_LR = scalers['HR'].transform(data_LR.reshape(Nt, -1))\
                            .reshape(Nt, Nlat, Nlon, num_channels)
+
+
 
     if residual_mode:
         # create residual and secant predictor data
@@ -263,10 +320,27 @@ def load_training_data(split_factor=4/5,
         secant  = 2*data_HR[1:-1,] - data_HR[:-2,]
         data_FT = secant - data_LR[2:,]
         Nt_R = data_R.shape[0]
+
         data_R = scalers['R'].fit_transform(data_R.reshape(Nt_R, -1))\
-                               .reshape(Nt_R, Nlat, Nlon, num_channels)
+                             .reshape(Nt_R, Nlat, Nlon, num_channels)
         data_FT = scalers['R'].transform(data_FT.reshape(Nt_R, -1))\
-                               .reshape(Nt_R, Nlat, Nlon, num_channels)
+                              .reshape(Nt_R, Nlat, Nlon, num_channels)
+
+        
+        plt.subplot(4,2,5)
+        a = plt.imshow(data_R[100,:,:,0])
+        plt.colorbar(a, shrink=0.5)
+        
+        plt.subplot(4,2,6)
+        a = plt.imshow(data_FT[100,:,:,0])
+        plt.colorbar(a, shrink=0.5)
+
+        plt.tight_layout()
+        plt.pause(1)
+        breakpoint()
+
+
+
 
     Nt = Nt_R if residual_mode else Nt
 

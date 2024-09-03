@@ -5,27 +5,27 @@ import keras
 from keras import layers
 from keras import ops
 
-hyperparams = { 'external' : {'model_type'      : 'ESN',
+hyperparams = { 'external' : {'model_type'      : 'ESNc',
                               'training_length' : 25000,
                               'repetitions'     : 2,
                               'test_length'     : 4*24*10,
                               'reshape_order'   : 'C',
                               'decode_pred'     : True,
-                              'bypass_mode'     : False,
+                              'bypass_mode'     : True,
                               'control_amp'     : 1 },
 
-                'internal' : { 'Nr'                 : 1000,
+                'internal' : { 'Nr'                 : 5000,
                                'scalingType'        : 'none',
-                               'rhoMax'             : 1.2,
-                               'alpha'              : 0.8,
-                               'avgDegree'          : 100,
+                               'rhoMax'             : 0.4,
+                               'alpha'              : 0.2,
+                               'avgDegree'          : 10,
                                'entriesPerRow'      : 50,
                                'noiseAmplitude'     : 0,
-                               'tikhonov_lambda'    : 10,
+                               'tikhonov_lambda'    : 1,
                                'squaredStates'      : 'even',
                                'reservoirStateInit' : 'zero',
                                'inputMatrixType'    : 'balancedSparse',
-                               'fCutoff'            : 0.001,
+                               'fCutoff'            : 0.0,
                                'Wconstruction'      : 'avgDegree'} }
 
 class ESN_interface():

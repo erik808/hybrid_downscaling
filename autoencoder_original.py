@@ -76,13 +76,13 @@ dirs, files = dm.setup_directories(folder_id, add_id)
 models_dir = dirs['models']
 
 data, params, scalers, _  = \
-    dm.create_training_data(compute_data=False,
+    dm.create_training_data(compute_data=True,
                             residual_mode=residual_mode,
-                            coarsen_in_time=True,
+                            coarsen_in_time=False,
                             detide=False)
 # truncate
 # history = data['train']['HR'].shape[0] # use all data we have
-history = 1000
+history = 5000
 # history = 1000
 future = 400
 
@@ -219,6 +219,8 @@ esn_callback = TriggerESN(esn,
                           num_samples=X_train[0].shape[0])
 
 breakpoint()
+
+
 if CNN_mode == 'timesteps':
     # normal validation is not valid for timestepping mode
     validation_data=None

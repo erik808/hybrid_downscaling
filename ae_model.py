@@ -357,14 +357,6 @@ class CustomValidation(keras.callbacks.Callback):
 
         error, base = (0,0)
 
-        import matplotlib.pyplot as plt
-        plt.figure()
-        a = plt.imshow(xk[0,:,:,0])
-        plt.colorbar(a)
-        plt.figure()
-        plt.imshow(xkm1[0,:,:,0])
-        plt.pause(1)
-
         for i in range(self.N_steps):
 
             xk_LR = np.expand_dims(self.test_data_ft[i,], axis=0)

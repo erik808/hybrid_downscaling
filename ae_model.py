@@ -356,13 +356,24 @@ class CustomValidation(keras.callbacks.Callback):
                                    stateful_metrics=['error', 'base'])
 
         error, base = (0,0)
+
+        import matplotlib.pyplot as plt
+        plt.figure()
+        a = plt.imshow(xk[0,:,:,0])
+        plt.colorbar(a)
+        plt.figure()
+        plt.imshow(xkm1[0,:,:,0])
+        plt.pause(1)
+
         for i in range(self.N_steps):
 
-            breakpoint()
             xk_LR = np.expand_dims(self.test_data_ft[i,], axis=0)
             if self.pars['residual_mode']:
                 # secant predictor in residual mode
                 Pxk = 2*xk - xkm1 - xk_LR
+                Pxk = self.scalers['R']\
+                         .transform(Pxk.reshape(1,-1))\
+                         .reshape(Pxk.shape)
             else:
                 Pxk = xk_LR
 

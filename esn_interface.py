@@ -14,7 +14,7 @@ hyperparams = { 'external' : {'model_type'      : 'ESN',
                               'bypass_mode'     : False,
                               'control_amp'     : 1 },
 
-                'internal' : { 'Nr'                 : 10000,
+                'internal' : { 'Nr'                 : 1000,
                                'scalingType'        : 'none',
                                'rhoMax'             : 1.2,
                                'alpha'              : 0.8,

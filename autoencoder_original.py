@@ -82,7 +82,7 @@ data, params, scalers, _  = \
                             detide=False)
 # truncate
 # history = data['train']['HR'].shape[0] # use all data we have
-history = 10000
+history = 1000
 # history = 1000
 future = 400
 
@@ -218,6 +218,7 @@ esn_callback = TriggerESN(esn,
                           train_in_epochs=[0,5],
                           num_samples=X_train[0].shape[0])
 
+breakpoint()
 if CNN_mode == 'timesteps':
     # normal validation is not valid for timestepping mode
     validation_data=None

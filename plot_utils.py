@@ -86,12 +86,12 @@ class PlotMachine():
                          label='validation loss')
 
         plt.subplot(2,1,2)
-        if 'val_error' in hist.history:            
-            plt.semilogy(hist.history['val_error'],'.-',
+        if 'error' in hist.history:            
+            plt.semilogy(hist.history['error'],'.-',
                          label='validation error')
 
-        if 'val_base' in hist.history:            
-            plt.semilogy(hist.history['val_base'],'.-',
+        if 'base' in hist.history:            
+            plt.semilogy(hist.history['base'],'.-',
                          label='validation baseline')            
         plt.grid()
         plt.legend()

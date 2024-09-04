@@ -11,17 +11,17 @@ hyperparams = { 'external' : {'model_type'      : 'ESNc',
                               'test_length'     : 4*24*10,
                               'reshape_order'   : 'C',
                               'decode_pred'     : True,
-                              'bypass_mode'     : True,
+                              'bypass_mode'     : False,
                               'control_amp'     : 1 },
 
-                'internal' : { 'Nr'                 : 5000,
-                               'scalingType'        : 'none',
-                               'rhoMax'             : 0.4,
-                               'alpha'              : 0.2,
-                               'avgDegree'          : 10,
+                'internal' : { 'Nr'                 : 10000,
+                               'scalingType'        : 'minMax1',
+                               'rhoMax'             : 1.2,
+                               'alpha'              : 0.9,
+                               'avgDegree'          : 50,
                                'entriesPerRow'      : 50,
                                'noiseAmplitude'     : 0,
-                               'tikhonov_lambda'    : 1,
+                               'tikhonov_lambda'    : 10,
                                'squaredStates'      : 'even',
                                'reservoirStateInit' : 'zero',
                                'inputMatrixType'    : 'balancedSparse',
@@ -117,7 +117,7 @@ class ESN_interface():
         self.hyperparams = hyperparams
         # initialization is done
 
-    def train(self):
+    def train(self):        
         self.esn.train(self.trainU,
                        self.trainY)
         self.esn_state = self.esn.X[-1,:].copy()
@@ -241,8 +241,7 @@ class ESN_embedded(layers.Layer):
         self.needs_initializing = True
         self.upscale_factor = 0
 
-    def pixel_shuffle(self, input_tensor):
-        
+    def pixel_shuffle(self, input_tensor):        
         numpy_mode = not isinstance(input_tensor, torch.Tensor)
 
         if numpy_mode: # convert to torch
@@ -261,11 +260,19 @@ class ESN_embedded(layers.Layer):
             
 
     def pixel_unshuffle(self, input_tensor):
+        
         assert self.upscale_factor > 0
+        numpy_mode = not isinstance(input_tensor, torch.Tensor)
+        
+        if numpy_mode: # convert to torch
+            input_tensor = torch.tensor(input_tensor)
+        
         ret = torch.nn.functional.pixel_unshuffle(input_tensor,
                                                      int(self.upscale_factor))
         ret = ret.transpose(2,3).transpose(1,3)
-        return ret
+        
+        if numpy_mode: return ret.detach().numpy()
+        else: return ret
 
 
     def call(self, inputs, time, control_ft):
@@ -370,7 +377,6 @@ class ESN_embedded(layers.Layer):
             self.esn_params['internal']['ftRange'] = \
                 range(self.values_dim,
                       self.total_feats)
-
 
         self.esn = ESN(Nr, Nu, Ny)
         self.esn.setPars(self.esn_params['internal'])

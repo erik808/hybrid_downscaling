@@ -22,7 +22,6 @@ HR_bathy_file = (f'{data_dir}/cmems_mod_nws_phy_anfc_0.027deg-3D_'
 LR_data_file = (f'{data_dir}/cmems_mod_nws_phy-uv_my_7km-2D_PT1H-i_'
                 f'uo-vo_4.22E-7.78E_56.80N-58.67N_2023-01-01-2023-05-01.nc')
 
-
 def build_grid(ds, mask=None):
     lat_arr = ds.latitude
     lon_arr = ds.longitude
@@ -107,7 +106,7 @@ def load_uv_data(coarsen_in_time=False,
 
         dates = da.time.values
         f, vu = wt.compute_nodal_modulations(dates)
-        latlons = np.where(mask==1)
+        latlons = np.where(mask=1)
 
         ind_range = range(len(latlons[0]))
         pb = keras.utils.Progbar(len(ind_range))
@@ -175,14 +174,23 @@ def load_uv_data(coarsen_in_time=False,
 
     def filter_HR_data(da, sigma):
         tic = time.time()
+        print(f'Loading dataset {da.name}... ', end='')
+        da.load()
+        toc = time.time()
+        print(f'done ({toc-tic:.1f}s)')
         print(f'Apply Gaussian filter with '
               f'sigma={sigma} to {da.name}...', end='')
         out_da = xr.zeros_like(da)
         # assume 3D
         out_da[:,:,:] = gaussian_filter(da.values, sigma=sigma)
         toc = time.time()
+        
+        mask_ = mask.rename({'latitude':'lat',
+                            'longitude':'lon'})\
+                    .assign_coords({'lat':out_da.lat,
+                                    'lon':out_da.lon})
 
-        out_da = out_da.where(mask==1)
+        out_da = out_da.where(mask_ == 1)
         out_da = out_da.fillna(0.0)
         print(f' done ({toc-tic:.1f}s)')
         return out_da
@@ -192,12 +200,11 @@ def load_uv_data(coarsen_in_time=False,
         da_LR_vo = create_da_LR(da_HR_vo, coarsen_in_time)
 
     elif coarsening_method == 'gaussian_filter':
-        sigma = [8,2,2]
+        sigma = [8,1,1]
         da_LR_uo = filter_HR_data(da_HR_uo, sigma)
         da_LR_vo = filter_HR_data(da_HR_vo, sigma)
     else:
         raise Exception('invalid coarsening_method {coarsening_method}')
-
 
 
     da_HR = {'uo': da_HR_uo[:,3:-2,:-1],
@@ -279,40 +286,38 @@ def load_training_data(split_factor=4/5,
 
     Nt, Nlat, Nlon, num_channels = data_HR.shape
 
-    import matplotlib.pyplot as plt
-    plt.close('all')
-    data_R  = (data_HR - data_LR)
-
-    plt.figure(figsize=(8,10))
-
-    plt.subplot(4,2,1)
-    a = plt.imshow(data_R[100,:,:,0])
-    plt.colorbar(a, shrink=0.5)
-
-    plt.subplot(4,2,2)
-    a = plt.imshow(data_R.min(axis=0)[:,:,0])
-    plt.colorbar(a, shrink=0.5)
-
-    plt.subplot(4,2,3)
-    a = plt.imshow(data_HR[100,:,:,0])
-    plt.colorbar(a, shrink=0.5)
-
-    plt.subplot(4,2,4)
-    a = plt.imshow(data_LR[100,:,:,0])
-    plt.colorbar(a, shrink=0.5)
-
-    plt.subplot(4,2,7)
-    plt.plot(np.sum(np.square(data_HR[:200,:,:,0]), axis=(1,2)))
-    plt.plot(np.sum(np.square(data_LR[:200,:,:,0]), axis=(1,2)))
-
-
+    
     data_HR = scalers['HR'].fit_transform(data_HR.reshape(Nt, -1))\
                            .reshape(Nt, Nlat, Nlon, num_channels)
 
     data_LR = scalers['HR'].transform(data_LR.reshape(Nt, -1))\
                            .reshape(Nt, Nlat, Nlon, num_channels)
+    
+    # import matplotlib.pyplot as plt
+    # plt.close('all')
+    # data_R  = (data_HR - data_LR)
 
+    # plt.figure(figsize=(8,10))
 
+    # plt.subplot(4,2,1)
+    # a = plt.imshow(data_R[100,:,:,0])
+    # plt.colorbar(a, shrink=0.5)
+
+    # plt.subplot(4,2,2)
+    # a = plt.imshow(data_R.min(axis=0)[:,:,0])
+    # plt.colorbar(a, shrink=0.5)
+
+    # plt.subplot(4,2,3)
+    # a = plt.imshow(data_HR[100,:,:,0])
+    # plt.colorbar(a, shrink=0.5)
+
+    # plt.subplot(4,2,4)
+    # a = plt.imshow(data_LR[100,:,:,0])
+    # plt.colorbar(a, shrink=0.5)
+
+    # plt.subplot(4,2,7)
+    # plt.plot(np.sum(np.square(data_HR[:200,:,:,0]), axis=(1,2)))
+    # plt.plot(np.sum(np.square(data_LR[:200,:,:,0]), axis=(1,2)))
 
     if residual_mode:
         # create residual and secant predictor data
@@ -324,22 +329,24 @@ def load_training_data(split_factor=4/5,
         data_R = scalers['R'].fit_transform(data_R.reshape(Nt_R, -1))\
                              .reshape(Nt_R, Nlat, Nlon, num_channels)
         data_FT = scalers['R'].transform(data_FT.reshape(Nt_R, -1))\
-                              .reshape(Nt_R, Nlat, Nlon, num_channels)
-
+                              .reshape(Nt_R, Nlat, Nlon, num_channels)        
+        # plt.subplot(4,2,5)
+        # a = plt.imshow(data_R[100,:,:,0])
+        # plt.colorbar(a, shrink=0.5)
         
-        plt.subplot(4,2,5)
-        a = plt.imshow(data_R[100,:,:,0])
-        plt.colorbar(a, shrink=0.5)
-        
-        plt.subplot(4,2,6)
-        a = plt.imshow(data_FT[100,:,:,0])
-        plt.colorbar(a, shrink=0.5)
+        # plt.subplot(4,2,6)
+        # a = plt.imshow(scalers['R'].min_\
+        #                .reshape(Nlat, Nlon, num_channels)[:,:,0])
+        # plt.colorbar(a, shrink=0.5)
 
-        plt.tight_layout()
-        plt.pause(1)
-        breakpoint()
+        # plt.subplot(4,2,8)
+        # a = plt.imshow(scalers['R'].scale_\
+        #                .reshape(Nlat, Nlon, num_channels)[:,:,0])
+        # plt.colorbar(a, shrink=0.5)
 
-
+        # plt.tight_layout()
+        # plt.pause(1)
+        # breakpoint()
 
 
     Nt = Nt_R if residual_mode else Nt
@@ -356,12 +363,12 @@ def load_training_data(split_factor=4/5,
 
     if residual_mode:
         data['train'] = {'R'    : data_R[train_range,],
-                         'FT'   : data_FT[train_range,],
+                         'LR'   : data_LR[2:,][train_range,],
                          'HR'   : data_HR[2:,][spinup_range,],
                          'time' : da_LR['uo'].time.values[2:][train_range]}
 
         data['test']  = {'R'    : data_R[test_range,],
-                         'FT'   : data_FT[test_range,],
+#                         'FT'   : data_FT[test_range,],
                          'LR'   : data_LR[2:,][test_range,],
                          'HR'   : data_HR[2:,][test_range,],
                          'time' : da_LR['uo'].time.values[2:][test_range]}

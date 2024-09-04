@@ -11,11 +11,11 @@ from keras.models import Model
 @keras.saving.register_keras_serializable(name="custom_masking")
 class Masking(layers.Layer):
     def __init__(self, mask, **kwargs):
-        super(Masking, self).__init__(**kwargs)
+        super().__init__(**kwargs)
         self.mask = mask
 
     def get_config(self):
-        config = super(Masking, self).get_config()
+        config = super().get_config()
         config.update({
             'mask' : keras.saving.serialize_keras_object(self.mask)})
         return config
@@ -44,7 +44,7 @@ class AutoEncoder(keras_tuner.HyperModel):
         self.num_filters = 32
         self.num_filters_red = 16
         self.kernel_size = (3,3)
-        self.num_resblocks = 2
+        self.num_resblocks = 0
         self.resblock_ctr = 0
 
     def ResBlock(self, inputs):
@@ -69,15 +69,16 @@ class AutoEncoder(keras_tuner.HyperModel):
                     conv_arch='default',
                     learning_rate=0.002,
                     use_dropout=False,
-                    activation='relu',
                     optimizer='adam',
                     verbosity=20,
-                    use_feedthrough=False,
+                    use_feedthrough=True,
                     feedthrough_only=False,
                     use_timeinput=True,
                     feedthrough_type='multiply'
                     ):
 
+        self.activation_encoder = None
+        self.activation_decoder = 'sigmoid'
         self.use_feedthrough = use_feedthrough
         self.feedthrough_only = feedthrough_only
         self.feedthrough_type = feedthrough_type
@@ -106,25 +107,25 @@ class AutoEncoder(keras_tuner.HyperModel):
         conv_layer_0 = layers.Conv2D(self.num_filters_red,
                                      self.kernel_size,
                                      strides = (1,1),
-                                     activation=activation,
+                                     activation=self.activation_encoder,
                                      padding="same", name="conv_layer_0")
 
         conv_layer_1 = layers.Conv2D(self.num_filters,
                                      self.kernel_size,
                                      strides = (2,2),
-                                     activation=activation,
+                                     activation=self.activation_encoder,
                                      padding="same", name="conv_layer_1")
 
         conv_layer_2 = layers.Conv2D(self.num_filters,
                                      self.kernel_size,
                                      strides = (2,2),
-                                     activation=activation,
+                                     activation=self.activation_encoder,
                                      padding="same", name="conv_layer_2")
 
         conv_layer_3 = layers.Conv2D(self.num_filters_red,
                                      self.kernel_size,
                                      strides = (2,2),
-                                     activation=activation,
+                                     activation=self.activation_encoder,
                                      padding="same", name="conv_layer_3")
 
         dropout_layer_1 = layers.Dropout(self.dropout_rate,
@@ -145,7 +146,7 @@ class AutoEncoder(keras_tuner.HyperModel):
             c = conv_layer_1(feedthrough)
             c = conv_layer_2(c)
             if use_dropout:
-                c = dropout_layer(c)
+                c = dropout_layer_1(c)
             control = conv_layer_3(c)
 
             encoded = self.esn(encoded, time_input, control)
@@ -154,28 +155,28 @@ class AutoEncoder(keras_tuner.HyperModel):
         convt_layer_1 = layers.Conv2DTranspose(self.num_filters,
                                                self.kernel_size,
                                                strides=(2,2),
-                                               activation=activation,
+                                               activation=self.activation_decoder,
                                                padding="same",
                                                name='convt_layer_1')
 
         convt_layer_2 = layers.Conv2DTranspose(self.num_filters,
                                                self.kernel_size,
                                                strides=(2,2),
-                                               activation=activation,
+                                               activation=self.activation_decoder,
                                                padding="same",
                                                name='convt_layer_2')
 
         convt_layer_2_1 = layers.Conv2DTranspose(self.num_filters,
                                                  self.kernel_size,
                                                  strides=(1,1),
-                                                 activation=activation,
+                                                 activation=self.activation_decoder,
                                                  padding="same",
                                                  name='convt_layer_2_1')
 
         convt_layer_3 = layers.Conv2DTranspose(self.num_filters,
                                                self.kernel_size,
                                                strides=(2,2),
-                                               activation=activation,
+                                               activation=self.activation_decoder,
                                                padding="same",
                                                name='convt_layer_3')
 
@@ -188,7 +189,7 @@ class AutoEncoder(keras_tuner.HyperModel):
         feedthrough_layer_1 = layers.Conv2D(self.num_filters,
                                             self.kernel_size,
                                             strides = (1,1),
-                                            activation=activation,
+                                            activation=self.activation_decoder,
                                             padding="same",
                                             name='feedthrough_layer_1')
 
@@ -214,7 +215,6 @@ class AutoEncoder(keras_tuner.HyperModel):
 
             inputs_decoder=[feedthrough]
             inputs_autoencoder=[feedthrough]
-            outputs = [masking_layer(output)]
 
         elif self.use_feedthrough:
             z = feedthrough_layer_1(feedthrough)
@@ -232,14 +232,13 @@ class AutoEncoder(keras_tuner.HyperModel):
             output = output_layer(output)
             inputs_decoder=[encoded, feedthrough]
             inputs_autoencoder=[state_input, time_input, feedthrough]
-            outputs = [masking_layer(output)]
 
         else:
             output = output_layer(cropped_y)
             inputs_decoder=[encoded]
             inputs_autoencoder=[state_input, time_input]
-            outputs = [masking_layer(output)]
 
+        outputs = [masking_layer(output)]
 
         # Construct models
         decoder = Model(inputs=inputs_decoder,
@@ -318,7 +317,6 @@ class TriggerESN(keras.callbacks.Callback):
         self.num_samples = num_samples
 
     def on_epoch_begin(self, epoch, logs=None):
-
         # synchronize the size of the training data between AE and ESN
         # not sure if this is the right place
         self.esn.num_samples = self.num_samples
@@ -329,6 +327,9 @@ class TriggerESN(keras.callbacks.Callback):
         elif not epoch % self.train_every:
             self.esn.esn_ready_to_train[1] = True
 
+        if np.all(self.esn.esn_ready_to_train[1]):
+            self.esn.train()
+            
 
 class CustomValidation(keras.callbacks.Callback):
     """
@@ -355,20 +356,50 @@ class CustomValidation(keras.callbacks.Callback):
         pb_i = keras.utils.Progbar(self.N_steps,
                                    stateful_metrics=['error', 'base'])
 
-        error, base = (0,0)
+        error, base, Pxk_err = (0,0,0)
+
+        
+        # i=0
+        # xk_LR = np.expand_dims(self.test_data_ft[i,], axis=0)
+        # Pxk = 2*xk - xkm1 - xk_LR
+        # Pxk = self.scalers['R']\
+        #           .transform(Pxk.reshape(1,-1))\
+        #           .reshape(Pxk.shape)
+
+        # plt.figure()
+        # a=plt.imshow(Pxk[0,:,:,0])
+        # plt.colorbar(a,shrink=0.5)
+        # plt.pause(1)
+        
 
         for i in range(self.N_steps):
 
             xk_LR = np.expand_dims(self.test_data_ft[i,], axis=0)
-            if self.pars['residual_mode']:
-                # secant predictor in residual mode
-                Pxk = 2*xk - xkm1 - xk_LR
-                Pxk = self.scalers['R']\
-                         .transform(Pxk.reshape(1,-1))\
-                         .reshape(Pxk.shape)
-            else:
-                Pxk = xk_LR
-
+            
+            # if self.pars['residual_mode']:
+            #     # # secant predictor in residual mode
+            #     # Pxk = 2*xk - xkm1 - xk_LR
+            #     # # Pxk = xk - xk_LR
+            #     # Pxk = self.scalers['R']\
+            #     #          .transform(Pxk.reshape(1,-1))\
+            #     #          .reshape(Pxk.shape)
+                
+            #     # xk_true = np.expand_dims(self.test_data[i,], axis=0)
+            #     # Pxk_true = xk_true-xk_LR
+            #     # Pxk_true = self.scalers['R']\
+            #     #                .transform(Pxk_true.reshape(1,-1))\
+            #     #                .reshape(Pxk_true.shape)
+            #     # dff = Pxk - Pxk_true
+            #     # err = (np.sum(np.square(dff)))
+            #     # Pxk_err += err
+            #     # import matplotlib.pyplot as plt
+            #     # plt.close('all')
+            #     # a=plt.imshow(dff[0,:,:,0]);plt.colorbar(a)
+            #     # plt.pause(1)
+            #     # print(err)                
+            # else:
+            Pxk = xk_LR
+                
             tid = np.expand_dims(self.T_test[i,], axis=0)
             xkm1 = xk
 
@@ -389,7 +420,8 @@ class CustomValidation(keras.callbacks.Callback):
             error += (np.sum(np.square(xk - xk_true)))
             base += (np.sum(np.square(xk_LR - xk_true)))
             values = [('error', np.sqrt(error/(i+1))),
-                      ('base', np.sqrt(base/(i+1)))]
+                      ('base', np.sqrt(base/(i+1))),
+                      ('Pxk', np.sqrt(Pxk_err/(i+1)))]
             pb_i.add(1, values=values)
 
         self.plotmachine.plot_prediction_error(self.test_data,

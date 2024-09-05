@@ -37,8 +37,6 @@ from plot_utils import PlotMachine
 # If True, train and predict residuals: R such that X_LR + R = X_HR
 residual_mode = False
 
-use_embedded_ESN = True
-
 use_feedthrough = True
 feedthrough_only = False
 
@@ -46,27 +44,32 @@ overwrite_existing_model = False
 select_existing_model = False
 
 # truncate
-# history = data['train']['HR'].shape[0] # use all data we have
-history = 10000
-# history = 1000
+# history = 'all'
+history = 15000
+# history = 4000
 future = 400
 
 # 
-epochs = 20
+epochs = [10,30]
 batch_size = 4
-esn_train_in_epochs=[0,10]
+esn_train_in_epochs=[0,2,4,8]
 
 compute_data=False
 
-    
+data, params, scalers, _  = \
+    dm.create_training_data(compute_data=compute_data,
+                            residual_mode=residual_mode,
+                            coarsen_in_time=False,
+                            detide=False)
+
 # CNN_modes:
 #  'snapshots' : train an instanteous model
 #  'timesteps' : train a time-stepping model
+CNN_modes = ['timesteps', 'timesteps']
 
-CNN_modes = ['snapshots', 'timesteps']
 loading = [False, True]
-for (CNN_mode, load_existing_model) in zip(CNN_modes, loading):
-    
+for itr, (CNN_mode, load_existing_model) in enumerate(zip(CNN_modes, loading)):
+    use_embedded_ESN = False
 
     #-------------------------------------------------------
     if select_existing_model:
@@ -86,11 +89,9 @@ for (CNN_mode, load_existing_model) in zip(CNN_modes, loading):
     dirs, files = dm.setup_directories(folder_id, add_id)
     models_dir = dirs['models']
 
-    data, params, scalers, _  = \
-        dm.create_training_data(compute_data=compute_data,
-                                residual_mode=residual_mode,
-                                coarsen_in_time=False,
-                                detide=False)
+    if history == 'all':
+         # use all data we have
+        history = data['train']['HR'].shape[0]
 
     if residual_mode:
         # input training data
@@ -129,9 +130,9 @@ for (CNN_mode, load_existing_model) in zip(CNN_modes, loading):
 
         # Get rid of time shift in training data, train with the '1:'
         # range.
-        train_data_inp = train_data_otp
+        # train_data_inp = train_data_otp
         # snapshot mode does not give any predictions:
-        plot_prediction = False
+        plot_prediction = False        
 
     if feedthrough_only: use_embedded_ESN = False
 
@@ -141,45 +142,21 @@ for (CNN_mode, load_existing_model) in zip(CNN_modes, loading):
         load_path_decoder     = f'{models_dir}/decoder_{model_id}.keras'
 
         autoencoder = keras.models.load_model(load_path_autoencoder)
-        esn = autoencoder.get_layer('esn_embedded')
-        # overwrite parameters
         encoder = keras.models.load_model(load_path_encoder)
-        num_samples = train_data_inp.shape[0]
-        timeids = np.arange(num_samples)
-        timetns = np.expand_dims(timeids, axis=[1,2,3])
-        print('create training data for embedded ESN')
-        esn.setPars(esn_params, num_samples=num_samples)
-        values  = esn.pixel_shuffle(encoder.predict([train_data_inp, timetns]))
-        control = esn.pixel_shuffle(encoder.predict([train_data_ft, timetns]))
-        esn.initialize(values, control)
-        esn.populate_storage(values, timeids, control)
-
-        # TEST ESN STEPS HERE, USE DECODER
-
-        # field = np.expand_dims(data['test']['R'][0,],0)
-        # contr = np.expand_dims(data['test']['FT'][0,],0)
-        # time = np.expand_dims([1000],(1,2,3))
-        # values  = esn.pixel_shuffle(encoder.predict([field, time]))
-        # control = esn.pixel_shuffle(encoder.predict([contr, time]))
-
-        # out = esn.step(values[-1,], timetns[-1,0,0,0], control[-1,])
-        # out = esn.pixel_unshuffle(np.expand_dims(out,0))
-        # ctr = np.expand_dims(train_data_ft[-1,],0)
-        # decoder = keras.models.load_model(load_path_decoder)
-        # sol = decoder.predict([out, ctr], verbose=0)
-        # truth = data['test']['R'][1,]
-
-        # import matplotlib.pyplot as plt
-        # plt.close('all')
-        # plt.figure()
-        # a = plt.imshow(sol[0,:,:,0])
-        # plt.colorbar(a)
-        # plt.pause(1)
-
-        # plt.figure()
-        # a = plt.imshow((sol[0,]-truth)[:,:,0])
-        # plt.colorbar(a)
-        # plt.pause(1)
+        decoder = keras.models.load_model(load_path_decoder)
+        if use_embedded_ESN:
+            esn = autoencoder.get_layer('esn_embedded')
+            # overwrite parameters
+            
+            num_samples = train_data_inp.shape[0]
+            timeids = np.arange(num_samples)
+            timetns = np.expand_dims(timeids, axis=[1,2,3])
+            print('create training data for embedded ESN')
+            esn.setPars(esn_params, num_samples=num_samples)
+            values  = esn.pixel_shuffle(encoder.predict([train_data_inp, timetns]))
+            control = esn.pixel_shuffle(encoder.predict([train_data_ft, timetns]))
+            esn.initialize(values, control)
+            esn.populate_storage(values, timeids, control)
 
     else:
 
@@ -249,9 +226,6 @@ for (CNN_mode, load_existing_model) in zip(CNN_modes, loading):
                               num_samples=X_train[0].shape[0])
 
     if CNN_mode == 'timesteps':
-        # normal validation is not valid for timestepping mode
-        validation_data=None
-
         # we create a custom validation using a callback at every epoch
         # end
         initial_xk   = np.expand_dims(data['train']['HR'][-1,:,:,:], axis=0)
@@ -272,18 +246,15 @@ for (CNN_mode, load_existing_model) in zip(CNN_modes, loading):
         callbacks = [esn_callback, validation_callback]
 
     elif CNN_mode == 'snapshots':
-        X_test = [test_data, T_test, test_data_ft]
-        Y_test = test_data
-        validation_data = (X_test, Y_test)
         callbacks = None
 
     # TRAINING --------------------------------------------
     hist = autoencoder.fit(x=X_train,
                            y=Y_train,
-                           epochs=epochs,
+                           epochs=epochs[itr],
                            batch_size=batch_size,
                            shuffle=shuffle,
-                           validation_data=validation_data,
+                           validation_data=None,
                            callbacks=callbacks
                            )
     toc = time.time()
@@ -294,7 +265,7 @@ for (CNN_mode, load_existing_model) in zip(CNN_modes, loading):
     timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
     mdata_file = f'{models_dir}/mdata_{timestamp}.dill'
     container = {'hist' : hist,
-                 'epochs' : epochs,
+                 'epochs' : epochs[itr],
                  'batch_size' : batch_size,
                  'encoder' : encoder,
                  'decoder' : decoder,

@@ -6,7 +6,7 @@ from keras import layers
 from keras import ops
 
 hyperparams = { 'external' : {'model_type'      : 'ESNc',
-                              'training_length' : 25000,
+                              'training_length' : 2000,
                               'repetitions'     : 2,
                               'test_length'     : 4*24*10,
                               'reshape_order'   : 'C',
@@ -14,10 +14,10 @@ hyperparams = { 'external' : {'model_type'      : 'ESNc',
                               'bypass_mode'     : False,
                               'control_amp'     : 1 },
 
-                'internal' : { 'Nr'                 : 10000,
-                               'scalingType'        : 'minMax1',
+                'internal' : { 'Nr'                 : 2000,
+                               'scalingType'        : 'none',
                                'rhoMax'             : 1.2,
-                               'alpha'              : 0.9,
+                               'alpha'              : 0.8,
                                'avgDegree'          : 50,
                                'entriesPerRow'      : 50,
                                'noiseAmplitude'     : 0,
@@ -26,7 +26,7 @@ hyperparams = { 'external' : {'model_type'      : 'ESNc',
                                'reservoirStateInit' : 'zero',
                                'inputMatrixType'    : 'balancedSparse',
                                'fCutoff'            : 0.0,
-                               'Wconstruction'      : 'avgDegree'} }
+                               'Wconstruction'      : 'entriesPerRow'} }
 
 class ESN_interface():
 
@@ -250,7 +250,8 @@ class ESN_embedded(layers.Layer):
         ret = input_tensor.transpose(3,1).transpose(3,2)
         num_channels = ret.shape[1]        
         self.upscale_factor = np.sqrt(num_channels)
-        assert self.upscale_factor.is_integer()
+        assert self.upscale_factor.is_integer(), \
+            "ESN::pixel_shuffle, non-integer upscale factor"
         ret = torch.nn.functional.pixel_shuffle(ret,
                                                 int(self.upscale_factor))
 
@@ -275,7 +276,10 @@ class ESN_embedded(layers.Layer):
         else: return ret
 
 
-    def call(self, inputs, time, control_ft):
+    def call(self, inputs, time, control_ft=None):
+        if self.bypass_mode:
+            return inputs
+        
         inputs = self.pixel_shuffle(inputs)
         control_ft = self.pixel_shuffle(control_ft)
         
@@ -289,9 +293,6 @@ class ESN_embedded(layers.Layer):
 
         if self.needs_initializing:
             self.initialize(values, control)
-
-        if self.bypass_mode:
-            return self.pixel_unshuffle(inputs)
 
         self.populate_storage(values, timeid, control)
 
@@ -333,8 +334,10 @@ class ESN_embedded(layers.Layer):
 
     def populate_storage(self, values, timeid, control):
         T, _, _, _ =  values.shape
-        # not going to populate storage if timeid beyond range
-        if np.any(timeid >= self.storage.shape[0]):
+        # not going to populate storage if timeid beyond range or
+        # model in bypass mode
+        if ( np.any(timeid >= self.storage.shape[0]) or
+             self.bypass_mode ):
             return
         if not np.all(self.populate_lookup[timeid,:]):
             self.populate_lookup[timeid,:] = 1
@@ -357,7 +360,11 @@ class ESN_embedded(layers.Layer):
             self.populate_lookup = np.zeros((self.num_samples,1))
 
     def train(self):
+        
         print('\nTraining embedded ESN')
+
+        assert not self.bypass_mode, \
+            "cannot train ESN in bypass mode"
         Nr = self.esn_params['internal']['Nr']
         Nu = self.total_feats
         Ny = self.values_dim
@@ -438,3 +445,13 @@ class ESN_embedded(layers.Layer):
         self.last_sk = sk
 
         return yk.reshape(values.shape, order=self.reshape_order)
+
+    def summary(self):
+        print('ESN embedding layer:')
+        print(f'esn_params {self.esn_params}')
+        print(f'num_samples {self.num_samples}')
+        print(f'model_type {self.model_type}')
+        print(f'bypass_mode {self.bypass_mode}')
+        print(f'reshape_order {self.reshape_order}')
+        print(f'needs_initializing {self.needs_initializing}')
+        print(f'upscale_factor {self.upscale_factor}')

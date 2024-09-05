@@ -200,12 +200,11 @@ def load_uv_data(coarsen_in_time=False,
         da_LR_vo = create_da_LR(da_HR_vo, coarsen_in_time)
 
     elif coarsening_method == 'gaussian_filter':
-        sigma = [8,1,1]
+        sigma = [1,1,1]
         da_LR_uo = filter_HR_data(da_HR_uo, sigma)
         da_LR_vo = filter_HR_data(da_HR_vo, sigma)
     else:
         raise Exception('invalid coarsening_method {coarsening_method}')
-
 
     da_HR = {'uo': da_HR_uo[:,3:-2,:-1],
              'vo': da_HR_vo[:,3:-2,:-1]}

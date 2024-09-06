@@ -34,20 +34,33 @@ class AutoEncoder(keras_tuner.HyperModel):
     def __init__(self, test_vec, mask, log_file, esn=None):
         super(AutoEncoder, self).__init__()
 
+        self.log('AutoEncoder\n', 'w')
+        
         self.test_vec = test_vec
         self.mask = mask
         self.log_file = log_file
         self.dropout_rate = 0.25
+        self.noise_stddev = 0.1
         self.esn = esn
-        self.log('AutoEncoder\n', 'w')
-
         self.num_filters = 32
         # this needs to have an integer sqrt
         self.num_filters_red = 9
         self.kernel_size = (3,3)
         self.num_resblocks = 0
         self.resblock_ctr = 0
-        self.esn_combine_mode = 'replace'        
+        self.esn_combine_mode = 'replace'
+
+    def summary(self):
+        
+        print(f'dropout_rate: {self.dropout_rate}')
+        print(f'noise_stddev: {self.noise_stddev}')
+        print(f'esn: {vars(self.esn)}')
+        print(f'num_filters: {self.num_filters}')
+        print(f'num_filters_red: {self.num_filters_red}')
+        print(f'kernel_size: {self.kernel_size}')
+        print(f'num_resblocks: {self.num_resblocks}')
+        print(f'resblock_ctr: {self.resblock_ctr}')
+        print(f'esn_combine_mode: {self.esn_combine_mode}')
 
     def ResBlock(self, inputs):
         self.resblock_ctr += 1
@@ -172,7 +185,7 @@ class AutoEncoder(keras_tuner.HyperModel):
                 encoded = layers.Add()([esn_step, encoded])
 
         if self.use_noise:
-            encoded = layers.GaussianNoise(0.1)(encoded)
+            encoded = layers.GaussianNoise(self.noise_stddev)(encoded)
 
         if self.use_dropout:
             encoded = layers.Dropout(self.dropout_rate,
@@ -279,7 +292,7 @@ class AutoEncoder(keras_tuner.HyperModel):
 
         autoencoder.compile(optimizer=optim, loss=loss)
 
-        self.log(locals(), 'a')
+        self.log_model()
         self.log_model(autoencoder, 'a')
         self.log_model(self.esn, 'a')
 
@@ -308,7 +321,8 @@ class AutoEncoder(keras_tuner.HyperModel):
             print(msg)
             sys.stdout = original
 
-    def log_model(self, model, mode='a'):
+    def log_model(self, model=None, mode='a'):
+        model = self if model is None            
         original = sys.stdout
         with open(self.log_file, mode) as f:
             sys.stdout = f

@@ -52,7 +52,7 @@ future = 400
 
 # 
 epochs = 10
-batch_size = 2
+batch_size = 4
 esn_train_in_epochs=[0,2,4,8]
 
 compute_data = False

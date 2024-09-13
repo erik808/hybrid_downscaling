@@ -66,21 +66,24 @@ class AE_Experiment():
             self.load_path_decoder     = \
                 f'{mdir}/decoder_{self.load_model_id}.keras'
 
+        # -------------------------------------------------------
+        # Load or compute data
         self.data, self.params, self.scalers, _ = \
             dm.create_training_data(compute_data=False,
                                     detide=False)
+        # -------------------------------------------------------
 
         self.full_postprocess = False
         self.trial_id = None
 
         # default hyperparams
         self.hyper_params = {
-            'history' : 'all',
+            'history' : 1000,
             'future' : 400,
             'noise_stddev' : 0.05,
             'dropout_rate' : 0.0,
             'optimizer' : 'adam',
-            'epochs' : 4,
+            'epochs' : 8,
             'batch_size' : 4,
             'learning_rate' : 0.002,
             'num_filters' : 32,
@@ -94,7 +97,7 @@ class AE_Experiment():
         tuning_dir = self.dirs['tuning']
         storage = f'sqlite:///{tuning_dir}/storage.db'
         reload_tuning=True
-        timeout=60*60*6 # 6h
+        timeout=60*60*4 # 6h
 
         self.setup_search_space()
 
@@ -137,7 +140,7 @@ class AE_Experiment():
                         'low':1, 'high':100 },
                 search_space=[16,32,48,64,80],
                 trial=trial)
-            
+
             self.hyper_param_helper(
                 'int',  {'name':'num_filters_red',
                          'low':1, 'high':100 },
@@ -147,20 +150,33 @@ class AE_Experiment():
         elif self.test_config == 'training_pars':
             self.hyper_param_helper(
                 'float', {'name':'learning_rate',
-                          'low':1e-5, 'high':1e-2},
+                          'low':1e-4, 'high':1e-2},
                 search_space=[5e-4, 1e-3, 2e-3, 4e-3],
                 trial=trial)
-            
+
             self.hyper_param_helper(
                 'int', {'name':'batch_size',
                         'low':1, 'high':100},
                 search_space=[1, 2, 4, 8],
                 trial=trial)
-            
+
             self.hyper_param_helper(
                 'categorical', {'name':'optimizer',
                                 'choices': ['adam', 'sgd']},
                 search_space=['adam', 'sgd'],
+                trial=trial)
+            
+        elif self.test_config == 'training_pars_2':
+            self.hyper_param_helper(
+                'float', {'name':'learning_rate',
+                          'low':1e-4, 'high':1e-2},
+                search_space=[2e-3, 4e-3, 6e-3, 8e-3, 1e-2],
+                trial=trial)
+
+            self.hyper_param_helper(
+                'int', {'name':'batch_size',
+                        'low':1, 'high':100},
+                search_space=[1, 2, 4],
                 trial=trial)
         else:
             raise Exception(f'invalid test_config: {self.test_config}')
@@ -169,7 +185,7 @@ class AE_Experiment():
             optuna.samplers.GridSampler(self.search_space)
 
     def objective(self, trial):
-        self.trial_id = trial._trial_id
+        self.trial_id = trial._trial_id-1
         self.setup_search_space(trial)
         self.log(trial)
         err = self.build_and_run_experiment()
@@ -185,13 +201,12 @@ class AE_Experiment():
 
 
     def log(self, trial):
-        self.trial_id = trial._trial_id
         print(f'writing log to {self.study_log}')
         with open(self.study_log, "a") as file:
 
             for out in [file, sys.stdout]:
 
-                print(f'trial_id: {trial._trial_id}', file=out)
+                print(f'trial_id: {self.trial_id}', file=out)
                 print(f'trial_params: {trial.params}', file=out)
                 print(f'best_trials: {self.study.best_trials}', file=out)
 
@@ -243,7 +258,7 @@ class AE_Experiment():
         if feedthrough_only: use_embedded_ESN = False
 
         mdir = self.dirs['models']
-        timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
+        postfix, timestamp = self.create_postfix()        
         if self.load_existing_model:
 
             autoencoder = keras.models.load_model(self.load_path_autoencoder)
@@ -272,7 +287,7 @@ class AE_Experiment():
 
             ae = AutoEncoder(test_vec=train_data_inp[0,:,:,:],
                              mask=mask,
-                             log_file=self.files['log'] + '_' + timestamp,
+                             log_file=self.files['log'] + f'{postfix}',
                              esn=esn)
 
             autoencoder, encoder, decoder = \
@@ -293,7 +308,8 @@ class AE_Experiment():
         # print a summary
         autoencoder.summary()
 
-        model_name = self.load_model_id if self.load_existing_model else timestamp
+        model_name = self.load_model_id \
+            if self.load_existing_model else timestamp
         print('----------------------------------------------------------')
         print(f'experiment: {self.folder_id}{self.folder_postfix}, ')
         print(f'model: {model_name}')
@@ -352,7 +368,7 @@ class AE_Experiment():
 
         # SAVING -----------------------------------------------
         # save model and metadata
-        mdata_file = f'{mdir}/mdata_{timestamp}.dill'
+        mdata_file = f'{mdir}/mdata{postfix}.dill'
         container = {'hist' : self.hist,
                      'epochs' : epochs,
                      'batch_size' : batch_size,
@@ -363,9 +379,9 @@ class AE_Experiment():
             dill.dump(container, file)
 
         # save models
-        save_path_autoencoder = f'{mdir}/aencodr_{timestamp}.keras'
-        save_path_encoder     = f'{mdir}/encoder_{timestamp}.keras'
-        save_path_decoder     = f'{mdir}/decoder_{timestamp}.keras'
+        save_path_autoencoder = f'{mdir}/autoencoder{postfix}.keras'
+        save_path_encoder     = f'{mdir}/encoder{postfix}.keras'
+        save_path_decoder     = f'{mdir}/decoder{postfix}.keras'
 
         print(f'saving autoencoder to {save_path_autoencoder}')
         print(f'saving encoder to {save_path_encoder}')
@@ -478,7 +494,19 @@ class AE_Experiment():
 
             plotmachine.create_movie(output_dict)
 
+
+    def create_postfix(self):
+
+        postfix = ''
+        if self.trial_id != None:
+            postfix += f'_trial_{self.trial_id}'
+
+        timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
+        postfix += f'_{timestamp}'
+
+        return postfix, timestamp
+
 if __name__=="__main__":
     exp = AE_Experiment(exp_name='tuning',
-                        test_config='filters_exp_red')
+                        test_config='training_pars_2')
     exp.run_optuna_study()

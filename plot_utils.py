@@ -28,8 +28,8 @@ class PlotMachine():
             if output_dict == None else output_dict
 
         fig = plt.figure(figsize=self.figsize)
-        timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
-        fig_name = f'{self.results_dir}/results_autoencoder_{timestamp}.png'
+        postfix = self.create_postfix()
+        fig_name = f'{self.results_dir}/results_autoencoder{postfix}.png'
         self.plot_frame(frame_id, fig_name)
 
     def create_movie(self, output_dict=None):
@@ -37,13 +37,13 @@ class PlotMachine():
         self.output_dict = self.output_dict \
             if output_dict == None else output_dict
         
-        fig = plt.figure(figsize=self.figsize)
-        timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
+        fig = plt.figure(figsize=self.figsize)        
         with Pool(self.pool_size) as p:
             p.map(self.plot_frame, range(0,len(self.time_array),
                                          self.frame_stride))
 
-        movie_name = f'movie_{timestamp}.mov'
+        postfix = self.create_postfix()
+        movie_name = f'movie{postfix}.mov'
         framerate = 24
         sys_cmd = ( f"ffmpeg -r {framerate} -f image2 -pattern_type glob -i "
                     f"'{self.movie_dir}/frame-*.png' "
@@ -74,17 +74,12 @@ class PlotMachine():
             plt.gca().invert_yaxis()
 
         plt.suptitle(f"date: {np.datetime64(self.time_array[id], 'h')}")
-        # print(fig_name)
         plt.savefig(fig_name)
 
     def plot_history(self, hist):
-        
-        timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
 
-        if self.trial_id == None:
-            fig_name = f'{self.results_dir}/history_{timestamp}.png'
-        else:
-            fig_name = f'{self.results_dir}/history_trial_{self.trial_id}.png'
+        postfix = self.create_postfix()
+        fig_name = f'{self.results_dir}/history{postfix}.png'        
             
         plt.close('all')
         plt.subplot(2,1,1)
@@ -117,8 +112,9 @@ class PlotMachine():
         plt.savefig(fig_name)
 
     def plot_prediction_error(self, X, Y, Z, add_name=''):
-        timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
-        fig_name = f'{self.results_dir}/errors_{timestamp}{add_name}.png'
+
+        postfix = self.create_postfix(add_name)
+        fig_name = f'{self.results_dir}/errors{postfix}.png'
 
         RSE_Y = np.sqrt(np.sum(np.square(X-Y),axis=(1,2,3)))
         RSE_Z = np.sqrt(np.sum(np.square(X-Z),axis=(1,2,3)))
@@ -134,3 +130,16 @@ class PlotMachine():
         plt.savefig(fig_name)
 
         return RSE_Y, RSE_Z
+    
+    def create_postfix(self, add_name=''):
+
+        postfix = ''
+        if self.trial_id != None:
+            postfix += f'_trial_{self.trial_id}'            
+
+        postfix += f'_{add_name}' if len(add_name)>0 else ''
+        timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
+        postfix += f'_{timestamp}'
+
+        return postfix
+        

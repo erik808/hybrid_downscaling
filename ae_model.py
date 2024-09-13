@@ -444,7 +444,7 @@ class CustomValidation(keras.callbacks.Callback):
         self.plotmachine.plot_prediction_error(self.test_data,
                                                self.predictions,
                                                self.test_data_ft,
-                                               f'_epoch_{epoch}')
+                                               f'epoch_{epoch}')
 
         self.final_error = np.sqrt(error/(i+1))
         self.final_base = np.sqrt(base/(i+1))

@@ -34,21 +34,21 @@ class AutoEncoder(keras_tuner.HyperModel):
     def __init__(self, test_vec, mask, log_file, esn=None):
         super(AutoEncoder, self).__init__()
 
-
         self.test_vec = test_vec
         self.mask = mask
         self.log_file = log_file
         self.esn = esn
-        self.num_filters = 32
-        self.num_filters_red = 9 # this needs to have an integer sqrt
-        self.kernel_size = (3,3)
-        self.num_resblocks = 0
         self.resblock_ctr = 0
         self.esn_combine_mode = 'replace'
+        self.needs_building = True
 
         self.log('AutoEncoder\n', 'w')
 
     def summary(self):
+
+        if self.needs_building:
+            print('Model needs building, no summary available.')
+            return
 
         print(f'dropout_rate: {self.dropout_rate}')
         print(f'noise_stddev: {self.noise_stddev}')
@@ -72,6 +72,9 @@ class AutoEncoder(keras_tuner.HyperModel):
                     feedthrough_type='multiply',
                     noise_stddev=0.0,
                     dropout_rate=0.0,
+                    kernel_size=(3,3),
+                    num_filters=32,
+                    num_filters_exp=32,
                     num_filters_red=9,
                     ):
 
@@ -86,7 +89,10 @@ class AutoEncoder(keras_tuner.HyperModel):
         self.use_timeinput = use_timeinput
         self.noise_stddev = noise_stddev
         self.dropout_rate = dropout_rate
+        self.num_filters = num_filters
+        self.kernel_size = kernel_size
         self.num_filters_red = num_filters_red
+        self.num_filters_exp = num_filters_exp
 
         Nlat, Nlon, num_channels = self.test_vec.shape
 
@@ -117,7 +123,7 @@ class AutoEncoder(keras_tuner.HyperModel):
                                      activation=self.activation_encoder,
                                      padding="same", name="conv_layer_1")
 
-        conv_layer_2 = layers.Conv2D(self.num_filters,
+        conv_layer_2 = layers.Conv2D(self.num_filters_exp,
                                      self.kernel_size,
                                      strides = (2,2),
                                      activation=self.activation_encoder,
@@ -142,7 +148,8 @@ class AutoEncoder(keras_tuner.HyperModel):
             x = dropout_layer_1(x)
         encoded = conv_layer_3(x)
 
-        encoder = Model([state_input, time_input], encoded, name="encoder")
+        self.encoder = \
+            Model([state_input, time_input], encoded, name="encoder")
 
         # Call ESN layer in the latent space
         if (self.esn != None):
@@ -187,7 +194,7 @@ class AutoEncoder(keras_tuner.HyperModel):
         upsample_layer_1 = layers.UpSampling2D(size=(2, 2),
                                                interpolation="bilinear")
 
-        dec_conv_layer_2 = layers.Conv2D(self.num_filters,
+        dec_conv_layer_2 = layers.Conv2D(self.num_filters_exp,
                                          self.kernel_size,
                                          strides=(1,1),
                                          activation=self.activation_decoder,
@@ -258,11 +265,11 @@ class AutoEncoder(keras_tuner.HyperModel):
         outputs = [masking_layer(output)]
 
         # Construct models
-        decoder = Model(inputs=inputs_decoder,
-                        outputs=outputs,
-                        name="decoder")
+        self.decoder = Model(inputs=inputs_decoder,
+                             outputs=outputs,
+                             name="decoder")
 
-        autoencoder = Model(inputs=inputs_autoencoder,
+        self.autoencoder = Model(inputs=inputs_autoencoder,
                             outputs=outputs,
                             name="autoencoder")
 
@@ -275,13 +282,16 @@ class AutoEncoder(keras_tuner.HyperModel):
         elif optimizer == 'sgd':
             optim = keras.optimizers.SGD(learning_rate=learning_rate)
 
-        autoencoder.compile(optimizer=optim, loss=loss)
+        self.autoencoder.compile(optimizer=optim, loss=loss)
 
         self.log_model()
-        self.log_model(autoencoder, 'a')
+        self.log_model(self.autoencoder, 'a')
         self.log_model(self.esn, 'a')
 
-        return autoencoder, encoder, decoder
+        # models are constructed
+        self.needs_building = False        
+
+        return self.autoencoder, self.encoder, self.decoder
 
     def res_block(self, inputs):
         self.resblock_ctr += 1

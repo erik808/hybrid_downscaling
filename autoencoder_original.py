@@ -38,13 +38,14 @@ class AE_Experiment():
         self.init_timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
         self.exp_name = exp_name
         self.test_config = test_config
+        self.do_gridsearch = True
 
         if existing_model == None:
             self.folder_id = self.init_timestamp \
                 if self.exp_name == None else self.exp_name
             self.folder_id = self.exp_name
             self.folder_postfix = ''\
-                if self.test_config == None else f'_{self.test_config}'
+                if self.test_config == None else f'-{self.test_config}'
             self.load_existing_model = False
         else:
             self.folder_id = existing_model['folder_id']
@@ -58,9 +59,12 @@ class AE_Experiment():
 
         if self.load_existing_model:
             mdir = self.dirs['models']
-            self.load_path_autoencoder = f'{mdir}/aencodr_{self.load_model_id}.keras'
-            self.load_path_encoder     = f'{mdir}/encoder_{self.load_model_id}.keras'
-            self.load_path_decoder     = f'{mdir}/decoder_{self.load_model_id}.keras'
+            self.load_path_autoencoder = \
+                f'{mdir}/aencodr_{self.load_model_id}.keras'
+            self.load_path_encoder     = \
+                f'{mdir}/encoder_{self.load_model_id}.keras'
+            self.load_path_decoder     = \
+                f'{mdir}/decoder_{self.load_model_id}.keras'
 
         self.data, self.params, self.scalers, _ = \
             dm.create_training_data(compute_data=False,
@@ -69,13 +73,19 @@ class AE_Experiment():
         self.full_postprocess = False
         self.trial_id = None
 
+        # default hyperparams
         self.hyper_params = {
             'history' : 'all',
             'future' : 400,
-            'noise_stddev' : 0.1,
+            'noise_stddev' : 0.05,
+            'dropout_rate' : 0.0,
+            'optimizer' : 'adam',
             'epochs' : 4,
             'batch_size' : 4,
             'learning_rate' : 0.002,
+            'num_filters' : 32,
+            'num_filters_exp' : 32,
+            'num_filters_red' : 9,
         }
 
     def run_optuna_study(self):
@@ -85,37 +95,85 @@ class AE_Experiment():
         storage = f'sqlite:///{tuning_dir}/storage.db'
         reload_tuning=True
         timeout=60*60*6 # 6h
-        self.study = optuna.create_study(direction="minimize",
-                                         storage=storage,
-                                         study_name=f'{self.exp_name}_{self.test_config}',
-                                         load_if_exists=reload_tuning)
+
+        self.setup_search_space()
+
+        if self.do_gridsearch:
+            sampler = self.gridSampler
+        else:
+            sampler = optuna.samplers.TPESampler()
+
+        self.study = \
+            optuna.create_study(sampler=sampler,
+                                direction="minimize",
+                                storage=storage,
+                                study_name=f'{self.exp_name}_{self.test_config}',
+                                load_if_exists=reload_tuning)
+
         self.study.optimize(self.objective, timeout=timeout)
+
+
+    def hyper_param_helper(self, vartype: str, suggest_args={},
+                           search_space=[], trial=None):
+
+        var = suggest_args['name']
+        trial_mode = True if trial != None else False
+        suggest_fun = getattr(trial, f'suggest_{vartype}') \
+            if trial_mode else []
+
+        if trial_mode:
+            self.hyper_params[var] = suggest_fun(**suggest_args)
+        self.search_space[var] = search_space
+        
+
+    def setup_search_space(self, trial=None):
+        # trial dependencies are implemented as lambdas, actual values
+        # are created in objective call
+        self.search_space = {}
+
+        if self.test_config == 'filters_exp_red':
+            self.hyper_param_helper(
+                'int', {'name':'num_filters_exp',
+                        'low':1, 'high':100 },
+                search_space=[16,32,48,64,80],
+                trial=trial)
+            
+            self.hyper_param_helper(
+                'int',  {'name':'num_filters_red',
+                         'low':1, 'high':100 },
+                search_space=[9,16,25,36],
+                trial=trial)
+
+        elif self.test_config == 'training_pars':
+            self.hyper_param_helper(
+                'float', {'name':'learning_rate',
+                          'low':1e-5, 'high':1e-2},
+                search_space=[5e-4, 1e-3, 2e-3, 4e-3],
+                trial=trial)
+            
+            self.hyper_param_helper(
+                'int', {'name':'batch_size',
+                        'low':1, 'high':100},
+                search_space=[1, 2, 4, 8],
+                trial=trial)
+            
+            self.hyper_param_helper(
+                'categorical', {'name':'optimizer',
+                                'choices': ['adam', 'sgd']},
+                search_space=['adam', 'sgd'],
+                trial=trial)
+        else:
+            raise Exception(f'invalid test_config: {self.test_config}')
+
+        self.gridSampler = \
+            optuna.samplers.GridSampler(self.search_space)
 
     def objective(self, trial):
         self.trial_id = trial._trial_id
-        self.setup_hyper_params(trial)
+        self.setup_search_space(trial)
         self.log(trial)
         err = self.build_and_run_experiment()
         return err
-
-    def setup_hyper_params(self, trial):
-        
-        if self.test_config == 'noise_1':
-            self.hyper_params['history'] = 'all'
-            self.hyper_params['epochs'] = 4
-            self.hyper_params['noise_stddev'] = \
-                trial.suggest_float('noise_stddev', 0.0, 0.1)
-
-        elif self.test_config == 'num_filters_red_3':
-            self.hyper_params['history'] = 'all'
-            self.hyper_params['epochs'] = 4
-            self.hyper_params['noise_stddev'] = 0.05
-            self.hyper_params['num_filters_red'] = \
-                trial.suggest_categorical('num_filters_red',
-                                          [49,64,81,100])
-            
-        else:
-            raise Exception(f'test config {self.test_config} not implemented')
 
 
     def init_log(self):
@@ -218,14 +276,22 @@ class AE_Experiment():
                              esn=esn)
 
             autoencoder, encoder, decoder = \
-                ae.build_model(learning_rate=self.hyper_params['learning_rate'],
-                               use_feedthrough=use_feedthrough,
-                               feedthrough_only=feedthrough_only,
-                               feedthrough_type='multiply',
-                               noise_stddev=self.hyper_params['noise_stddev'],
-                               num_filters_red=self.hyper_params['num_filters_red'],
-                               )
+                ae.build_model(
+                    use_feedthrough=use_feedthrough,
+                    feedthrough_only=feedthrough_only,
+                    feedthrough_type='multiply',
+                    learning_rate=self.hyper_params['learning_rate'],
+                    optimizer=self.hyper_params['optimizer'],
+                    dropout_rate=self.hyper_params['dropout_rate'],
+                    noise_stddev=self.hyper_params['noise_stddev'],
+                    num_filters=self.hyper_params['num_filters'],
+                    num_filters_red=self.hyper_params['num_filters_red'],
+                    num_filters_exp=self.hyper_params['num_filters_exp']
+                )
 
+
+        # print a summary
+        autoencoder.summary()
 
         model_name = self.load_model_id if self.load_existing_model else timestamp
         print('----------------------------------------------------------')
@@ -414,5 +480,5 @@ class AE_Experiment():
 
 if __name__=="__main__":
     exp = AE_Experiment(exp_name='tuning',
-                        test_config='num_filters_red_3')
+                        test_config='filters_exp_red')
     exp.run_optuna_study()

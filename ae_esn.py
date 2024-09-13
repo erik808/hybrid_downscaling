@@ -197,7 +197,6 @@ else:
 
     study.optimize(objective, timeout=timeout)
 
-
     
 study_log = f'{tuning_dir}/optuna_{timestamp}.log'
 print(f'writing log to {study_log}')

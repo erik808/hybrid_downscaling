@@ -34,24 +34,22 @@ class AutoEncoder(keras_tuner.HyperModel):
     def __init__(self, test_vec, mask, log_file, esn=None):
         super(AutoEncoder, self).__init__()
 
-        self.log('AutoEncoder\n', 'w')
-        
+
         self.test_vec = test_vec
         self.mask = mask
         self.log_file = log_file
-        self.dropout_rate = 0.25
-        self.noise_stddev = 0.1
         self.esn = esn
         self.num_filters = 32
-        # this needs to have an integer sqrt
-        self.num_filters_red = 9
+        self.num_filters_red = 9 # this needs to have an integer sqrt
         self.kernel_size = (3,3)
         self.num_resblocks = 0
         self.resblock_ctr = 0
         self.esn_combine_mode = 'replace'
 
+        self.log('AutoEncoder\n', 'w')
+
     def summary(self):
-        
+
         print(f'dropout_rate: {self.dropout_rate}')
         print(f'noise_stddev: {self.noise_stddev}')
         print(f'esn: {vars(self.esn)}')
@@ -62,35 +60,19 @@ class AutoEncoder(keras_tuner.HyperModel):
         print(f'resblock_ctr: {self.resblock_ctr}')
         print(f'esn_combine_mode: {self.esn_combine_mode}')
 
-    def ResBlock(self, inputs):
-        self.resblock_ctr += 1
-        name_conv_a = f"residual_block_conv2d_a_{self.resblock_ctr}"
-        name_conv_b = f"residual_block_conv2d_b_{self.resblock_ctr}"
-        name_add_layer = f"residual_add_{self.resblock_ctr}"
-
-        x = layers.Conv2D(self.num_filters,
-                          self.kernel_size,
-                          padding="same",
-                          activation="relu",
-                          name=name_conv_a)(inputs)
-        x = layers.Conv2D(self.num_filters,
-                          self.kernel_size,
-                          padding="same",
-                          name=name_conv_b)(x)
-        x = layers.Add(name=name_add_layer)([inputs, x])
-        return x
 
     def build_model(self,
                     conv_arch='default',
                     learning_rate=0.002,
-                    use_dropout=False,
-                    use_noise=True,
                     optimizer='adam',
                     verbosity=20,
                     use_feedthrough=True,
                     feedthrough_only=False,
                     use_timeinput=True,
-                    feedthrough_type='multiply'
+                    feedthrough_type='multiply',
+                    noise_stddev=0.0,
+                    dropout_rate=0.0,
+                    num_filters_red=9,
                     ):
 
         self.activation_encoder = 'relu'
@@ -102,8 +84,9 @@ class AutoEncoder(keras_tuner.HyperModel):
         if self.feedthrough_only: self.use_feedthrough = True
 
         self.use_timeinput = use_timeinput
-        self.use_dropout = use_dropout
-        self.use_noise = use_noise
+        self.noise_stddev = noise_stddev
+        self.dropout_rate = dropout_rate
+        self.num_filters_red = num_filters_red
 
         Nlat, Nlon, num_channels = self.test_vec.shape
 
@@ -146,18 +129,20 @@ class AutoEncoder(keras_tuner.HyperModel):
                                      activation=self.activation_encoder,
                                      padding="same", name="conv_layer_3")
 
-        dropout_layer_1 = layers.Dropout(self.dropout_rate,
-                                         name="dropout_1")        
+        
+        use_dropout = True if self.dropout_rate > 0 else False
+
+        if use_dropout:
+            dropout_layer_1 = layers.Dropout(self.dropout_rate,
+                                             name="dropout_1")
 
         x = conv_layer_1(state_input)
         x = conv_layer_2(x)
         if use_dropout:
             x = dropout_layer_1(x)
         encoded = conv_layer_3(x)
-        
-        encoder = Model([state_input, time_input], encoded, name="encoder")
 
-        encoder.summary()
+        encoder = Model([state_input, time_input], encoded, name="encoder")
 
         # Call ESN layer in the latent space
         if (self.esn != None):
@@ -166,14 +151,14 @@ class AutoEncoder(keras_tuner.HyperModel):
             if self.use_feedthrough_in_esn:
                 c = conv_layer_1(feedthrough)
                 c = conv_layer_2(c)
-                
+
                 if use_dropout:
                     c = dropout_layer_1(c)
-                    
+
                 control = conv_layer_3(c)
             else:
                 control = ops.multiply(encoded, 0.0)
-                
+
             esn_step = self.esn(encoded, time_input, control)
 
             if (self.esn_combine_mode == 'replace' or
@@ -184,13 +169,13 @@ class AutoEncoder(keras_tuner.HyperModel):
             elif self.esn_combine_mode == 'add':
                 encoded = layers.Add()([esn_step, encoded])
 
-        if self.use_noise:
+        if self.noise_stddev > 0:
             encoded = layers.GaussianNoise(self.noise_stddev)(encoded)
 
-        if self.use_dropout:
+        if use_dropout:
             encoded = layers.Dropout(self.dropout_rate,
                                      name="dropout_1")(encoded)
-            
+
         # Decoder layers
         dec_conv_layer_1 = layers.Conv2D(self.num_filters,
                                          self.kernel_size,
@@ -298,6 +283,25 @@ class AutoEncoder(keras_tuner.HyperModel):
 
         return autoencoder, encoder, decoder
 
+    def res_block(self, inputs):
+        self.resblock_ctr += 1
+        name_conv_a = f"residual_block_conv2d_a_{self.resblock_ctr}"
+        name_conv_b = f"residual_block_conv2d_b_{self.resblock_ctr}"
+        name_add_layer = f"residual_add_{self.resblock_ctr}"
+
+        x = layers.Conv2D(self.num_filters,
+                          self.kernel_size,
+                          padding="same",
+                          activation="relu",
+                          name=name_conv_a)(inputs)
+        x = layers.Conv2D(self.num_filters,
+                          self.kernel_size,
+                          padding="same",
+                          name=name_conv_b)(x)
+        x = layers.Add(name=name_add_layer)([inputs, x])
+        return x
+
+
     # build model for hyperparameter tuning
     def build(self, hp):
         learning_rate = hp.Float("learning_rate",
@@ -322,13 +326,14 @@ class AutoEncoder(keras_tuner.HyperModel):
             sys.stdout = original
 
     def log_model(self, model=None, mode='a'):
-        model = self if model is None            
+        if model is None:
+            model = self
+
         original = sys.stdout
         with open(self.log_file, mode) as f:
             sys.stdout = f
             model.summary()
             sys.stdout = original
-        print(f'printing model info to {self.log_file}')
 
 
 class TriggerESN(keras.callbacks.Callback):
@@ -364,7 +369,7 @@ class TriggerESN(keras.callbacks.Callback):
 
         if np.all(self.esn.esn_ready_to_train):
             self.esn.train()
-            
+
 
 class CustomValidation(keras.callbacks.Callback):
     """
@@ -382,6 +387,8 @@ class CustomValidation(keras.callbacks.Callback):
         self.pars = pars
         self.scalers = scalers
         self.predictions = []
+        self.final_error = []
+        self.final_base = []
 
     def on_epoch_end(self, epoch, logs=None):
         self.predictions = np.zeros_like(self.test_data)
@@ -389,52 +396,17 @@ class CustomValidation(keras.callbacks.Callback):
         xk   = self.initial_xk[0]
         xkm1 = self.initial_xk[1]
         pb_i = keras.utils.Progbar(self.N_steps,
-                                   stateful_metrics=['error', 'base'])
+                                   stateful_metrics=['error', 'base'],
+                                   interval=0.5)
 
-        error, base, Pxk_err = (0,0,0)
-
-        
-        # i=0
-        # xk_LR = np.expand_dims(self.test_data_ft[i,], axis=0)
-        # Pxk = 2*xk - xkm1 - xk_LR
-        # Pxk = self.scalers['R']\
-        #           .transform(Pxk.reshape(1,-1))\
-        #           .reshape(Pxk.shape)
-
-        # plt.figure()
-        # a=plt.imshow(Pxk[0,:,:,0])
-        # plt.colorbar(a,shrink=0.5)
-        # plt.pause(1)
-        
+        error, base = (0,0)
 
         for i in range(self.N_steps):
 
             xk_LR = np.expand_dims(self.test_data_ft[i,], axis=0)
-            
-            # if self.pars['residual_mode']:
-            #     # # secant predictor in residual mode
-            #     # Pxk = 2*xk - xkm1 - xk_LR
-            #     # # Pxk = xk - xk_LR
-            #     # Pxk = self.scalers['R']\
-            #     #          .transform(Pxk.reshape(1,-1))\
-            #     #          .reshape(Pxk.shape)
-                
-            #     # xk_true = np.expand_dims(self.test_data[i,], axis=0)
-            #     # Pxk_true = xk_true-xk_LR
-            #     # Pxk_true = self.scalers['R']\
-            #     #                .transform(Pxk_true.reshape(1,-1))\
-            #     #                .reshape(Pxk_true.shape)
-            #     # dff = Pxk - Pxk_true
-            #     # err = (np.sum(np.square(dff)))
-            #     # Pxk_err += err
-            #     # import matplotlib.pyplot as plt
-            #     # plt.close('all')
-            #     # a=plt.imshow(dff[0,:,:,0]);plt.colorbar(a)
-            #     # plt.pause(1)
-            #     # print(err)                
-            # else:
+
             Pxk = xk_LR
-                
+
             tid = np.expand_dims(self.T_test[i,], axis=0)
             xkm1 = xk
 
@@ -445,7 +417,8 @@ class CustomValidation(keras.callbacks.Callback):
             else:
                 xk = self.model.predict([xk, tid], verbose=0)
 
-            if self.pars['residual_mode']:
+            if ('residual_mode' in self.pars and
+                self.pars['residual_mode']):
                 xk = self.scalers['R']\
                          .inverse_transform(xk.reshape(1,-1))\
                          .reshape(xk.shape) + xk_LR
@@ -455,8 +428,7 @@ class CustomValidation(keras.callbacks.Callback):
             error += (np.sum(np.square(xk - xk_true)))
             base += (np.sum(np.square(xk_LR - xk_true)))
             values = [('error', np.sqrt(error/(i+1))),
-                      ('base', np.sqrt(base/(i+1))),
-                      ('Pxk', np.sqrt(Pxk_err/(i+1)))]
+                      ('base', np.sqrt(base/(i+1)))]
             pb_i.add(1, values=values)
 
         self.plotmachine.plot_prediction_error(self.test_data,
@@ -464,5 +436,7 @@ class CustomValidation(keras.callbacks.Callback):
                                                self.test_data_ft,
                                                f'_epoch_{epoch}')
 
-        logs['error']=np.sqrt(error/(i+1))
-        logs['base']=np.sqrt(base/(i+1))
+        self.final_error = np.sqrt(error/(i+1))
+        self.final_base = np.sqrt(base/(i+1))
+        logs['error'] = self.final_error
+        logs['base']  = self.final_base

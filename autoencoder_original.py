@@ -33,11 +33,11 @@ from esn_interface import ESN_embedded
 
 class AE_Experiment():
 
-    def __init__(self, existing_model=None, exp_name=None, test_config=None):
+    def __init__(self, existing_model=None, exp_name=None, tuning_config=None):
 
         self.init_timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
         self.exp_name = exp_name
-        self.test_config = test_config
+        self.tuning_config = tuning_config
         self.do_gridsearch = True
 
         if existing_model == None:
@@ -45,7 +45,7 @@ class AE_Experiment():
                 if self.exp_name == None else self.exp_name
             self.folder_id = self.exp_name
             self.folder_postfix = ''\
-                if self.test_config == None else f'-{self.test_config}'
+                if self.tuning_config == None else f'-{self.tuning_config}'
             self.load_existing_model = False
         else:
             self.folder_id = existing_model['folder_id']
@@ -78,7 +78,7 @@ class AE_Experiment():
 
         # default hyperparams
         self.hyper_params = {
-            'history' : 1000,
+            'history' : 'all',
             'future' : 400,
             'noise_stddev' : 0.05,
             'dropout_rate' : 0.0,
@@ -110,7 +110,7 @@ class AE_Experiment():
             optuna.create_study(sampler=sampler,
                                 direction="minimize",
                                 storage=storage,
-                                study_name=f'{self.exp_name}_{self.test_config}',
+                                study_name=f'{self.exp_name}_{self.tuning_config}',
                                 load_if_exists=reload_tuning)
 
         self.study.optimize(self.objective, timeout=timeout)
@@ -134,7 +134,7 @@ class AE_Experiment():
         # are created in objective call
         self.search_space = {}
 
-        if self.test_config == 'filters_exp_red':
+        if self.tuning_config == 'filters_exp_red':
             self.hyper_param_helper(
                 'int', {'name':'num_filters_exp',
                         'low':1, 'high':100 },
@@ -147,7 +147,7 @@ class AE_Experiment():
                 search_space=[9,16,25,36],
                 trial=trial)
 
-        elif self.test_config == 'training_pars':
+        elif self.tuning_config == 'training_pars':
             self.hyper_param_helper(
                 'float', {'name':'learning_rate',
                           'low':1e-4, 'high':1e-2},
@@ -166,7 +166,7 @@ class AE_Experiment():
                 search_space=['adam', 'sgd'],
                 trial=trial)
             
-        elif self.test_config == 'training_pars_2':
+        elif self.tuning_config == 'training_pars_2':
             self.hyper_param_helper(
                 'float', {'name':'learning_rate',
                           'low':1e-4, 'high':1e-2},
@@ -179,7 +179,7 @@ class AE_Experiment():
                 search_space=[1, 2, 4],
                 trial=trial)
         else:
-            raise Exception(f'invalid test_config: {self.test_config}')
+            raise Exception(f'invalid tuning_config: {self.tuning_config}')
 
         self.gridSampler = \
             optuna.samplers.GridSampler(self.search_space)
@@ -508,5 +508,5 @@ class AE_Experiment():
 
 if __name__=="__main__":
     exp = AE_Experiment(exp_name='tuning',
-                        test_config='training_pars_2')
+                        tuning_config='training_pars_2')
     exp.run_optuna_study()

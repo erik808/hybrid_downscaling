@@ -73,13 +73,13 @@ class AutoEncoder(keras_tuner.HyperModel):
                     feedthrough_type='multiply',
                     noise_stddev=0.0,
                     dropout_rate=0.0,
-                    conv_layers_per_block=3,
+                    conv_layers_per_block=1,
                     kernel_size=(3,3),
                     num_filters=32,
                     num_filters_exp=32,
                     num_filters_red=9,
                     inner_stride=1,
-                    regularizer=regularizers.L2(1e-5)
+                    L2_lambda=1e-5,
                     ):
 
         self.activation_encoder = 'relu'
@@ -98,7 +98,7 @@ class AutoEncoder(keras_tuner.HyperModel):
         self.kernel_size = kernel_size
         self.num_filters_red = num_filters_red
         self.num_filters_exp = num_filters_exp
-        self.regularizer = regularizer
+        self.regularizer = regularizers.L2(L2_lambda)
         self.inner_stride = (inner_stride, inner_stride)
 
         use_dropout = True if self.dropout_rate > 0 else False
@@ -230,10 +230,8 @@ class AutoEncoder(keras_tuner.HyperModel):
         feedthrough_layer_1 = ConvBlock(self.conv_layers_per_block,
                                         self.num_filters,
                                         self.kernel_size,
-                                        strides = (1,1),
                                         activation=self.activation_decoder,
                                         regularizer=self.regularizer,
-                                        padding="same",
                                         name='feedthrough_layer_1')
 
         output_layer = ConvBlock(1, num_channels,
@@ -384,7 +382,7 @@ class ConvBlock():
                               kernel_size,
                               strides=(1,1),
                               activation=activation,
-                              activity_regularizer=regularizer,
+                              kernel_regularizer=regularizer,
                               padding="same",
                               name=f'{name}_l{ctr}')
 
@@ -396,7 +394,7 @@ class ConvBlock():
                           kernel_size,
                           strides = downsample_stride,
                           activation=activation,
-                          activity_regularizer=regularizer,
+                          kernel_regularizer=regularizer,
                           padding="same",
                           name=f'{name}_l{ctr}')
         self.layer_list.append(l)

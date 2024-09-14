@@ -84,14 +84,45 @@ class AE_Experiment():
             'noise_stddev' : 0.05,
             'dropout_rate' : 0.0,
             'optimizer' : 'adam',
-            'epochs' : 8,
-            'batch_size' : 1,
-            'learning_rate' : 0.004,
+            'L2_lambda' : 1e-5,
+            'epochs' : 4,
+            'batch_size' : 2,
+            'learning_rate' : 0.002,
             'num_filters' : 32,
             'num_filters_exp' : 32,
             'num_filters_red' : 9,
-            'inner_stride' : (1,1),
+            'inner_stride' : 1,
         }
+
+
+        ## TODO use this instead of the huge if elif construction below
+        ## maybe read from ini?
+        self.tuning_config_dict = {
+            
+            'regularization' : {
+                'L2_lambda' : {
+                    'args' : {'name' : 'L2_lambda',
+                              'low'  : 0,
+                              'high' : 1e2},
+                    'type' : 'float',
+                    'search_space' : [0, 1e-8, 1e-7, 1e-6, 1e-5] } },
+            
+            'training_pars' : {
+                'L2_lambda' : {
+                    'args' : {'name' : 'L2_lambda',
+                              'low'  : 0,
+                              'high' : 1e2},
+                    'type' : 'float',
+                    'search_space' : [0, 1e-8, 1e-7, 1e-6, 1e-5] },
+                'learning_rate' : {
+                    'args' : {'name':'learning_rate',
+                              'low':1e-4, 'high':1e-2},
+                    'type' : 'float',
+                    'search_space' : [2e-3, 4e-3, 6e-3, 8e-3, 1e-2] } } }
+
+                    
+                
+            
 
     def run_optuna_study(self):
         self.init_log()
@@ -173,6 +204,14 @@ class AE_Experiment():
                 'int',  {'name':'inner_stride',
                          'low':1,'high':2},
                 search_space=[1, 2],
+                trial=trial)
+
+        elif self.tuning_config == 'regularization':
+            
+            self.hyper_param_helper(
+                'float',  {'name':'L2_lambda',
+                           'low':1e-12,'high':1e2},
+                search_space=[1e-7,1e-6,1e-5,1e-4,1e-3],
                 trial=trial)
 
         elif self.tuning_config == 'training_pars':
@@ -325,6 +364,7 @@ class AE_Experiment():
                     feedthrough_type='multiply',
                     learning_rate=self.hyper_params['learning_rate'],
                     optimizer=self.hyper_params['optimizer'],
+                    L2_lambda=self.hyper_params['L2_lambda'],
                     dropout_rate=self.hyper_params['dropout_rate'],
                     noise_stddev=self.hyper_params['noise_stddev'],
                     num_filters=self.hyper_params['num_filters'],
@@ -536,8 +576,8 @@ class AE_Experiment():
         return postfix, timestamp
 
 if __name__=="__main__":
-    exp = AE_Experiment(exp_name='test',
-                        tuning_config='filters_exp_red_3',
+    exp = AE_Experiment(exp_name='test_2',
+                        tuning_config='regularization',
                         detide=False,
                         compute_data=False)
     exp.run_optuna_study()

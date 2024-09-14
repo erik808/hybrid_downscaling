@@ -81,12 +81,12 @@ class AE_Experiment():
         self.hyper_params = {
             'history' : 'all',
             'future' : 400,
-            'noise_stddev' : 0.05,
+            'noise_stddev' : 0.04,
             'dropout_rate' : 0.0,
             'optimizer' : 'adam',
             'L2_lambda' : 1e-5,
             'epochs' : 4,
-            'batch_size' : 2,
+            'batch_size' : 4,
             'learning_rate' : 0.002,
             'num_filters' : 32,
             'num_filters_exp' : 32,
@@ -94,35 +94,44 @@ class AE_Experiment():
             'inner_stride' : 1,
         }
 
-
         ## TODO use this instead of the huge if elif construction below
         ## maybe read from ini?
         self.tuning_config_dict = {
-            
+            #-------------------------------------------------------
             'regularization' : {
                 'L2_lambda' : {
+                    'type' : 'float',
                     'args' : {'name' : 'L2_lambda',
                               'low'  : 0,
                               'high' : 1e2},
-                    'type' : 'float',
                     'search_space' : [0, 1e-8, 1e-7, 1e-6, 1e-5] } },
-            
+            #-------------------------------------------------------
             'training_pars' : {
                 'L2_lambda' : {
+                    'type' : 'float',
                     'args' : {'name' : 'L2_lambda',
                               'low'  : 0,
                               'high' : 1e2},
-                    'type' : 'float',
-                    'search_space' : [0, 1e-8, 1e-7, 1e-6, 1e-5] },
+                    'search_space' : [0, 1e-10, 1e-8, 1e-6] },
                 'learning_rate' : {
-                    'args' : {'name':'learning_rate',
-                              'low':1e-4, 'high':1e-2},
                     'type' : 'float',
-                    'search_space' : [2e-3, 4e-3, 6e-3, 8e-3, 1e-2] } } }
+                    'args' : {'name':'learning_rate',
+                              'low':1e-4,
+                              'high':1e-2},
+                    'search_space' : [2e-3, 4e-3, 6e-3, 8e-3, 1e-2] },
+                'batch_size' : {
+                    'type' : 'int',
+                    'args' : {'name':'batch_size',
+                              'low':1,
+                              'high':100},
+                    'search_space' : [1,2,4,8] } },
+            #-------------------------------------------------------
+            'filters' : {}, #TODO,
+            'dropout' : {}, #TODO
+            'skip_connections' : {}, # TODO
+            'layers_per_block' : {}, # TODO
+        }
 
-                    
-                
-            
 
     def run_optuna_study(self):
         self.init_log()
@@ -148,6 +157,12 @@ class AE_Experiment():
 
         self.study.optimize(self.objective, timeout=timeout)
 
+    def objective(self, trial):
+        self.trial_id = trial._trial_id-1
+        self.setup_search_space(trial)
+        self.log(trial)
+        err = self.build_and_run_experiment()
+        return err
 
     def hyper_param_helper(self, vartype: str, suggest_args={},
                            search_space=[], trial=None):
@@ -160,103 +175,25 @@ class AE_Experiment():
         if trial_mode:
             self.hyper_params[var] = suggest_fun(**suggest_args)
         self.search_space[var] = search_space
-        
+
 
     def setup_search_space(self, trial=None):
+
+        assert self.tuning_config in self.tuning_config_dict, \
+            f"invalid tuning config: {self.tuning_config}"
+
+        # initialize search space
         self.search_space = {}
-
-        # base this on (global) tuning config dict
-        if self.tuning_config == 'filters_exp_red':
+        tuning_config = self.tuning_config_dict[self.tuning_config]
+        for key, item in tuning_config.items():
             self.hyper_param_helper(
-                'int', {'name':'num_filters_exp',
-                        'low':1, 'high':100 },
-                search_space=[16,32,48,64,80],
+                item['type'],
+                item['args'],
+                search_space=item['search_space'],
                 trial=trial)
-
-            self.hyper_param_helper(
-                'int',  {'name':'num_filters_red',
-                         'low':1, 'high':100 },
-                search_space=[9,16,25,36],
-                trial=trial)
-
-        elif self.tuning_config == 'filters_exp_red_2':
-            self.hyper_param_helper(
-                'int', {'name':'num_filters_exp',
-                        'low':1, 'high':200 },
-                search_space=[32,64,128],
-                trial=trial)
-
-            self.hyper_param_helper(
-                'int',  {'name':'num_filters_red',
-                         'low':1, 'high':200 },
-                search_space=[9,64,81,144],
-                trial=trial)
-
-            self.hyper_param_helper(
-                'int',  {'name':'inner_stride',
-                         'low':1,'high':2},
-                search_space=[1, 2],
-                trial=trial)
-
-        elif self.tuning_config == 'filters_exp_red_3':
-            
-            self.hyper_param_helper(
-                'int',  {'name':'inner_stride',
-                         'low':1,'high':2},
-                search_space=[1, 2],
-                trial=trial)
-
-        elif self.tuning_config == 'regularization':
-            
-            self.hyper_param_helper(
-                'float',  {'name':'L2_lambda',
-                           'low':1e-12,'high':1e2},
-                search_space=[1e-7,1e-6,1e-5,1e-4,1e-3],
-                trial=trial)
-
-        elif self.tuning_config == 'training_pars':
-            self.hyper_param_helper(
-                'float', {'name':'learning_rate',
-                          'low':1e-4, 'high':1e-2},
-                search_space=[5e-4, 1e-3, 2e-3, 4e-3],
-                trial=trial)
-
-            self.hyper_param_helper(
-                'int', {'name':'batch_size',
-                        'low':1, 'high':100},
-                search_space=[1, 2, 4, 8],
-                trial=trial)
-
-            self.hyper_param_helper(
-                'categorical', {'name':'optimizer',
-                                'choices': ['adam', 'sgd']},
-                search_space=['adam', 'sgd'],
-                trial=trial)
-            
-        elif self.tuning_config == 'training_pars_2':
-            self.hyper_param_helper(
-                'float', {'name':'learning_rate',
-                          'low':1e-4, 'high':1e-2},
-                search_space=[2e-3, 4e-3, 6e-3, 8e-3, 1e-2],
-                trial=trial)
-
-            self.hyper_param_helper(
-                'int', {'name':'batch_size',
-                        'low':1, 'high':100},
-                search_space=[1, 2, 4],
-                trial=trial)
-        else:
-            raise Exception(f'invalid tuning_config: {self.tuning_config}')
 
         self.gridSampler = \
             optuna.samplers.GridSampler(self.search_space)
-
-    def objective(self, trial):
-        self.trial_id = trial._trial_id-1
-        self.setup_search_space(trial)
-        self.log(trial)
-        err = self.build_and_run_experiment()
-        return err
 
 
     def init_log(self):
@@ -325,7 +262,7 @@ class AE_Experiment():
         if feedthrough_only: use_embedded_ESN = False
 
         mdir = self.dirs['models']
-        postfix, timestamp = self.create_postfix()        
+        postfix, timestamp = self.create_postfix()
         if self.load_existing_model:
 
             autoencoder = keras.models.load_model(self.load_path_autoencoder)
@@ -576,8 +513,8 @@ class AE_Experiment():
         return postfix, timestamp
 
 if __name__=="__main__":
-    exp = AE_Experiment(exp_name='test_2',
-                        tuning_config='regularization',
+    exp = AE_Experiment(exp_name='test',
+                        tuning_config='training_pars',
                         detide=False,
                         compute_data=False)
     exp.run_optuna_study()

@@ -72,6 +72,7 @@ class AutoEncoder(keras_tuner.HyperModel):
                     feedthrough_type='multiply',
                     noise_stddev=0.0,
                     dropout_rate=0.0,
+                    conv_layers_per_block=3,
                     kernel_size=(3,3),
                     num_filters=32,
                     num_filters_exp=32,
@@ -90,11 +91,14 @@ class AutoEncoder(keras_tuner.HyperModel):
         self.use_timeinput = use_timeinput
         self.noise_stddev = noise_stddev
         self.dropout_rate = dropout_rate
+        self.conv_layers_per_block = conv_layers_per_block
         self.num_filters = num_filters
         self.kernel_size = kernel_size
         self.num_filters_red = num_filters_red
         self.num_filters_exp = num_filters_exp
         self.inner_stride = (inner_stride, inner_stride)
+
+        use_dropout = True if self.dropout_rate > 0 else False
 
         Nlat, Nlon, num_channels = self.test_vec.shape
 
@@ -113,36 +117,37 @@ class AutoEncoder(keras_tuner.HyperModel):
                                        name="feedthrough_input")
 
         # Encoder ------------------------------------------------------
-        conv_layer_1 = layers.Conv2D(self.num_filters,
-                                     self.kernel_size,
-                                     strides = (2,2),
-                                     activation=self.activation_encoder,
-                                     padding="same", name="conv_layer_1")
-
-        conv_layer_2 = layers.Conv2D(self.num_filters_exp,
-                                     self.kernel_size,
-                                     strides = (2,2),
-                                     activation=self.activation_encoder,
-                                     padding="same", name="conv_layer_2")
-
-        conv_layer_3 = layers.Conv2D(self.num_filters_red,
-                                     self.kernel_size,
-                                     strides = self.inner_stride,
-                                     activation=self.activation_encoder,
-                                     padding="same", name="conv_layer_3")
-
-
-        use_dropout = True if self.dropout_rate > 0 else False
-
         if use_dropout:
             dropout_layer_1 = layers.Dropout(self.dropout_rate,
                                              name="dropout_1")
 
-        x = conv_layer_1(state_input)
-        x = conv_layer_2(x)
-        if use_dropout:
-            x = dropout_layer_1(x)
-        encoded = conv_layer_3(x)
+        conv_block_1 = ConvBlock(self.conv_layers_per_block,
+                                 self.num_filters,
+                                 self.kernel_size,
+                                 self.activation_encoder,
+                                 downsample_stride=(2,2))
+
+        x = conv_block_1(state_input)
+
+        # second expansion
+        conv_block_2 = ConvBlock(self.conv_layers_per_block,
+                                 self.num_filters_exp,
+                                 self.kernel_size,
+                                 self.activation_encoder,
+                                 downsample_stride=(2,2))
+
+        x = conv_block_2(x)
+
+        # FIXME dropout here?
+        if use_dropout: x = dropout_layer_1(x)
+
+        conv_block_3 = ConvBlock(self.conv_layers_per_block,
+                                 self.num_filters_red,
+                                 self.kernel_size,
+                                 self.activation_encoder,
+                                 downsample_stride=self.inner_stride)
+
+        encoded = conv_block_3(x)
 
         self.encoder = \
             Model([state_input, time_input], encoded, name="encoder")
@@ -150,15 +155,15 @@ class AutoEncoder(keras_tuner.HyperModel):
         # Call ESN layer in the latent space
         if (self.esn != None):
             # setup feedthrough control
-
+            breakpoint()
             if self.use_feedthrough_in_esn:
-                c = conv_layer_1(feedthrough)
-                c = conv_layer_2(c)
+                c = conv_block_1(feedthrough)
+                c = conv_block_2(c)
 
                 if use_dropout:
                     c = dropout_layer_1(c)
 
-                control = conv_layer_3(c)
+                control = conv_block_3(c)
             else:
                 control = ops.multiply(encoded, 0.0)
 
@@ -344,6 +349,37 @@ class AutoEncoder(keras_tuner.HyperModel):
             sys.stdout = f
             model.summary()
             sys.stdout = original
+
+
+class ConvBlock():
+    def __init__(self,
+                 conv_layers_per_block,
+                 num_filters=32,
+                 kernel_size=(3,3),
+                 activation='relu',
+                 downsample_stride=(2,2)):
+
+        self.layer_list = []        
+
+        for i in range(conv_layers_per_block-1):
+            self.layer_list.append(layers.Conv2D(num_filters,
+                                                 kernel_size,
+                                                 strides=(1,1),
+                                                 activation=activation,
+                                                 padding="same"))
+            
+        # final downsampling convolution
+        self.layer_list.append(layers.Conv2D(num_filters,
+                                             kernel_size,
+                                             strides = downsample_stride,
+                                             activation=activation,
+                                             padding="same"))
+
+    def __call__(self, inputs):
+        x = inputs
+        for layer in self.layer_list:
+            x = layer(x)
+        return x
 
 
 class TriggerESN(keras.callbacks.Callback):

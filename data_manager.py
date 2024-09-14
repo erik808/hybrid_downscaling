@@ -106,8 +106,7 @@ def load_uv_data(coarsen_in_time=False,
 
         dates = da.time.values
         f, vu = wt.compute_nodal_modulations(dates)
-        latlons = np.where(mask=1)
-
+        latlons = np.where(mask==1)
         ind_range = range(len(latlons[0]))
         pb = keras.utils.Progbar(len(ind_range))
 

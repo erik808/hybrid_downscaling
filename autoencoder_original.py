@@ -33,7 +33,8 @@ from esn_interface import ESN_embedded
 
 class AE_Experiment():
 
-    def __init__(self, existing_model=None, exp_name=None, tuning_config=None):
+    def __init__(self, existing_model=None, exp_name=None,
+                 tuning_config=None, detide=False, compute_data=False):
 
         self.init_timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
         self.exp_name = exp_name
@@ -69,8 +70,8 @@ class AE_Experiment():
         # -------------------------------------------------------
         # Load or compute data
         self.data, self.params, self.scalers, _ = \
-            dm.create_training_data(compute_data=False,
-                                    detide=False)
+            dm.create_training_data(compute_data=compute_data,
+                                    detide=detide)
         # -------------------------------------------------------
 
         self.full_postprocess = False
@@ -131,10 +132,9 @@ class AE_Experiment():
         
 
     def setup_search_space(self, trial=None):
-        # trial dependencies are implemented as lambdas, actual values
-        # are created in objective call
         self.search_space = {}
 
+        # base this on (global) tuning config dict
         if self.tuning_config == 'filters_exp_red':
             self.hyper_param_helper(
                 'int', {'name':'num_filters_exp',
@@ -161,6 +161,14 @@ class AE_Experiment():
                 search_space=[9,64,81,144],
                 trial=trial)
 
+            self.hyper_param_helper(
+                'int',  {'name':'inner_stride',
+                         'low':1,'high':2},
+                search_space=[1, 2],
+                trial=trial)
+
+        elif self.tuning_config == 'filters_exp_red_3':
+            
             self.hyper_param_helper(
                 'int',  {'name':'inner_stride',
                          'low':1,'high':2},
@@ -327,7 +335,8 @@ class AE_Experiment():
 
 
         # print a summary
-        autoencoder.summary(line_length=120)
+        autoencoder.summary()
+        breakpoint()
 
         model_name = self.load_model_id \
             if self.load_existing_model else timestamp
@@ -528,6 +537,8 @@ class AE_Experiment():
         return postfix, timestamp
 
 if __name__=="__main__":
-    exp = AE_Experiment(exp_name='tuning',
-                        tuning_config='filters_exp_red_2')
+    exp = AE_Experiment(exp_name='test',
+                        tuning_config='filters_exp_red_3',
+                        detide=False,
+                        compute_data=False)
     exp.run_optuna_study()

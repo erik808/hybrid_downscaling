@@ -5,6 +5,7 @@ import keras
 import keras_tuner
 from keras import layers
 from keras import ops
+from keras import regularizers
 from keras.models import Model
 
 # create custom masking class
@@ -78,6 +79,7 @@ class AutoEncoder(keras_tuner.HyperModel):
                     num_filters_exp=32,
                     num_filters_red=9,
                     inner_stride=1,
+                    regularizer=regularizers.L2(1e-5)
                     ):
 
         self.activation_encoder = 'relu'
@@ -96,6 +98,7 @@ class AutoEncoder(keras_tuner.HyperModel):
         self.kernel_size = kernel_size
         self.num_filters_red = num_filters_red
         self.num_filters_exp = num_filters_exp
+        self.regularizer = regularizer
         self.inner_stride = (inner_stride, inner_stride)
 
         use_dropout = True if self.dropout_rate > 0 else False
@@ -125,7 +128,9 @@ class AutoEncoder(keras_tuner.HyperModel):
                                  self.num_filters,
                                  self.kernel_size,
                                  self.activation_encoder,
-                                 downsample_stride=(2,2))
+                                 downsample_stride=(2,2),
+                                 regularizer=self.regularizer,
+                                 name="conv_block_1")
 
         x = conv_block_1(state_input)
 
@@ -134,7 +139,9 @@ class AutoEncoder(keras_tuner.HyperModel):
                                  self.num_filters_exp,
                                  self.kernel_size,
                                  self.activation_encoder,
-                                 downsample_stride=(2,2))
+                                 downsample_stride=(2,2),
+                                 regularizer=self.regularizer,
+                                 name="conv_block_2")
 
         x = conv_block_2(x)
 
@@ -145,7 +152,9 @@ class AutoEncoder(keras_tuner.HyperModel):
                                  self.num_filters_red,
                                  self.kernel_size,
                                  self.activation_encoder,
-                                 downsample_stride=self.inner_stride)
+                                 downsample_stride=self.inner_stride,
+                                 regularizer=self.regularizer,
+                                 name="conv_block_3")
 
         encoded = conv_block_3(x)
 
@@ -155,7 +164,6 @@ class AutoEncoder(keras_tuner.HyperModel):
         # Call ESN layer in the latent space
         if (self.esn != None):
             # setup feedthrough control
-            breakpoint()
             if self.use_feedthrough_in_esn:
                 c = conv_block_1(feedthrough)
                 c = conv_block_2(c)
@@ -184,33 +192,33 @@ class AutoEncoder(keras_tuner.HyperModel):
             encoded = layers.Dropout(self.dropout_rate,
                                      name="dropout_1")(encoded)
 
-        # Decoder layers
-        dec_conv_layer_1 = layers.Conv2D(self.num_filters,
-                                         self.kernel_size,
-                                         strides=(1,1),
-                                         activation=self.activation_decoder,
-                                         padding="same",
-                                         name='dec_conv_layer_1')
+        # Decoder blocks
+        dec_conv_block_1 = ConvBlock(self.conv_layers_per_block,
+                                     self.num_filters,
+                                     self.kernel_size,
+                                     self.activation_decoder,
+                                     regularizer=self.regularizer,
+                                     name="dec_conv_block_1")
 
         upsample_layer_1 = layers.UpSampling2D(size=self.inner_stride,
                                                interpolation="bilinear")
 
-        dec_conv_layer_2 = layers.Conv2D(self.num_filters_exp,
-                                         self.kernel_size,
-                                         strides=(1,1),
-                                         activation=self.activation_decoder,
-                                         padding="same",
-                                         name='dec_conv_layer_2')
+        dec_conv_block_2 = ConvBlock(self.conv_layers_per_block,
+                                     self.num_filters_exp,
+                                     self.kernel_size,
+                                     self.activation_decoder,
+                                     regularizer=self.regularizer,
+                                     name="dec_conv_block_2")
 
         upsample_layer_2 = layers.UpSampling2D(size=(2, 2),
                                                interpolation="bilinear")
 
-        dec_conv_layer_3 = layers.Conv2D(self.num_filters,
-                                         self.kernel_size,
-                                         strides=(1,1),
-                                         activation=self.activation_decoder,
-                                         padding="same",
-                                         name='dec_conv_layer_3')
+        dec_conv_block_3 = ConvBlock(self.conv_layers_per_block,
+                                     self.num_filters,
+                                     self.kernel_size,
+                                     self.activation_decoder,
+                                     regularizer=self.regularizer,
+                                     name="dec_conv_block_3")
 
         upsample_layer_3 = layers.UpSampling2D(size=(2,2),
                                                interpolation="bilinear")
@@ -218,24 +226,28 @@ class AutoEncoder(keras_tuner.HyperModel):
         dropout_layer_2 = layers.Dropout(self.dropout_rate,
                                          name="dropout_2")
 
-        feedthrough_layer_1 = layers.Conv2D(self.num_filters,
-                                            self.kernel_size,
-                                            strides = (1,1),
-                                            activation=self.activation_decoder,
-                                            padding="same",
-                                            name='feedthrough_layer_1')
+        # Should these be residual blocks instead?
+        feedthrough_layer_1 = ConvBlock(self.conv_layers_per_block,
+                                        self.num_filters,
+                                        self.kernel_size,
+                                        strides = (1,1),
+                                        activation=self.activation_decoder,
+                                        regularizer=self.regularizer,
+                                        padding="same",
+                                        name='feedthrough_layer_1')
 
-        output_layer = layers.Conv2D(num_channels, self.kernel_size,
-                                     activation="sigmoid",
-                                     padding="same",
-                                     name='output_layer')
+        output_layer = ConvBlock(1, num_channels,
+                                 self.kernel_size,
+                                 activation="sigmoid",
+                                 regularizer=self.regularizer,
+                                 name='output_layer')
 
         # Decoder:
-        y = dec_conv_layer_1(encoded)
+        y = dec_conv_block_1(encoded)
         y = upsample_layer_1(y)
-        y = dec_conv_layer_2(y)
+        y = dec_conv_block_2(y)
         y = upsample_layer_2(y)
-        y = dec_conv_layer_3(y)
+        y = dec_conv_block_3(y)
         y = upsample_layer_3(y)
 
         if self.feedthrough_only:
@@ -350,30 +362,44 @@ class AutoEncoder(keras_tuner.HyperModel):
             model.summary()
             sys.stdout = original
 
-
 class ConvBlock():
+    """Convolutional block with optional downsampling stride in the last
+    layer.
+
+    """
     def __init__(self,
                  conv_layers_per_block,
                  num_filters=32,
                  kernel_size=(3,3),
                  activation='relu',
-                 downsample_stride=(2,2)):
+                 downsample_stride=(1,1),
+                 regularizer=regularizers.L2(1e-5),
+                 name="conv_block"):
 
-        self.layer_list = []        
-
+        self.layer_list = []
+        ctr = 0
         for i in range(conv_layers_per_block-1):
-            self.layer_list.append(layers.Conv2D(num_filters,
-                                                 kernel_size,
-                                                 strides=(1,1),
-                                                 activation=activation,
-                                                 padding="same"))
-            
+            ctr += 1
+            l = layers.Conv2D(num_filters,
+                              kernel_size,
+                              strides=(1,1),
+                              activation=activation,
+                              activity_regularizer=regularizer,
+                              padding="same",
+                              name=f'{name}_l{ctr}')
+
+            self.layer_list.append(l)
+
         # final downsampling convolution
-        self.layer_list.append(layers.Conv2D(num_filters,
-                                             kernel_size,
-                                             strides = downsample_stride,
-                                             activation=activation,
-                                             padding="same"))
+        ctr += 1
+        l = layers.Conv2D(num_filters,
+                          kernel_size,
+                          strides = downsample_stride,
+                          activation=activation,
+                          activity_regularizer=regularizer,
+                          padding="same",
+                          name=f'{name}_l{ctr}')
+        self.layer_list.append(l)
 
     def __call__(self, inputs):
         x = inputs

@@ -336,7 +336,6 @@ class AE_Experiment():
 
         # print a summary
         autoencoder.summary()
-        breakpoint()
 
         model_name = self.load_model_id \
             if self.load_existing_model else timestamp

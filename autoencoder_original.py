@@ -84,11 +84,12 @@ class AE_Experiment():
             'dropout_rate' : 0.0,
             'optimizer' : 'adam',
             'epochs' : 8,
-            'batch_size' : 4,
-            'learning_rate' : 0.002,
+            'batch_size' : 1,
+            'learning_rate' : 0.004,
             'num_filters' : 32,
             'num_filters_exp' : 32,
             'num_filters_red' : 9,
+            'inner_stride' : (1,1),
         }
 
     def run_optuna_study(self):
@@ -145,6 +146,25 @@ class AE_Experiment():
                 'int',  {'name':'num_filters_red',
                          'low':1, 'high':100 },
                 search_space=[9,16,25,36],
+                trial=trial)
+
+        elif self.tuning_config == 'filters_exp_red_2':
+            self.hyper_param_helper(
+                'int', {'name':'num_filters_exp',
+                        'low':1, 'high':200 },
+                search_space=[32,64,128],
+                trial=trial)
+
+            self.hyper_param_helper(
+                'int',  {'name':'num_filters_red',
+                         'low':1, 'high':200 },
+                search_space=[9,64,81,144],
+                trial=trial)
+
+            self.hyper_param_helper(
+                'int',  {'name':'inner_stride',
+                         'low':1,'high':2},
+                search_space=[1, 2],
                 trial=trial)
 
         elif self.tuning_config == 'training_pars':
@@ -301,12 +321,13 @@ class AE_Experiment():
                     noise_stddev=self.hyper_params['noise_stddev'],
                     num_filters=self.hyper_params['num_filters'],
                     num_filters_red=self.hyper_params['num_filters_red'],
-                    num_filters_exp=self.hyper_params['num_filters_exp']
+                    num_filters_exp=self.hyper_params['num_filters_exp'],
+                    inner_stride=self.hyper_params['inner_stride'],
                 )
 
 
         # print a summary
-        autoencoder.summary()
+        autoencoder.summary(line_length=120)
 
         model_name = self.load_model_id \
             if self.load_existing_model else timestamp
@@ -508,5 +529,5 @@ class AE_Experiment():
 
 if __name__=="__main__":
     exp = AE_Experiment(exp_name='tuning',
-                        tuning_config='training_pars_2')
+                        tuning_config='filters_exp_red_2')
     exp.run_optuna_study()

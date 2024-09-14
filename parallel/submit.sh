@@ -14,4 +14,7 @@ export OPENBLAS_NUM_THREADS=4
 
 # module load Mambaforge/23.3.1-1-hpc1
 # mamba activate freja_stable
+origdir=$PWD
+cd ../
 python autoencoder_original.py
+cd $origdir

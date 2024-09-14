@@ -76,6 +76,7 @@ class AutoEncoder(keras_tuner.HyperModel):
                     num_filters=32,
                     num_filters_exp=32,
                     num_filters_red=9,
+                    inner_stride=1,
                     ):
 
         self.activation_encoder = 'relu'
@@ -93,6 +94,7 @@ class AutoEncoder(keras_tuner.HyperModel):
         self.kernel_size = kernel_size
         self.num_filters_red = num_filters_red
         self.num_filters_exp = num_filters_exp
+        self.inner_stride = (inner_stride, inner_stride)
 
         Nlat, Nlon, num_channels = self.test_vec.shape
 
@@ -111,12 +113,6 @@ class AutoEncoder(keras_tuner.HyperModel):
                                        name="feedthrough_input")
 
         # Encoder ------------------------------------------------------
-        conv_layer_0 = layers.Conv2D(self.num_filters_red,
-                                     self.kernel_size,
-                                     strides = (1,1),
-                                     activation=self.activation_encoder,
-                                     padding="same", name="conv_layer_0")
-
         conv_layer_1 = layers.Conv2D(self.num_filters,
                                      self.kernel_size,
                                      strides = (2,2),
@@ -131,11 +127,11 @@ class AutoEncoder(keras_tuner.HyperModel):
 
         conv_layer_3 = layers.Conv2D(self.num_filters_red,
                                      self.kernel_size,
-                                     strides = (1,1),
+                                     strides = self.inner_stride,
                                      activation=self.activation_encoder,
                                      padding="same", name="conv_layer_3")
 
-        
+
         use_dropout = True if self.dropout_rate > 0 else False
 
         if use_dropout:
@@ -191,7 +187,7 @@ class AutoEncoder(keras_tuner.HyperModel):
                                          padding="same",
                                          name='dec_conv_layer_1')
 
-        upsample_layer_1 = layers.UpSampling2D(size=(2, 2),
+        upsample_layer_1 = layers.UpSampling2D(size=self.inner_stride,
                                                interpolation="bilinear")
 
         dec_conv_layer_2 = layers.Conv2D(self.num_filters_exp,
@@ -210,6 +206,9 @@ class AutoEncoder(keras_tuner.HyperModel):
                                          activation=self.activation_decoder,
                                          padding="same",
                                          name='dec_conv_layer_3')
+
+        upsample_layer_3 = layers.UpSampling2D(size=(2,2),
+                                               interpolation="bilinear")
 
         dropout_layer_2 = layers.Dropout(self.dropout_rate,
                                          name="dropout_2")
@@ -232,6 +231,7 @@ class AutoEncoder(keras_tuner.HyperModel):
         y = dec_conv_layer_2(y)
         y = upsample_layer_2(y)
         y = dec_conv_layer_3(y)
+        y = upsample_layer_3(y)
 
         if self.feedthrough_only:
             output = feedthrough_layer_1(feedthrough)
@@ -289,7 +289,7 @@ class AutoEncoder(keras_tuner.HyperModel):
         self.log_model(self.esn, 'a')
 
         # models are constructed
-        self.needs_building = False        
+        self.needs_building = False
 
         return self.autoencoder, self.encoder, self.decoder
 

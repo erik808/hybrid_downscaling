@@ -69,6 +69,7 @@ class AutoEncoder(keras_tuner.HyperModel):
                     verbosity=20,
                     use_feedthrough=True,
                     feedthrough_only=False,
+                    use_skip_connections=False,
                     use_timeinput=True,
                     feedthrough_type='multiply',
                     noise_stddev=0.0,
@@ -85,6 +86,7 @@ class AutoEncoder(keras_tuner.HyperModel):
         self.activation_encoder = 'relu'
         self.activation_decoder = 'relu'
         self.use_feedthrough = use_feedthrough
+        self.use_skip_connections = use_skip_connections
         self.use_feedthrough_in_esn = use_feedthrough
         self.feedthrough_only = feedthrough_only
         self.feedthrough_type = feedthrough_type
@@ -98,7 +100,8 @@ class AutoEncoder(keras_tuner.HyperModel):
         self.kernel_size = kernel_size
         self.num_filters_red = num_filters_red
         self.num_filters_exp = num_filters_exp
-        self.regularizer = regularizers.L2(L2_lambda)
+        self.regularizer = regularizers.L2(L2_lambda) \
+            if L2_lambda > 0 else None
         self.inner_stride = (inner_stride, inner_stride)
 
         use_dropout = True if self.dropout_rate > 0 else False
@@ -133,6 +136,7 @@ class AutoEncoder(keras_tuner.HyperModel):
                                  name="conv_block_1")
 
         x = conv_block_1(state_input)
+        x_skip_1 = x if self.use_skip_connections else None
 
         # second expansion
         conv_block_2 = ConvBlock(self.conv_layers_per_block,
@@ -144,6 +148,7 @@ class AutoEncoder(keras_tuner.HyperModel):
                                  name="conv_block_2")
 
         x = conv_block_2(x)
+        x_skip_2 = x if self.use_skip_connections else None
 
         # FIXME dropout here?
         if use_dropout: x = dropout_layer_1(x)
@@ -243,9 +248,9 @@ class AutoEncoder(keras_tuner.HyperModel):
         # Decoder:
         y = dec_conv_block_1(encoded)
         y = upsample_layer_1(y)
-        y = dec_conv_block_2(y)
+        y = dec_conv_block_2(y, x_skip_2)
         y = upsample_layer_2(y)
-        y = dec_conv_block_3(y)
+        y = dec_conv_block_3(y, x_skip_1)
         y = upsample_layer_3(y)
 
         if self.feedthrough_only:
@@ -399,8 +404,11 @@ class ConvBlock():
                           name=f'{name}_l{ctr}')
         self.layer_list.append(l)
 
-    def __call__(self, inputs):
-        x = inputs
+    def __call__(self, inputs, skip=None):
+        if skip == None:
+            x = inputs
+        else:
+            x = layers.Concatenate(axis=-1)([skip, inputs])
         for layer in self.layer_list:
             x = layer(x)
         return x

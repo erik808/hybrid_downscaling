@@ -80,11 +80,13 @@ class AE_Experiment():
         # default hyperparams
         self.hyper_params = {
             'history' : 'all',
+            'use_skip_connections' : True,
+            'conv_layers_per_block' : 1,
             'future' : 400,
             'noise_stddev' : 0.04,
             'dropout_rate' : 0.0,
             'optimizer' : 'adam',
-            'L2_lambda' : 1e-5,
+            'L2_lambda' : 0.0,
             'epochs' : 4,
             'batch_size' : 4,
             'learning_rate' : 0.002,
@@ -97,6 +99,26 @@ class AE_Experiment():
         ## TODO use this instead of the huge if elif construction below
         ## maybe read from ini?
         self.tuning_config_dict = {
+            #-------------------------------------------------------
+            'default' : {
+                'skip_conns' : {
+                    'type' : 'categorical',
+                    'args' : {'name':'use_skip_connections',
+                              'choices': [True, False]},
+                    'search_space' : [True, False] } ,
+                'L2_lambda' : {
+                    'type' : 'float',
+                    'args' : {'name' : 'L2_lambda',
+                              'low'  : 0,
+                              'high' : 1},
+                    'search_space' : [0] },
+                'layers_per_block' : {
+                    'type' : 'int',
+                    'args' : {'name' : 'conv_layers_per_block',
+                              'low'  : 1,
+                              'high' : 6},
+                    'search_space' : [1, 2, 3, 4] } },
+            
             #-------------------------------------------------------
             'regularization' : {
                 'L2_lambda' : {
@@ -130,8 +152,10 @@ class AE_Experiment():
             'dropout' : {}, #TODO
             'skip_connections' : {}, # TODO
             'layers_per_block' : {}, # TODO
-        }
 
+            #-------------------------------------------------------
+        }
+        
 
     def run_optuna_study(self):
         self.init_log()
@@ -300,6 +324,8 @@ class AE_Experiment():
                     feedthrough_only=feedthrough_only,
                     feedthrough_type='multiply',
                     learning_rate=self.hyper_params['learning_rate'],
+                    conv_layers_per_block=self.hyper_params['conv_layers_per_block'],
+                    use_skip_connections=self.hyper_params['use_skip_connections'],
                     optimizer=self.hyper_params['optimizer'],
                     L2_lambda=self.hyper_params['L2_lambda'],
                     dropout_rate=self.hyper_params['dropout_rate'],
@@ -514,7 +540,7 @@ class AE_Experiment():
 
 if __name__=="__main__":
     exp = AE_Experiment(exp_name='test',
-                        tuning_config='training_pars',
+                        tuning_config='default',
                         detide=False,
                         compute_data=False)
     exp.run_optuna_study()

@@ -41,31 +41,31 @@ class AE_Experiment():
         self.tuning_config = tuning_config
         self.do_gridsearch = True
 
-        if existing_model == None:
-            self.folder_id = self.init_timestamp \
-                if self.exp_name == None else self.exp_name
-            self.folder_id = self.exp_name
-            self.folder_postfix = ''\
-                if self.tuning_config == None else f'-{self.tuning_config}'
-            self.load_existing_model = False
-        else:
-            self.folder_id = existing_model['folder_id']
-            self.folder_postfix = existing_model['folder_postfix']
-            self.load_model_id = existing_model['load_model_id']
-            self.load_existing_model = True
+        self.folder_id = self.init_timestamp \
+            if self.exp_name == None else self.exp_name
+        self.folder_id = self.exp_name
+        self.folder_postfix = ''\
+            if self.tuning_config == None else f'-{self.tuning_config}'
 
         # setup new or existing directories
         self.dirs, self.files = \
             dm.setup_directories(self.folder_id, self.folder_postfix)
 
+        if existing_model == None:
+            self.load_existing_model = False
+        else:
+            self.load_existing_model = True
+            self.load_model_folder = existing_model['folder']
+            self.load_model_postfix = existing_model['postfix']
+
         if self.load_existing_model:
-            mdir = self.dirs['models']
+            mdir = self.load_model_folder
             self.load_path_autoencoder = \
-                f'{mdir}/aencodr_{self.load_model_id}.keras'
+                f'{mdir}/autoencoder_{self.load_model_postfix}.keras'
             self.load_path_encoder     = \
-                f'{mdir}/encoder_{self.load_model_id}.keras'
+                f'{mdir}/encoder_{self.load_model_postfix}.keras'
             self.load_path_decoder     = \
-                f'{mdir}/decoder_{self.load_model_id}.keras'
+                f'{mdir}/decoder_{self.load_model_postfix}.keras'
 
         # -------------------------------------------------------
         # Load or compute data
@@ -73,15 +73,13 @@ class AE_Experiment():
             dm.create_training_data(compute_data=compute_data,
                                     detide=detide)
         # -------------------------------------------------------
-
-        self.full_postprocess = False
         self.trial_id = None
 
         # default hyperparams
         self.hyper_params = {
             'history' : 'all',
-            'use_skip_connections' : True,
-            'conv_layers_per_block' : 1,
+            'use_skip_connections' : False,
+            'conv_layers_per_block' : 2,
             'future' : 400,
             'noise_stddev' : 0.04,
             'dropout_rate' : 0.0,
@@ -96,29 +94,23 @@ class AE_Experiment():
             'inner_stride' : 1,
         }
 
-        ## TODO use this instead of the huge if elif construction below
-        ## maybe read from ini?
+        ## maybe read from ini or xml instead?
         self.tuning_config_dict = {
             #-------------------------------------------------------
             'default' : {
-                'skip_conns' : {
-                    'type' : 'categorical',
-                    'args' : {'name':'use_skip_connections',
-                              'choices': [True, False]},
-                    'search_space' : [True, False] } ,
-                'L2_lambda' : {
-                    'type' : 'float',
-                    'args' : {'name' : 'L2_lambda',
-                              'low'  : 0,
-                              'high' : 1},
-                    'search_space' : [0] },
+                'epochs' : {
+                    'type' : 'int',
+                    'args' : {'name':'epochs',
+                              'low': 1,
+                              'high':50},
+                    'search_space' : [4] },
                 'layers_per_block' : {
                     'type' : 'int',
                     'args' : {'name' : 'conv_layers_per_block',
                               'low'  : 1,
                               'high' : 6},
-                    'search_space' : [1, 2, 3, 4] } },
-            
+                    'search_space' : [2] } },
+
             #-------------------------------------------------------
             'regularization' : {
                 'L2_lambda' : {
@@ -155,7 +147,7 @@ class AE_Experiment():
 
             #-------------------------------------------------------
         }
-        
+
 
     def run_optuna_study(self):
         self.init_log()
@@ -185,7 +177,7 @@ class AE_Experiment():
         self.trial_id = trial._trial_id-1
         self.setup_search_space(trial)
         self.log(trial)
-        err = self.build_and_run_experiment()
+        err = self.build_and_run_model()
         return err
 
     def hyper_param_helper(self, vartype: str, suggest_args={},
@@ -242,8 +234,7 @@ class AE_Experiment():
                                headers='keys',
                                tablefmt='orgtbl'), file=out)
 
-    def build_and_run_experiment(self):
-
+    def build_and_run_model(self, predict_only=False):
         # AE-MODEL CONFIG
         use_feedthrough = True
         feedthrough_only = False
@@ -261,6 +252,8 @@ class AE_Experiment():
 
         if history == 'all':  # use all data we have
             history = self.data['train']['HR'].shape[0]
+        if future == 'all':  # use all data we have
+            future = self.data['test']['HR'].shape[0]
 
         # input data
         train_data_inp = self.data['train']['HR'][:-1,][-history:,]
@@ -306,12 +299,13 @@ class AE_Experiment():
                 control = esn.pixel_shuffle(encoder.predict([train_data_ft, timetns]))
                 esn.initialize(values, control)
                 esn.populate_storage(values, timeids, control)
-
+            else:
+                esn_params['external']['bypass_mode'] = True
+                esn = ESN_embedded(esn_params=esn_params)
         else:
 
             esn_params['external']['bypass_mode'] = not use_embedded_ESN
             esn = ESN_embedded(esn_params=esn_params)
-
 
             ae = AutoEncoder(test_vec=train_data_inp[0,:,:,:],
                              mask=mask,
@@ -336,16 +330,13 @@ class AE_Experiment():
                     inner_stride=self.hyper_params['inner_stride'],
                 )
 
-
         # print a summary
         autoencoder.summary()
 
-        model_name = self.load_model_id \
-            if self.load_existing_model else timestamp
         print('----------------------------------------------------------')
-        print(f'experiment: {self.folder_id}{self.folder_postfix}, ')
-        print(f'model: {model_name}')
-        print('---------------------------------------------------------')
+        print(f'experiment: {self.folder_id}{self.folder_postfix},       ')
+        print(f'model: {postfix}                                         ')
+        print('--------------------------------------------------------- ')
 
         tic = time.time()
 
@@ -382,7 +373,8 @@ class AE_Experiment():
                              initial_xk=(initial_xk, initial_xkm1),
                              plotmachine=plotmachine,
                              pars = {'feedthrough_only': feedthrough_only,
-                                     'use_feedthrough': use_feedthrough},
+                                     'use_feedthrough': use_feedthrough,
+                                     'predict_only' : predict_only},
                              scalers = self.scalers)
 
         callbacks = [esn_callback, self.validation_callback]
@@ -422,14 +414,29 @@ class AE_Experiment():
         encoder.save(save_path_encoder)
         decoder.save(save_path_decoder)
 
-        self.post_process_results()
+        self.plot_history()
 
         print(self.validation_callback.final_error)
         return self.validation_callback.final_error
 
-    def post_process_results(self):
+    def plot_history(self):
+        future = self.hyper_params['future']
+        if future == 'all':  # use all data we have
+            future = self.data['test']['HR'].shape[0]
+            
+        plotmachine = PlotMachine(results_dir=self.dirs['results'],
+                                  movie_dir=self.dirs['movies'],
+                                  time_array=self.data['test']['time'][:future,],
+                                  trial_id=self.trial_id)
+        plotmachine.plot_history(self.hist)
+
+        
+    def create_movie(self):
 
         future = self.hyper_params['future']
+        if future == 'all':  # use all data we have
+            future = self.data['test']['HR'].shape[0]
+            
         Nlon = self.params['Nlon']
         Nlat = self.params['Nlat']
         num_channels = self.params['num_channels']
@@ -445,86 +452,84 @@ class AE_Experiment():
                                   time_array=test_time,
                                   trial_id=self.trial_id)
 
-        plotmachine.plot_history(self.hist)
+        predictions = self.validation_callback.predictions
 
-        if self.full_postprocess:
+        # Create dictionary for output visualization
+        xr_HR_true_fun = lambda i : \
+            self.scalers['HR'].inverse_transform(test_data[i,:,:,:]\
+                                            .reshape(1,-1))\
+                         .reshape(Nlat, Nlon, num_channels)
 
-            predictions = self.validation_callback.predictions
+        # instant kinetic energy
+        Kt_HR_true_fun = lambda i : \
+            np.sqrt(np.square(xr_HR_true_fun(i)).sum(axis=2))
 
-            # Create dictionary for output visualization
-            xr_HR_true_fun = lambda i : \
-                self.scalers['HR'].inverse_transform(test_data[i,:,:,:]\
-                                                .reshape(1,-1))\
-                             .reshape(Nlat, Nlon, num_channels)
+        xr_HR_pred_fun = lambda i : \
+            self.scalers['HR'].inverse_transform(predictions[i,:,:,:]\
+                                            .reshape(1,-1))\
+                         .reshape(Nlat, Nlon, num_channels)
 
-            # instant kinetic energy
-            Kt_HR_true_fun = lambda i : \
-                np.sqrt(np.square(xr_HR_true_fun(i)).sum(axis=2))
+        # instant kinetic energy
+        Kt_HR_pred_fun = lambda i : \
+            np.sqrt(np.square(xr_HR_pred_fun(i)).sum(axis=2))
 
-            xr_HR_pred_fun = lambda i : \
-                self.scalers['HR'].inverse_transform(predictions[i,:,:,:]\
-                                                .reshape(1,-1))\
-                             .reshape(Nlat, Nlon, num_channels)
+        # Create dictionary for output visualization
+        xr_LR_true_fun = lambda i : \
+            self.scalers['HR'].inverse_transform(test_data_ft[i,:,:,:]\
+                                            .reshape(1,-1))\
+                         .reshape(Nlat, Nlon, num_channels)
 
-            # instant kinetic energy
-            Kt_HR_pred_fun = lambda i : \
-                np.sqrt(np.square(xr_HR_pred_fun(i)).sum(axis=2))
-
-            # Create dictionary for output visualization
-            xr_LR_true_fun = lambda i : \
-                self.scalers['HR'].inverse_transform(test_data_ft[i,:,:,:]\
-                                                .reshape(1,-1))\
-                             .reshape(Nlat, Nlon, num_channels)
-
-            # instant kinetic energy
-            Kt_LR_true_fun = lambda i : \
-                np.sqrt(np.square(xr_LR_true_fun(i)).sum(axis=2))
+        # instant kinetic energy
+        Kt_LR_true_fun = lambda i : \
+            np.sqrt(np.square(xr_LR_true_fun(i)).sum(axis=2))
 
 
-            xr_HR_diff_fun = lambda i : xr_HR_true_fun(i) - xr_HR_pred_fun(i)
+        xr_HR_diff_fun = lambda i : xr_HR_true_fun(i) - xr_HR_pred_fun(i)
 
-            Kt_HR_diff_fun = lambda i : Kt_HR_true_fun(i) - Kt_HR_pred_fun(i)
+        Kt_HR_diff_fun = lambda i : Kt_HR_true_fun(i) - Kt_HR_pred_fun(i)
 
-            Rs_true_fun = lambda i : test_data[i,:,:,0] - test_data_ft[i,:,:,0]
-            Rs_pred_fun = lambda i : predictions[i,:,:,0] - test_data_ft[i,:,:,0]
-            Rs_diff_fun = lambda i : Rs_true_fun(i) - Rs_pred_fun(i)
+        Rs_true_fun = lambda i : test_data[i,:,:,0] - test_data_ft[i,:,:,0]
+        Rs_pred_fun = lambda i : predictions[i,:,:,0] - test_data_ft[i,:,:,0]
+        Rs_diff_fun = lambda i : Rs_true_fun(i) - Rs_pred_fun(i)
 
-            vmax = Kt_HR_true_fun(0).max()
-            vmin_diff = Rs_true_fun(0).min()
-            vmax_diff = Rs_true_fun(0).max()
+        vmax = Kt_HR_true_fun(0).max()
+        vmin_diff = -0.1
+        vmax_diff = 0.1
 
-            output_dict = {'Kt_HR true' : {'values' : Kt_HR_true_fun,
-                                           'vmin' : 0,
-                                           'vmax' : vmax,
-                                           'cmap' : 'viridis'},
+        output_dict = {'Kt_HR true' : {'values' : Kt_HR_true_fun,
+                                       'vmin' : 0,
+                                       'vmax' : vmax,
+                                       'cmap' : 'viridis'},
 
-                           'Kt_HR pred' : {'values' : Kt_HR_pred_fun,
-                                           'vmin' : 0,
-                                           'vmax' : vmax,
-                                           'cmap' : 'viridis'},
+                       'Kt_HR pred' : {'values' : Kt_HR_pred_fun,
+                                       'vmin' : 0,
+                                       'vmax' : vmax,
+                                       'cmap' : 'viridis'},
 
-                           'Kt_LR true' : {'values' : Kt_LR_true_fun,
-                                           'vmin' : 0,
-                                           'vmax' : vmax,
-                                           'cmap' : 'viridis'},
+                       'Kt_LR true' : {'values' : Kt_LR_true_fun,
+                                       'vmin' : 0,
+                                       'vmax' : vmax,
+                                       'cmap' : 'viridis'},
 
-                           'res true' : {'values' : Rs_true_fun,
-                                         'vmin' : vmin_diff,
-                                         'vmax' : vmax_diff,
-                                         'cmap' : 'RdBu'},
+                       'res true' : {'values' : Rs_true_fun,
+                                     'vmin' : vmin_diff,
+                                     'vmax' : vmax_diff,
+                                     'cmap' : 'RdBu'},
 
-                           'res pred' : {'values' : Rs_pred_fun,
-                                         'vmin' : vmin_diff,
-                                         'vmax' : vmax_diff,
-                                         'cmap' : 'RdBu'},
+                       'res pred' : {'values' : Rs_pred_fun,
+                                     'vmin' : vmin_diff,
+                                     'vmax' : vmax_diff,
+                                     'cmap' : 'RdBu'},
 
-                           'error' : {'values' : Kt_HR_diff_fun,
-                                      'vmin' : vmin_diff,
-                                      'vmax' : vmax_diff,
-                                      'cmap' : 'RdBu'},
-                           }
+                       'error' : {'values' : Kt_HR_diff_fun,
+                                  'vmin' : vmin_diff,
+                                  'vmax' : vmax_diff,
+                                  'cmap' : 'RdBu'},
+                       }
 
-            plotmachine.create_movie(output_dict)
+        breakpoint()
+        
+        plotmachine.create_movie(output_dict)
 
 
     def create_postfix(self):

@@ -5,7 +5,7 @@
 #SBATCH -N 1
 #SBATCH -n 4
 #SBATCH --cpus-per-task 4
-#SBATCH --mem 24G
+#SBATCH --mem 36G
 #SBATCH --qos low
 
 export OMP_NUM_THREADS=4

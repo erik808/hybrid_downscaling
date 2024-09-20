@@ -20,7 +20,7 @@ class PlotMachine():
         self.movie_dir=movie_dir
         self.cbar_shrinkf=0.7
         self.frame_stride=4
-        self.pool_size=8
+        self.pool_size=6
         self.trial_id=trial_id
 
     def plot_single_frame(self, frame_id, output_dict=None):
@@ -33,11 +33,11 @@ class PlotMachine():
         self.plot_frame(frame_id, fig_name)
 
     def create_movie(self, output_dict=None):
-        
+
         self.output_dict = self.output_dict \
             if output_dict == None else output_dict
-        
-        fig = plt.figure(figsize=self.figsize)        
+
+        fig = plt.figure(figsize=self.figsize)
         with Pool(self.pool_size) as p:
             p.map(self.plot_frame, range(0,len(self.time_array),
                                          self.frame_stride))
@@ -79,8 +79,8 @@ class PlotMachine():
     def plot_history(self, hist):
 
         postfix = self.create_postfix()
-        fig_name = f'{self.results_dir}/history{postfix}.png'        
-            
+        fig_name = f'{self.results_dir}/history{postfix}.png'
+
         plt.close('all')
         plt.subplot(2,1,1)
         plt.semilogy(hist.history['loss'],'.-',
@@ -96,13 +96,13 @@ class PlotMachine():
                          label='validation loss')
 
         plt.subplot(2,1,2)
-        if 'error' in hist.history:            
+        if 'error' in hist.history:
             plt.semilogy(hist.history['error'],'.-',
                          label='validation error')
 
-        if 'base' in hist.history:            
+        if 'base' in hist.history:
             plt.semilogy(hist.history['base'],'.-',
-                         label='validation baseline')            
+                         label='validation baseline')
         plt.grid()
         plt.legend()
         plt.gca().set_xlabel('epoch')
@@ -130,16 +130,15 @@ class PlotMachine():
         plt.savefig(fig_name)
 
         return RSE_Y, RSE_Z
-    
+
     def create_postfix(self, add_name=''):
 
         postfix = ''
         if self.trial_id != None:
-            postfix += f'_trial_{self.trial_id}'            
+            postfix += f'_trial_{self.trial_id}'
 
         postfix += f'_{add_name}' if len(add_name)>0 else ''
         timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
         postfix += f'_{timestamp}'
 
         return postfix
-        

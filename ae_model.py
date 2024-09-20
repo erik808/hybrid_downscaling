@@ -453,7 +453,8 @@ class CustomValidation(keras.callbacks.Callback):
     """
     """
 
-    def __init__(self, test_data, initial_xk, plotmachine, pars, scalers):
+    def __init__(self, test_data, initial_xk,
+                 plotmachine, pars, scalers):
         super().__init__()
 
         self.initial_xk = initial_xk
@@ -468,17 +469,27 @@ class CustomValidation(keras.callbacks.Callback):
         self.final_error = []
         self.final_base = []
 
+    def on_epoch_begin(self, epoch, logs=None):
+        if self.pars['predict_only']:
+            self.predict(epoch, logs)
+            self.model.stop_training=True
+        
     def on_epoch_end(self, epoch, logs=None):
+        if not self.pars['predict_only']:
+            self.predict(epoch, logs)
+            
+    def predict(self, epoch, logs=None):
+        
         self.predictions = np.zeros_like(self.test_data)
-
+        
         xk   = self.initial_xk[0]
         xkm1 = self.initial_xk[1]
         pb_i = keras.utils.Progbar(self.N_steps,
                                    stateful_metrics=['error', 'base'],
                                    interval=0.5)
-
+    
         error, base = (0,0)
-
+        
         for i in range(self.N_steps):
 
             xk_LR = np.expand_dims(self.test_data_ft[i,], axis=0)

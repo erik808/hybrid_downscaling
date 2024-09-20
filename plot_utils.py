@@ -186,3 +186,45 @@ class PlotMachine():
             [:,tpicker.y_trans, tpicker.x_trans,:]
         pred = inverse_transform(data['pred'], data['scaler'])\
             [:,tpicker.y_trans, tpicker.x_trans,:]
+
+        # mean_u_v = np.mean(truth, axis=0)
+        # mean_K = np.sum(np.square(time_mean),axis=1)
+        # square_u_v = np.square(truth)
+        # mean_sq_u_v = np.mean(square_u_v, axis=0)
+        # eddy_K = np.sum(mean_sq_u_v) - mean_K
+
+
+        def compute_spectrum(field):
+            # mean subtract? get eddy component?
+            # field = field - np.mean(field, axis=(0,1))
+            H = np.fft.rfft(field, axis=1)
+            return np.mean(np.sum(np.square(np.abs(H)), axis=2), axis=0)
+
+
+        breakpoint()
+        trunc = 46
+        S_truth = compute_spectrum(truth)[:trunc]
+        S_pred = compute_spectrum(pred)[:trunc]
+        S_lowres = compute_spectrum(lowres)[:trunc]
+
+        k_1 = np.linspace(1.7,20,100)
+        k_2 = np.linspace(7,trunc,100)
+
+        offset_1 = 1e4
+        offset_2 = 1e5
+
+        plt.figure()
+        plt.loglog(S_truth, '.-', label='HR truth')
+        plt.loglog(S_pred, '.-', label='Model prediction')
+        plt.loglog(S_lowres, '.-', label='LR forcing/control')
+        plt.loglog(k_1, offset_1 * k_1**(-5/3), '--', label='k^-5/3')
+        plt.loglog(k_2, offset_2 * k_2**(-3), ':', label='k^-3')
+        plt.legend()
+        plt.gca().set_title(f'transect: {transect_name}')
+        plt.grid()
+
+        postfix = self.create_postfix()
+        fig_name = f'{self.results_dir}/spectrum_{transect_name}{postfix}.png'
+        print(fig_name)
+        plt.tight_layout()
+        plt.savefig(fig_name)

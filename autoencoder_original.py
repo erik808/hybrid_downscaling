@@ -540,7 +540,9 @@ class AE_Experiment():
 
         plotmachine.plot_spectrum(transect_name='along_flow',
                                   data=data_dict)
-
+        plotmachine.plot_spectrum(transect_name='across_flow',
+                                  data=data_dict)
+        
         plotmachine.create_movie(output_dict)
 
 

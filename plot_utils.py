@@ -23,7 +23,7 @@ class PlotMachine():
         self.movie_dir=movie_dir
         self.cbar_shrinkf=0.7
         self.frame_stride=4
-        self.pool_size=6
+        self.pool_size=8
         self.trial_id=trial_id
 
         self.transect_dir = f'{dm.data_dir}/transects'
@@ -36,6 +36,7 @@ class PlotMachine():
         fig = plt.figure(figsize=self.figsize)
         postfix = self.create_postfix()
         fig_name = f'{self.results_dir}/results_autoencoder{postfix}.png'
+        print(fig_name)
         self.plot_frame(frame_id, fig_name)
 
     def create_movie(self, output_dict=None):
@@ -63,21 +64,35 @@ class PlotMachine():
         os.system(sys_cmd)
 
     def plot_frame(self, id, fig_name=None):
+        print(f'plotting frame {id}')
         plt.clf()
         if fig_name == None:
             fig_name = f'{self.movie_dir}/frame-{id:06d}.png'
 
-        dim = int(np.ceil(np.sqrt(len(self.output_dict))))
+        Nsub = len(self.output_dict)
+        dim0 = int(np.ceil(np.sqrt(Nsub)))
+        dim1 = int(np.ceil(Nsub / dim0))
         for f, (key, item) in enumerate(self.output_dict.items()):
+            plt.subplot(dim1,dim0,f+1)
+            if item['type'] == '2d':
+                h = plt.imshow(item['values'](id),
+                               cmap=item['cmap'],
+                               vmin=item['vmin'],
+                               vmax=item['vmax'])
+                plt.colorbar(h, shrink=self.cbar_shrinkf)
+                plt.gca().set_title(key)
+                plt.gca().invert_yaxis()
+                
+            elif (key == 'spectrum along flow' or
+                  key == 'spectrum across flow'):
+                for (name, var) in item['values'].items():
+                    plt.loglog(var(id), '.-', label=name)
+                    
+                plt.legend()
+                plt.grid()
+                plt.gca().set_title(key)
+                plt.gca().set_ylim(item['vmin'], item['vmax'])
 
-            plt.subplot(dim,dim,f+1)
-            h = plt.imshow(item['values'](id),
-                           cmap=item['cmap'],
-                           vmin=item['vmin'],
-                           vmax=item['vmax'])
-            plt.colorbar(h, shrink=self.cbar_shrinkf)
-            plt.gca().set_title(key)
-            plt.gca().invert_yaxis()
 
         plt.suptitle(f"date: {np.datetime64(self.time_array[id], 'h')}")
         plt.savefig(fig_name)
@@ -152,7 +167,7 @@ class PlotMachine():
     def create_transect(self, output_dict):
 
         fig, ax  = plt.subplots(figsize=(5,4))
-        field = output_dict['Kt_HR true']['values'](200)
+        field = output_dict['Kt_HR true']['values'](40)
         im = plt.pcolormesh(field)
         tpicker = TransectPicker(im, field)
         plt.show()
@@ -167,7 +182,7 @@ class PlotMachine():
             dill.dump(container, file)
 
 
-    def plot_spectrum(self, transect_name='along_flow', data = {}):
+    def plot_spectrum(self, transect_name='along_flow', data = {}):        
 
         dill_file = f'{self.transect_dir}/{transect_name}.dill'
         print(f'Loading transect from {dill_file}')
@@ -195,32 +210,42 @@ class PlotMachine():
 
 
         def compute_spectrum(field):
+            """ normalized
+
+            """
+            
             # mean subtract? get eddy component?
             # field = field - np.mean(field, axis=(0,1))
             H = np.fft.rfft(field, axis=1)
-            return np.mean(np.sum(np.square(np.abs(H)), axis=2), axis=0)
+            S = np.sum(np.square(np.abs(H)), axis=2)
+            S = S / np.max(S)
+            return S
 
+        
+        trunc = -int(len(tpicker.x_trans)/2/6)
+        S_truth = compute_spectrum(truth)
+        S_pred = compute_spectrum(pred)
+        S_lowres = compute_spectrum(lowres)
+        S_truth_mn = np.mean(S_truth, axis=0)[:trunc]
+        S_pred_mn = np.mean(S_pred, axis=0)[:trunc]
+        S_lowres_mn = np.mean(S_lowres, axis=0)[:trunc]
 
-        breakpoint()
-        trunc = 46
-        S_truth = compute_spectrum(truth)[:trunc]
-        S_pred = compute_spectrum(pred)[:trunc]
-        S_lowres = compute_spectrum(lowres)[:trunc]
+        k_1 = np.linspace(1.7,np.ceil(len(S_truth_mn)/2),100)
+        k_2 = np.linspace(7,len(S_truth_mn),100)
 
-        k_1 = np.linspace(1.7,20,100)
-        k_2 = np.linspace(7,trunc,100)
-
-        offset_1 = 1e4
-        offset_2 = 1e5
+        offset_1 = 1e1*np.max(S_truth_mn) if transect_name == 'along_flow'\
+            else 1e0*np.max(S_truth_mn)
+        offset_2 = 2e2*np.max(S_truth_mn) if transect_name == 'along_flow'\
+            else 1e1*np.max(S_truth_mn)
 
         plt.figure()
-        plt.loglog(S_truth, '.-', label='HR truth')
-        plt.loglog(S_pred, '.-', label='Model prediction')
-        plt.loglog(S_lowres, '.-', label='LR forcing/control')
+        plt.loglog(S_truth_mn, '.-', label='HR truth')
+        plt.loglog(S_pred_mn, '.-', label='Model prediction')
+        plt.loglog(S_lowres_mn, '.-', label='LR forcing/control')
         plt.loglog(k_1, offset_1 * k_1**(-5/3), '--', label='k^-5/3')
         plt.loglog(k_2, offset_2 * k_2**(-3), ':', label='k^-3')
         plt.legend()
-        plt.gca().set_title(f'transect: {transect_name}')
+        plt.gca().set_title(f'Mean energy spectrum, {transect_name}')
         plt.grid()
 
         postfix = self.create_postfix()
@@ -228,3 +253,8 @@ class PlotMachine():
         print(fig_name)
         plt.tight_layout()
         plt.savefig(fig_name)
+        plt.close('all')
+
+        return {'truth' : S_truth,
+                'lowres' : S_lowres,
+                'pred' : S_pred}

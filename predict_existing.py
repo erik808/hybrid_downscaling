@@ -12,4 +12,4 @@ exp = AE_Experiment(existing_model=model,
                     detide=False,
                     compute_data=False)
 exp.build_and_run_model(predict_only=True)
-exp.create_movie()
+exp.create_movie() # broken

@@ -80,7 +80,7 @@ class AE_Experiment():
             'history' : 'all',
             'use_skip_connections' : False,
             'conv_layers_per_block' : 2,
-            'future' : 400,
+            'future' : 'all',
             'noise_stddev' : 0.04,
             'dropout_rate' : 0.0,
             'optimizer' : 'adam',
@@ -140,11 +140,10 @@ class AE_Experiment():
                               'high':100},
                     'search_space' : [1,2,4,8] } },
             #-------------------------------------------------------
-            'filters' : {}, #TODO,
+            'filters' : {}, #TODO
             'dropout' : {}, #TODO
             'skip_connections' : {}, # TODO
             'layers_per_block' : {}, # TODO
-
             #-------------------------------------------------------
         }
 
@@ -241,8 +240,8 @@ class AE_Experiment():
         use_embedded_ESN = False
 
         # DATA CONFIG
-        history = self.hyper_params['history']
-        future = self.hyper_params['future']
+        self.history = self.hyper_params['history']
+        self.future = self.hyper_params['future']
 
         # TRAINING CONFIG
         epochs = self.hyper_params['epochs']
@@ -250,23 +249,23 @@ class AE_Experiment():
         esn_train_in_epochs = [0,2,4,8]
         shuffle = True
 
-        if history == 'all':  # use all data we have
-            history = self.data['train']['HR'].shape[0]
-        if future == 'all':  # use all data we have
-            future = self.data['test']['HR'].shape[0]
+        if self.history == 'all':  # use all data we have
+            self.history = self.data['train']['HR'].shape[0]
+        if self.future == 'all':  # use all data we have
+            self.future = self.data['test']['HR'].shape[0]
 
         # input data
-        train_data_inp = self.data['train']['HR'][:-1,][-history:,]
+        train_data_inp = self.data['train']['HR'][:-1,][-self.history:,]
         # output data
-        train_data_otp = self.data['train']['HR'][1:,][-history:,]
+        train_data_otp = self.data['train']['HR'][1:,][-self.history:,]
         # control/feedthrough data
-        train_data_ft  = self.data['train']['LR'][1:,][-history:,]
+        train_data_ft  = self.data['train']['LR'][1:,][-self.history:,]
 
         # HR test data
-        test_data      = self.data['test']['HR'][:future,]
+        test_data      = self.data['test']['HR'][:self.future,]
         # LR/control/feedthrough test data
-        test_data_ft   = self.data['test']['LR'][:future,]
-        test_time      = self.data['test']['time'][:future,]
+        test_data_ft   = self.data['test']['LR'][:self.future,]
+        test_time      = self.data['test']['time'][:self.future,]
 
         mask = self.params['mask']
         Nt   = self.params['Nt']
@@ -360,8 +359,8 @@ class AE_Experiment():
                                   train_in_epochs=esn_train_in_epochs,
                                   num_samples=X_train[0].shape[0])
 
-        # we create a custom validation using a callback at every epoch
-        # end
+        # we create a custom validation using a callback at every
+        # epoch end
         initial_xk   = np.expand_dims(self.data['train']['HR'][-1,:,:,:], axis=0)
         initial_xkm1 = np.expand_dims(self.data['train']['HR'][-2,:,:,:], axis=0)
 
@@ -415,37 +414,51 @@ class AE_Experiment():
         decoder.save(save_path_decoder)
 
         self.plot_history()
+        self.plot_spectra()
 
-        print(self.validation_callback.final_error)
+        print(f'final error: {self.validation_callback.final_error}')
         return self.validation_callback.final_error
 
-    def plot_history(self):
-        future = self.hyper_params['future']
-        if future == 'all':  # use all data we have
-            future = self.data['test']['HR'].shape[0]
 
+    def plot_spectra(self):
+
+        test_time  = self.data['test']['time'][:self.future,]
         plotmachine = PlotMachine(results_dir=self.dirs['results'],
                                   movie_dir=self.dirs['movies'],
-                                  time_array=self.data['test']['time'][:future,],
+                                  time_array=test_time,
+                                  trial_id=self.trial_id)
+
+        data_dict = {
+            'truth'  : self.data['test']['HR'][:self.future,],
+            'lowres' : self.data['test']['LR'][:self.future,],
+            'pred'   : self.validation_callback.predictions,
+            'scaler' : self.scalers['HR'],
+        }
+
+        self.spec_along = plotmachine.plot_spectrum(transect_name='along_flow_3',
+                                                    data=data_dict)
+        self.spec_across = plotmachine.plot_spectrum(transect_name='across_flow',
+                                                     data=data_dict)
+
+    def plot_history(self):
+        plotmachine = PlotMachine(results_dir=self.dirs['results'],
+                                  movie_dir=self.dirs['movies'],
+                                  time_array=self.data['test']['time'][:self.future,],
                                   trial_id=self.trial_id)
         plotmachine.plot_history(self.hist)
 
 
     def create_movie(self):
 
-        future = self.hyper_params['future']
-        if future == 'all':  # use all data we have
-            future = self.data['test']['HR'].shape[0]
-
         Nlon = self.params['Nlon']
         Nlat = self.params['Nlat']
         num_channels = self.params['num_channels']
 
         # HR test data
-        test_data      = self.data['test']['HR'][:future,]
+        test_data      = self.data['test']['HR'][:self.future,]
         # LR/control/feedthrough test data
-        test_data_ft   = self.data['test']['LR'][:future,]
-        test_time      = self.data['test']['time'][:future,]
+        test_data_ft   = self.data['test']['LR'][:self.future,]
+        test_time      = self.data['test']['time'][:self.future,]
 
         predictions = self.validation_callback.predictions
 
@@ -478,7 +491,6 @@ class AE_Experiment():
         Kt_LR_true_fun = lambda i : \
             np.sqrt(np.square(xr_LR_true_fun(i)).sum(axis=2))
 
-
         xr_HR_diff_fun = lambda i : xr_HR_true_fun(i) - xr_HR_pred_fun(i)
 
         Kt_HR_diff_fun = lambda i : Kt_HR_true_fun(i) - Kt_HR_pred_fun(i)
@@ -489,62 +501,77 @@ class AE_Experiment():
 
         vmax = Kt_HR_true_fun(0).max()
         vmin_diff = -0.1
-        vmax_diff = 0.1
+        vmax_diff =  0.1
 
-        output_dict = {'Kt_HR true' : {'values' : Kt_HR_true_fun,
-                                       'vmin' : 0,
-                                       'vmax' : vmax,
-                                       'cmap' : 'viridis'},
+        plot_instructions = {
+            'Kt_HR true' : {'values' : Kt_HR_true_fun,
+                            'type' : '2d',
+                            'vmin' : 0,
+                            'vmax' : vmax,
+                            'cmap' : 'viridis'},
 
-                       'Kt_HR pred' : {'values' : Kt_HR_pred_fun,
-                                       'vmin' : 0,
-                                       'vmax' : vmax,
-                                       'cmap' : 'viridis'},
+            'Kt_HR pred' : {'values' : Kt_HR_pred_fun,
+                            'type' : '2d',
+                            'vmin' : 0,
+                            'vmax' : vmax,
+                            'cmap' : 'viridis'},
 
-                       'Kt_LR true' : {'values' : Kt_LR_true_fun,
-                                       'vmin' : 0,
-                                       'vmax' : vmax,
-                                       'cmap' : 'viridis'},
+            'Kt_LR true' : {'values' : Kt_LR_true_fun,
+                            'type' : '2d',
+                            'vmin' : 0,
+                            'vmax' : vmax,
+                            'cmap' : 'viridis'},
 
-                       'res true' : {'values' : Rs_true_fun,
-                                     'vmin' : vmin_diff,
-                                     'vmax' : vmax_diff,
-                                     'cmap' : 'RdBu'},
+            'res true' : {'values' : Rs_true_fun,
+                          'type' : '2d',
+                          'vmin' : vmin_diff,
+                          'vmax' : vmax_diff,
+                          'cmap' : 'RdBu'},
 
-                       'res pred' : {'values' : Rs_pred_fun,
-                                     'vmin' : vmin_diff,
-                                     'vmax' : vmax_diff,
-                                     'cmap' : 'RdBu'},
+            'res pred' : {'values' : Rs_pred_fun,
+                          'type' : '2d',
+                          'vmin' : vmin_diff,
+                          'vmax' : vmax_diff,
+                          'cmap' : 'RdBu'},
 
-                       'error' : {'values' : Kt_HR_diff_fun,
-                                  'vmin' : vmin_diff,
-                                  'vmax' : vmax_diff,
-                                  'cmap' : 'RdBu'},
-                       }
+            'error' : {'values' : Kt_HR_diff_fun,
+                       'type' : '2d',
+                       'vmin' : vmin_diff,
+                       'vmax' : vmax_diff,
+                       'cmap' : 'RdBu'},
 
-        import plot_utils
-        reload(plot_utils)
-        from plot_utils import PlotMachine
-        
+            'spectrum along flow' :
+            {
+                'type' : '1d',
+                'values' :
+                {'HR truth' : lambda i : self.spec_along['truth'][i,:],
+                 'Model prediction' : lambda i : self.spec_along['pred'][i,:],
+                 'LR forcing' : lambda i : self.spec_along['lowres'][i,:]
+                 },
+                'vmin' : 5e-6,
+                'vmax' : 2,
+            },
+
+            'spectrum across flow' :
+            {
+                'type' : '1d',
+                'values' :
+                {'HR truth' : lambda i : self.spec_across['truth'][i,:],
+                 'Model prediction' : lambda i : self.spec_across['pred'][i,:],
+                 'LR forcing' : lambda i : self.spec_across['lowres'][i,:]
+                 },
+                'vmin' : 5e-6,
+                'vmax' : 2,
+            } }
+
         plotmachine = PlotMachine(results_dir=self.dirs['results'],
                                   movie_dir=self.dirs['movies'],
                                   time_array=test_time,
                                   trial_id=self.trial_id)
 
-        data_dict = {
-            'truth'  : self.data['test']['HR'][:future,],
-            'lowres' : self.data['test']['LR'][:future,],
-            'pred'   : predictions,
-            'scaler' : self.scalers['HR'],
-        }
-
-        plotmachine.plot_spectrum(transect_name='along_flow',
-                                  data=data_dict)
-        plotmachine.plot_spectrum(transect_name='across_flow',
-                                  data=data_dict)
-        
-        plotmachine.create_movie(output_dict)
-
+        # plotmachine.create_transect(plot_instructions)
+        plotmachine.plot_single_frame(50, plot_instructions)
+        # plotmachine.create_movie(plot_instructions)
 
     def create_postfix(self):
 

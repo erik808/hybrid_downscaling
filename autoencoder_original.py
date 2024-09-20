@@ -423,20 +423,20 @@ class AE_Experiment():
         future = self.hyper_params['future']
         if future == 'all':  # use all data we have
             future = self.data['test']['HR'].shape[0]
-            
+
         plotmachine = PlotMachine(results_dir=self.dirs['results'],
                                   movie_dir=self.dirs['movies'],
                                   time_array=self.data['test']['time'][:future,],
                                   trial_id=self.trial_id)
         plotmachine.plot_history(self.hist)
 
-        
+
     def create_movie(self):
 
         future = self.hyper_params['future']
         if future == 'all':  # use all data we have
             future = self.data['test']['HR'].shape[0]
-            
+
         Nlon = self.params['Nlon']
         Nlat = self.params['Nlat']
         num_channels = self.params['num_channels']
@@ -447,18 +447,13 @@ class AE_Experiment():
         test_data_ft   = self.data['test']['LR'][:future,]
         test_time      = self.data['test']['time'][:future,]
 
-        plotmachine = PlotMachine(results_dir=self.dirs['results'],
-                                  movie_dir=self.dirs['movies'],
-                                  time_array=test_time,
-                                  trial_id=self.trial_id)
-
         predictions = self.validation_callback.predictions
 
         # Create dictionary for output visualization
         xr_HR_true_fun = lambda i : \
             self.scalers['HR'].inverse_transform(test_data[i,:,:,:]\
-                                            .reshape(1,-1))\
-                         .reshape(Nlat, Nlon, num_channels)
+                                                 .reshape(1,-1))\
+                              .reshape(Nlat, Nlon, num_channels)
 
         # instant kinetic energy
         Kt_HR_true_fun = lambda i : \
@@ -466,8 +461,8 @@ class AE_Experiment():
 
         xr_HR_pred_fun = lambda i : \
             self.scalers['HR'].inverse_transform(predictions[i,:,:,:]\
-                                            .reshape(1,-1))\
-                         .reshape(Nlat, Nlon, num_channels)
+                                                 .reshape(1,-1))\
+                              .reshape(Nlat, Nlon, num_channels)
 
         # instant kinetic energy
         Kt_HR_pred_fun = lambda i : \
@@ -476,8 +471,8 @@ class AE_Experiment():
         # Create dictionary for output visualization
         xr_LR_true_fun = lambda i : \
             self.scalers['HR'].inverse_transform(test_data_ft[i,:,:,:]\
-                                            .reshape(1,-1))\
-                         .reshape(Nlat, Nlon, num_channels)
+                                                 .reshape(1,-1))\
+                              .reshape(Nlat, Nlon, num_channels)
 
         # instant kinetic energy
         Kt_LR_true_fun = lambda i : \
@@ -527,8 +522,25 @@ class AE_Experiment():
                                   'cmap' : 'RdBu'},
                        }
 
-        breakpoint()
+        import plot_utils
+        reload(plot_utils)
+        from plot_utils import PlotMachine
         
+        plotmachine = PlotMachine(results_dir=self.dirs['results'],
+                                  movie_dir=self.dirs['movies'],
+                                  time_array=test_time,
+                                  trial_id=self.trial_id)
+
+        data_dict = {
+            'truth'  : self.data['test']['HR'][:future,],
+            'lowres' : self.data['test']['LR'][:future,],
+            'pred'   : predictions,
+            'scaler' : self.scalers['HR'],
+        }
+
+        plotmachine.plot_spectrum(transect_name='along_flow',
+                                  data=data_dict)
+
         plotmachine.create_movie(output_dict)
 
 
@@ -542,6 +554,9 @@ class AE_Experiment():
         postfix += f'_{timestamp}'
 
         return postfix, timestamp
+
+
+
 
 if __name__=="__main__":
     exp = AE_Experiment(exp_name='test',

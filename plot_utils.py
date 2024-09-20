@@ -3,6 +3,9 @@ import matplotlib.pyplot as plt
 import numpy as np
 import os
 from multiprocess import Pool
+from transectpicker.transectpicker import TransectPicker
+import dill
+import data_manager as dm
 
 class PlotMachine():
 
@@ -22,6 +25,9 @@ class PlotMachine():
         self.frame_stride=4
         self.pool_size=6
         self.trial_id=trial_id
+
+        self.transect_dir = f'{dm.data_dir}/transects'
+        os.system(f'mkdir -p {self.transect_dir}')
 
     def plot_single_frame(self, frame_id, output_dict=None):
         self.output_dict = self.output_dict \
@@ -142,3 +148,41 @@ class PlotMachine():
         postfix += f'_{timestamp}'
 
         return postfix
+
+    def create_transect(self, output_dict):
+
+        fig, ax  = plt.subplots(figsize=(5,4))
+        field = output_dict['Kt_HR true']['values'](200)
+        im = plt.pcolormesh(field)
+        tpicker = TransectPicker(im, field)
+        plt.show()
+
+        transect_name = input('Give a name for the transect\n')
+        dill_file = f'{self.transect_dir}/{transect_name}.dill'
+
+        container = {'tpicker' : tpicker}
+
+        print(f'writing to {dill_file}')
+        with open(dill_file, 'wb') as file:
+            dill.dump(container, file)
+
+
+    def plot_spectrum(self, transect_name='along_flow', data = {}):
+
+        dill_file = f'{self.transect_dir}/{transect_name}.dill'
+        print(f'Loading transect from {dill_file}')
+        with open(dill_file, 'rb') as file:
+            tpicker = dill.load(file)['tpicker']
+
+        def inverse_transform(data, scaler):
+            Nt, Nlat, Nlon, num_channels = data.shape
+            return scaler.inverse_transform(data.reshape(Nt,-1))\
+                         .reshape(Nt, Nlat, Nlon, num_channels)
+
+        # invert transform and restrict to transect
+        truth = inverse_transform(data['truth'], data['scaler'])\
+            [:,tpicker.y_trans, tpicker.x_trans,:]
+        lowres = inverse_transform(data['lowres'], data['scaler'])\
+            [:,tpicker.y_trans, tpicker.x_trans,:]
+        pred = inverse_transform(data['pred'], data['scaler'])\
+            [:,tpicker.y_trans, tpicker.x_trans,:]

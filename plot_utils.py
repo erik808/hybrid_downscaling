@@ -3,6 +3,7 @@ import matplotlib.pyplot as plt
 import numpy as np
 import os
 from multiprocess import Pool
+from importlib import reload
 from transectpicker.transectpicker import TransectPicker
 import dill
 import data_manager as dm
@@ -82,12 +83,12 @@ class PlotMachine():
                 plt.colorbar(h, shrink=self.cbar_shrinkf)
                 plt.gca().set_title(key)
                 plt.gca().invert_yaxis()
-                
+
             elif (key == 'spectrum along flow' or
                   key == 'spectrum across flow'):
                 for (name, var) in item['values'].items():
                     plt.loglog(var(id), '.-', label=name)
-                    
+
                 plt.legend()
                 plt.grid()
                 plt.gca().set_title(key)
@@ -164,10 +165,9 @@ class PlotMachine():
 
         return postfix
 
-    def create_transect(self, output_dict):
+    def create_transect(self, field):
 
         fig, ax  = plt.subplots(figsize=(5,4))
-        field = output_dict['Kt_HR true']['values'](40)
         im = plt.pcolormesh(field)
         tpicker = TransectPicker(im, field)
         plt.show()
@@ -182,25 +182,35 @@ class PlotMachine():
             dill.dump(container, file)
 
 
-    def plot_spectrum(self, transect_name='along_flow', data = {}):        
-
+    def plot_spectrum(self, transect_name='along_flow', data = {}):
         dill_file = f'{self.transect_dir}/{transect_name}.dill'
         print(f'Loading transect from {dill_file}')
         with open(dill_file, 'rb') as file:
             tpicker = dill.load(file)['tpicker']
+
+        transect_res=len(tpicker.x_trans)        
+        regrid = dm.regrid_to_transect(tpicker, resolution=transect_res)
 
         def inverse_transform(data, scaler):
             Nt, Nlat, Nlon, num_channels = data.shape
             return scaler.inverse_transform(data.reshape(Nt,-1))\
                          .reshape(Nt, Nlat, Nlon, num_channels)
 
+        def invert_and_regrid(data, scaler, regridder):
+            field = inverse_transform(data, scaler)\
+                .transpose(0,3,1,2)
+            field_tr = regrid(np.ascontiguousarray(field))\
+                .transpose(0,2,3,1)\
+                [:, np.arange(transect_res), np.arange(transect_res), :]
+            return field_tr
+
         # invert transform and restrict to transect
-        truth = inverse_transform(data['truth'], data['scaler'])\
-            [:,tpicker.y_trans, tpicker.x_trans,:]
-        lowres = inverse_transform(data['lowres'], data['scaler'])\
-            [:,tpicker.y_trans, tpicker.x_trans,:]
-        pred = inverse_transform(data['pred'], data['scaler'])\
-            [:,tpicker.y_trans, tpicker.x_trans,:]
+        truth  = invert_and_regrid(data['truth'],
+                                   data['scaler'], regridder=regrid)
+        lowres = invert_and_regrid(data['lowres'],
+                                   data['scaler'], regridder=regrid)
+        pred   = invert_and_regrid(data['pred'],
+                                   data['scaler'], regridder=regrid)
 
         # mean_u_v = np.mean(truth, axis=0)
         # mean_K = np.sum(np.square(time_mean),axis=1)
@@ -208,12 +218,11 @@ class PlotMachine():
         # mean_sq_u_v = np.mean(square_u_v, axis=0)
         # eddy_K = np.sum(mean_sq_u_v) - mean_K
 
-
         def compute_spectrum(field):
             """ normalized
 
             """
-            
+
             # mean subtract? get eddy component?
             # field = field - np.mean(field, axis=(0,1))
             H = np.fft.rfft(field, axis=1)
@@ -221,17 +230,15 @@ class PlotMachine():
             S = S / np.max(S)
             return S
 
-        
-        trunc = -int(len(tpicker.x_trans)/2/6)
         S_truth = compute_spectrum(truth)
         S_pred = compute_spectrum(pred)
         S_lowres = compute_spectrum(lowres)
-        S_truth_mn = np.mean(S_truth, axis=0)[:trunc]
-        S_pred_mn = np.mean(S_pred, axis=0)[:trunc]
-        S_lowres_mn = np.mean(S_lowres, axis=0)[:trunc]
+        S_truth_mn = np.mean(S_truth, axis=0)
+        S_pred_mn = np.mean(S_pred, axis=0)
+        S_lowres_mn = np.mean(S_lowres, axis=0)
 
-        k_1 = np.linspace(1.7,np.ceil(len(S_truth_mn)/2),100)
-        k_2 = np.linspace(7,len(S_truth_mn),100)
+        k_1 = np.linspace(1.7,np.ceil(len(S_truth_mn)/2), 100)
+        k_2 = np.linspace(7,len(S_truth_mn), 100)
 
         offset_1 = 1e1*np.max(S_truth_mn) if transect_name == 'along_flow'\
             else 1e0*np.max(S_truth_mn)

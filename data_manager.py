@@ -22,9 +22,16 @@ HR_bathy_file = (f'{data_dir}/cmems_mod_nws_phy_anfc_0.027deg-3D_'
 LR_data_file = (f'{data_dir}/cmems_mod_nws_phy-uv_my_7km-2D_PT1H-i_'
                 f'uo-vo_4.22E-7.78E_56.80N-58.67N_2023-01-01-2023-05-01.nc')
 
-def build_grid(ds, mask=None):
-    lat_arr = ds.latitude
-    lon_arr = ds.longitude
+def build_grid(ds=None, mask=None):
+    if mask == None:
+        lat_arr = ds.latitude
+        lon_arr = ds.longitude
+    elif ds == None:
+        lat_arr = mask.latitude
+        lon_arr = mask.longitude
+    else:
+        raise Exception('Either ds or mask should be given')
+
     Nlat = lat_arr.shape[0]
     Nlon = lon_arr.shape[0]
     lat_grid = np.tile(lat_arr, (Nlon,1)).T
@@ -37,6 +44,43 @@ def build_grid(ds, mask=None):
     if mask is not None:
         grid['mask'] = mask
     return grid
+
+def regrid_to_transect(tpicker, resolution=1e2):
+
+    print('Create transect regridder')
+    ### TODO FACTORIZE CROPPING
+    mask = xr.open_dataset(HR_bathy_file).mask[0,3:-2,:-1]
+    grid_orig = build_grid(mask)
+
+    lons = grid_orig['lon'][0,:]
+    lats = grid_orig['lat'][:,0]
+    dlon = float((lons[1:]-lons[:-1]).mean())
+    dlat = float((lats[1:]-lats[:-1]).mean())
+    grid_aspect = dlon / dlat
+    print(f' grid aspect ratio: {grid_aspect}')
+
+    lon_start = lons[tpicker.x_trans[0]]
+    lon_end   = lons[tpicker.x_trans[-1]]
+    lat_start = lats[tpicker.y_trans[0]]
+    lat_end   = lats[tpicker.y_trans[-1]]
+
+    resolution = int(resolution)
+    lat_arr = np.linspace(lat_start, lat_end, resolution)
+    lon_arr = np.linspace(lon_start, lon_end, resolution)
+
+    grid_upscale = {}
+    grid_upscale['N'] = resolution
+    grid_upscale['M'] = resolution
+    lat_mat = np.tile(lat_arr, (resolution,1)).T
+    lon_mat = np.tile(lon_arr, (resolution,1))
+    grid_upscale['lat'] = np.ascontiguousarray(lat_mat)
+    grid_upscale['lon'] = np.ascontiguousarray(lon_mat)
+    grid_upscale['mask'] = np.identity(resolution)
+
+    interp_to_transect = xe.Regridder(grid_orig, grid_upscale,
+                                      method="bilinear",
+                                      extrap_method="inverse_dist")
+    return interp_to_transect
 
 def load_u_data():
     bt_HR = xr.open_dataset(HR_bathy_file)
@@ -183,7 +227,7 @@ def load_uv_data(coarsen_in_time=False,
         # assume 3D
         out_da[:,:,:] = gaussian_filter(da.values, sigma=sigma)
         toc = time.time()
-        
+
         mask_ = mask.rename({'latitude':'lat',
                             'longitude':'lon'})\
                     .assign_coords({'lat':out_da.lat,
@@ -205,6 +249,7 @@ def load_uv_data(coarsen_in_time=False,
     else:
         raise Exception('invalid coarsening_method {coarsening_method}')
 
+    # Crop data
     da_HR = {'uo': da_HR_uo[:,3:-2,:-1],
              'vo': da_HR_vo[:,3:-2,:-1]}
     da_LR = {'uo': da_LR_uo[:,3:-2,:-1],
@@ -284,13 +329,13 @@ def load_training_data(split_factor=4/5,
 
     Nt, Nlat, Nlon, num_channels = data_HR.shape
 
-    
+
     data_HR = scalers['HR'].fit_transform(data_HR.reshape(Nt, -1))\
                            .reshape(Nt, Nlat, Nlon, num_channels)
 
     data_LR = scalers['HR'].transform(data_LR.reshape(Nt, -1))\
                            .reshape(Nt, Nlat, Nlon, num_channels)
-    
+
     # import matplotlib.pyplot as plt
     # plt.close('all')
     # data_R  = (data_HR - data_LR)
@@ -327,11 +372,11 @@ def load_training_data(split_factor=4/5,
         data_R = scalers['R'].fit_transform(data_R.reshape(Nt_R, -1))\
                              .reshape(Nt_R, Nlat, Nlon, num_channels)
         data_FT = scalers['R'].transform(data_FT.reshape(Nt_R, -1))\
-                              .reshape(Nt_R, Nlat, Nlon, num_channels)        
+                              .reshape(Nt_R, Nlat, Nlon, num_channels)
         # plt.subplot(4,2,5)
         # a = plt.imshow(data_R[100,:,:,0])
         # plt.colorbar(a, shrink=0.5)
-        
+
         # plt.subplot(4,2,6)
         # a = plt.imshow(scalers['R'].min_\
         #                .reshape(Nlat, Nlon, num_channels)[:,:,0])

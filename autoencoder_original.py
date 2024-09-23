@@ -81,6 +81,7 @@ class AE_Experiment():
             'use_skip_connections' : False,
             'conv_layers_per_block' : 2,
             'future' : 'all',
+            #'future' : 400,
             'noise_stddev' : 0.04,
             'dropout_rate' : 0.0,
             'optimizer' : 'adam',
@@ -435,7 +436,7 @@ class AE_Experiment():
             'scaler' : self.scalers['HR'],
         }
 
-        self.spec_along = plotmachine.plot_spectrum(transect_name='along_flow_3',
+        self.spec_along = plotmachine.plot_spectrum(transect_name='along_flow',
                                                     data=data_dict)
         self.spec_across = plotmachine.plot_spectrum(transect_name='across_flow',
                                                      data=data_dict)
@@ -571,7 +572,7 @@ class AE_Experiment():
 
         # plotmachine.create_transect(plot_instructions)
         plotmachine.plot_single_frame(50, plot_instructions)
-        # plotmachine.create_movie(plot_instructions)
+        plotmachine.create_movie(plot_instructions)
 
     def create_postfix(self):
 

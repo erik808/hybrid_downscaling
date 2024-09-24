@@ -117,6 +117,14 @@ def load_u_data():
 
     return da_HR, da_LR, mask
 
+
+def get_grid():
+    bt_HR = xr.open_dataset(HR_bathy_file)
+    ds_HR = xr.open_mfdataset(HR_data_files, parallel=True)
+    breakpoint()
+    return []
+
+
 def load_uv_data(coarsen_in_time=False,
                  detide=False,
                  differences=False,

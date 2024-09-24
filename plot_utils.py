@@ -250,7 +250,6 @@ class PlotMachine():
         plt.figure()
         h = plt.loglog(S_truth_mn, '.-', label='HR truth')
         
-        breakpoint()
         plt.loglog(S_pred_mn, '.-', label='Model prediction')
         plt.loglog(S_lowres_mn, '.-', label='LR forcing/control')
         plt.loglog(k_1, offset_1 * k_1**(-5/3), '--', label='k^-5/3')

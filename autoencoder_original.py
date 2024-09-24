@@ -417,9 +417,17 @@ class AE_Experiment():
 
         self.plot_history()
         self.plot_spectra()
+        self.plot_vorticity()
 
         print(f'final error: {self.validation_callback.final_error}')
         return self.validation_callback.final_error
+
+
+
+    def plot_vorticity(self):
+
+        grid = dm.get_grid()
+        breakpoint()
 
 
     def plot_spectra(self):

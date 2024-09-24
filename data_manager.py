@@ -19,6 +19,9 @@ HR_data_files = (f'{data_dir}/cmems_mod_nws_phy_anfc_0.027deg-2D_PT15M-i_'
 HR_bathy_file = (f'{data_dir}/cmems_mod_nws_phy_anfc_0.027deg-3D_'
                  f'static_multi-vars_4.23E-7.78E_56.81N-58.70N_0.49-643.57m.nc')
 
+coords_file = (f'{data_dir}/cmems_mod_nws_phy_anfc_0.027deg-3D_'
+               f'static_e1t-e2t-e3t_4.23E-7.78E_56.81N-58.70N_0.49-643.57m.nc')
+
 LR_data_file = (f'{data_dir}/cmems_mod_nws_phy-uv_my_7km-2D_PT1H-i_'
                 f'uo-vo_4.22E-7.78E_56.80N-58.67N_2023-01-01-2023-05-01.nc')
 
@@ -117,13 +120,13 @@ def load_u_data():
 
     return da_HR, da_LR, mask
 
-
 def get_grid():
-    bt_HR = xr.open_dataset(HR_bathy_file)
-    ds_HR = xr.open_mfdataset(HR_data_files, parallel=True)
-    breakpoint()
-    return []
-
+    " load grid, crop and return "
+    coords = xr.open_dataset(coords_file)
+    mask = crop(xr.open_dataset(HR_bathy_file).mask[0,:,:])
+    l = [crop(coords[var]) for var in coords]
+    coords = xr.merge(l)
+    return coords, mask
 
 def load_uv_data(coarsen_in_time=False,
                  detide=False,
@@ -264,7 +267,7 @@ def load_uv_data(coarsen_in_time=False,
              'vo': crop(da_HR_vo)}
     da_LR = {'uo': crop(da_LR_uo),
              'vo': crop(da_LR_vo)}
-    
+
     mask = crop(mask)
 
     return da_HR, da_LR, mask

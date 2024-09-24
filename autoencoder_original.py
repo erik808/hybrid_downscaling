@@ -421,12 +421,55 @@ class AE_Experiment():
 
         print(f'final error: {self.validation_callback.final_error}')
         return self.validation_callback.final_error
-
-
+    
 
     def plot_vorticity(self):
 
-        grid = dm.get_grid()
+        grid, binary_mask = dm.get_grid()
+
+        data_dict = {
+            'truth'  : self.data['test']['HR'][:self.future,],
+            'lowres' : self.data['test']['LR'][:self.future,],
+            'pred'   : self.validation_callback.predictions,
+            'scaler' : self.scalers['HR'],
+        }
+
+        e1 = grid.e1t.data # m
+        e2 = grid.e2t.data # m
+
+        def inverse_transform(data, scaler):
+            Nt, Nlat, Nlon, num_channels = data.shape
+            return scaler.inverse_transform(data.reshape(Nt,-1))\
+                         .reshape(Nt, Nlat, Nlon, num_channels)
+
+        
+        data = inverse_transform(data_dict['lowres'], data_dict['scaler'])        
+
+        u = data[...,0]  # m/s
+        v = data[...,1]  # m/s
+
+        mask = np.where(binary_mask==0, np.nan, 1)
+        ue *= mask
+        ve *= mask
+        
+        tdim = 3600 * 24
+        zeta = tdim/(e1*e2)* (np.diff(v*e2, axis=2, prepend=np.nan) -
+                              np.diff(u*e1, axis=1, prepend=np.nan))
+        
+        xi = tdim/(e1*e2) * (np.diff(u*e2, axis=2, prepend=np.nan) +
+                             np.diff(v*e1, axis=1, prepend=np.nan))
+
+        import matplotlib.pyplot as plt
+        plt.close('all')
+        plt.figure(figsize=(16,6))
+        plt.subplot(1,2,1)
+        h = plt.pcolormesh(zeta[-1,1:,1:])
+        plt.colorbar(h, label='vorticity (day$^{-1}$)')
+        plt.subplot(1,2,2)        
+        h = plt.pcolormesh(xi[-1,1:,1:])
+        plt.colorbar(h, label='divergence/convergence (day$^{-1}$)')
+        plt.savefig('tmp_lowres.png')
+        
         breakpoint()
 
 
@@ -482,16 +525,16 @@ class AE_Experiment():
 
         # instant kinetic energy
         Kt_HR_true_fun = lambda i : \
-            np.sqrt(np.square(xr_HR_true_fun(i)).sum(axis=2))
-
+            (np.square(xr_HR_true_fun(i)).sum(axis=2))
+        
         xr_HR_pred_fun = lambda i : \
             self.scalers['HR'].inverse_transform(predictions[i,:,:,:]\
                                                  .reshape(1,-1))\
                               .reshape(Nlat, Nlon, num_channels)
-
+        
         # instant kinetic energy
         Kt_HR_pred_fun = lambda i : \
-            np.sqrt(np.square(xr_HR_pred_fun(i)).sum(axis=2))
+            (np.square(xr_HR_pred_fun(i)).sum(axis=2))
 
         # Create dictionary for output visualization
         xr_LR_true_fun = lambda i : \
@@ -501,7 +544,7 @@ class AE_Experiment():
 
         # instant kinetic energy
         Kt_LR_true_fun = lambda i : \
-            np.sqrt(np.square(xr_LR_true_fun(i)).sum(axis=2))
+            (np.square(xr_LR_true_fun(i)).sum(axis=2))
 
         xr_HR_diff_fun = lambda i : xr_HR_true_fun(i) - xr_HR_pred_fun(i)
 

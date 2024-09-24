@@ -45,11 +45,13 @@ def build_grid(ds=None, mask=None):
         grid['mask'] = mask
     return grid
 
+def crop(input_field):
+    return input_field[...,3:-2,:-1]
+
 def regrid_to_transect(tpicker, resolution=1e2):
 
     print('Create transect regridder')
-    ### TODO FACTORIZE CROPPING
-    mask = xr.open_dataset(HR_bathy_file).mask[0,3:-2,:-1]
+    mask = crop(xr.open_dataset(HR_bathy_file).mask)
     grid_orig = build_grid(mask)
 
     lons = grid_orig['lon'][0,:]
@@ -250,11 +252,12 @@ def load_uv_data(coarsen_in_time=False,
         raise Exception('invalid coarsening_method {coarsening_method}')
 
     # Crop data
-    da_HR = {'uo': da_HR_uo[:,3:-2,:-1],
-             'vo': da_HR_vo[:,3:-2,:-1]}
-    da_LR = {'uo': da_LR_uo[:,3:-2,:-1],
-             'vo': da_LR_vo[:,3:-2,:-1]}
-    mask = mask[3:-2,:-1]
+    da_HR = {'uo': crop(da_HR_uo),
+             'vo': crop(da_HR_vo)}
+    da_LR = {'uo': crop(da_LR_uo),
+             'vo': crop(da_LR_vo)}
+    
+    mask = crop(mask)
 
     return da_HR, da_LR, mask
 

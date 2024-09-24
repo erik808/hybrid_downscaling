@@ -7,6 +7,7 @@ import dill
 from datetime import datetime
 from tabulate import tabulate
 import time
+import xarray as xr
 
 import numpy as np
 import keras
@@ -80,8 +81,8 @@ class AE_Experiment():
             'history' : 'all',
             'use_skip_connections' : False,
             'conv_layers_per_block' : 2,
-            'future' : 'all',
-            #'future' : 400,
+            'future' : 150,
+            #'future' : 'all',
             'noise_stddev' : 0.04,
             'dropout_rate' : 0.0,
             'optimizer' : 'adam',
@@ -436,10 +437,12 @@ class AE_Experiment():
             'scaler' : self.scalers['HR'],
         }
 
-        self.spec_along = plotmachine.plot_spectrum(transect_name='along_flow',
-                                                    data=data_dict)
-        self.spec_across = plotmachine.plot_spectrum(transect_name='across_flow',
-                                                     data=data_dict)
+        self.spec_along = \
+            plotmachine.plot_spectrum(transect_name='along_flow',
+                                      data=data_dict)
+        self.spec_across = \
+            plotmachine.plot_spectrum(transect_name='across_flow',
+                                      data=data_dict)
 
     def plot_history(self):
         plotmachine = PlotMachine(results_dir=self.dirs['results'],
@@ -500,9 +503,17 @@ class AE_Experiment():
         Rs_pred_fun = lambda i : predictions[i,:,:,0] - test_data_ft[i,:,:,0]
         Rs_diff_fun = lambda i : Rs_true_fun(i) - Rs_pred_fun(i)
 
-        vmax = Kt_HR_true_fun(0).max()
+        vmax = Kt_HR_true_fun(100).max()
         vmin_diff = -0.1
         vmax_diff =  0.1
+        vmax_err = np.abs(Kt_HR_diff_fun(100)).max()
+        vmin_err = -vmax_err
+
+        def get_rolling_spec(field, window_size=4*24):
+            return xr.DataArray(field,
+                                dims=['time','wavenumber'],
+                                coords={'time' : test_time})\
+                     .rolling(time=window_size).mean()
 
         plot_instructions = {
             'Kt_HR true' : {'values' : Kt_HR_true_fun,
@@ -537,17 +548,20 @@ class AE_Experiment():
 
             'error' : {'values' : Kt_HR_diff_fun,
                        'type' : '2d',
-                       'vmin' : vmin_diff,
-                       'vmax' : vmax_diff,
+                       'vmin' : vmin_err,
+                       'vmax' : vmax_err,
                        'cmap' : 'RdBu'},
 
             'spectrum along flow' :
             {
                 'type' : '1d',
                 'values' :
-                {'HR truth' : lambda i : self.spec_along['truth'][i,:],
-                 'Model prediction' : lambda i : self.spec_along['pred'][i,:],
-                 'LR forcing' : lambda i : self.spec_along['lowres'][i,:]
+                {'HR truth' : lambda i :
+                 get_rolling_spec(self.spec_along['truth'])[i,:],
+                 'Model prediction' : lambda i :
+                 get_rolling_spec(self.spec_along['pred'])[i,:],
+                 'LR forcing' : lambda i :
+                 get_rolling_spec(self.spec_along['lowres'])[i,:]
                  },
                 'vmin' : 5e-6,
                 'vmax' : 2,
@@ -557,9 +571,12 @@ class AE_Experiment():
             {
                 'type' : '1d',
                 'values' :
-                {'HR truth' : lambda i : self.spec_across['truth'][i,:],
-                 'Model prediction' : lambda i : self.spec_across['pred'][i,:],
-                 'LR forcing' : lambda i : self.spec_across['lowres'][i,:]
+                {'HR truth' : lambda i :
+                 get_rolling_spec(self.spec_across['truth'])[i,:],
+                 'Model prediction' : lambda i :
+                 get_rolling_spec(self.spec_across['pred'])[i,:],
+                 'LR forcing' : lambda i :
+                 get_rolling_spec(self.spec_across['lowres'])[i,:]
                  },
                 'vmin' : 5e-6,
                 'vmax' : 2,
@@ -584,9 +601,6 @@ class AE_Experiment():
         postfix += f'_{timestamp}'
 
         return postfix, timestamp
-
-
-
 
 if __name__=="__main__":
     exp = AE_Experiment(exp_name='test',

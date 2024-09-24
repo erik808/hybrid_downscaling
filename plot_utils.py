@@ -24,7 +24,7 @@ class PlotMachine():
         self.movie_dir=movie_dir
         self.cbar_shrinkf=0.7
         self.frame_stride=4
-        self.pool_size=8
+        self.pool_size=16
         self.trial_id=trial_id
 
         self.transect_dir = f'{dm.data_dir}/transects'
@@ -230,11 +230,13 @@ class PlotMachine():
             S = S / np.max(S)
             return S
 
-        S_truth = compute_spectrum(truth)
-        S_pred = compute_spectrum(pred)
+        S_truth  = compute_spectrum(truth)
+        S_pred   = compute_spectrum(pred)
         S_lowres = compute_spectrum(lowres)
-        S_truth_mn = np.mean(S_truth, axis=0)
-        S_pred_mn = np.mean(S_pred, axis=0)
+        
+        # compute mean
+        S_truth_mn  = np.mean(S_truth, axis=0)
+        S_pred_mn   = np.mean(S_pred, axis=0)
         S_lowres_mn = np.mean(S_lowres, axis=0)
 
         k_1 = np.linspace(1.7,np.ceil(len(S_truth_mn)/2), 100)
@@ -246,7 +248,9 @@ class PlotMachine():
             else 1e1*np.max(S_truth_mn)
 
         plt.figure()
-        plt.loglog(S_truth_mn, '.-', label='HR truth')
+        h = plt.loglog(S_truth_mn, '.-', label='HR truth')
+        
+        breakpoint()
         plt.loglog(S_pred_mn, '.-', label='Model prediction')
         plt.loglog(S_lowres_mn, '.-', label='LR forcing/control')
         plt.loglog(k_1, offset_1 * k_1**(-5/3), '--', label='k^-5/3')

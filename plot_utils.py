@@ -7,6 +7,7 @@ from importlib import reload
 from transectpicker.transectpicker import TransectPicker
 import dill
 import data_manager as dm
+from analysis import Analysis
 
 class PlotMachine():
 
@@ -219,14 +220,12 @@ class PlotMachine():
         # eddy_K = np.sum(mean_sq_u_v) - mean_K
 
         def compute_spectrum(field):
-            """ normalized
-
+            """ normalized energy spectrum
             """
-
             # mean subtract? get eddy component?
             # field = field - np.mean(field, axis=(0,1))
             H = np.fft.rfft(field, axis=1)
-            S = np.sum(np.square(np.abs(H)), axis=2)
+            S = 0.5*np.sum(np.square(np.abs(H)), axis=2)
             S = S / np.max(S)
             return S
 

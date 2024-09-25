@@ -421,7 +421,7 @@ class AE_Experiment():
 
         print(f'final error: {self.validation_callback.final_error}')
         return self.validation_callback.final_error
-    
+
 
     def plot_vorticity(self):
 
@@ -442,8 +442,8 @@ class AE_Experiment():
             return scaler.inverse_transform(data.reshape(Nt,-1))\
                          .reshape(Nt, Nlat, Nlon, num_channels)
 
-        
-        data = inverse_transform(data_dict['lowres'], data_dict['scaler'])        
+
+        data = inverse_transform(data_dict['lowres'], data_dict['scaler'])
 
         u = data[...,0]  # m/s
         v = data[...,1]  # m/s
@@ -451,13 +451,13 @@ class AE_Experiment():
         mask = np.where(binary_mask==0, np.nan, 1)
         ue *= mask
         ve *= mask
-        
+
         tdim = 3600 * 24
         zeta = tdim/(e1*e2)* (np.diff(v*e2, axis=2, prepend=np.nan) -
-                              np.diff(u*e1, axis=1, prepend=np.nan))
-        
+                              np.diff(u*e1, axis=1, prepend=np.nan))  # cycles /day
+
         xi = tdim/(e1*e2) * (np.diff(u*e2, axis=2, prepend=np.nan) +
-                             np.diff(v*e1, axis=1, prepend=np.nan))
+                             np.diff(v*e1, axis=1, prepend=np.nan)) # cycles /day
 
         import matplotlib.pyplot as plt
         plt.close('all')
@@ -465,20 +465,15 @@ class AE_Experiment():
         plt.subplot(1,2,1)
         h = plt.pcolormesh(zeta[-1,1:,1:])
         plt.colorbar(h, label='vorticity (day$^{-1}$)')
-        plt.subplot(1,2,2)        
+        plt.subplot(1,2,2)
         h = plt.pcolormesh(xi[-1,1:,1:])
         plt.colorbar(h, label='divergence/convergence (day$^{-1}$)')
         plt.savefig('tmp_lowres.png')
-        
-        breakpoint()
 
 
     def plot_spectra(self):
-
         test_time  = self.data['test']['time'][:self.future,]
         plotmachine = PlotMachine(results_dir=self.dirs['results'],
-                                  movie_dir=self.dirs['movies'],
-                                  time_array=test_time,
                                   trial_id=self.trial_id)
 
         data_dict = {
@@ -497,8 +492,6 @@ class AE_Experiment():
 
     def plot_history(self):
         plotmachine = PlotMachine(results_dir=self.dirs['results'],
-                                  movie_dir=self.dirs['movies'],
-                                  time_array=self.data['test']['time'][:self.future,],
                                   trial_id=self.trial_id)
         plotmachine.plot_history(self.hist)
 
@@ -517,6 +510,12 @@ class AE_Experiment():
 
         predictions = self.validation_callback.predictions
 
+        vort_true = lambda i : vorticity
+            
+
+        
+       
+
         # Create dictionary for output visualization
         xr_HR_true_fun = lambda i : \
             self.scalers['HR'].inverse_transform(test_data[i,:,:,:]\
@@ -526,12 +525,12 @@ class AE_Experiment():
         # instant kinetic energy
         Kt_HR_true_fun = lambda i : \
             (np.square(xr_HR_true_fun(i)).sum(axis=2))
-        
+
         xr_HR_pred_fun = lambda i : \
             self.scalers['HR'].inverse_transform(predictions[i,:,:,:]\
                                                  .reshape(1,-1))\
                               .reshape(Nlat, Nlon, num_channels)
-        
+
         # instant kinetic energy
         Kt_HR_pred_fun = lambda i : \
             (np.square(xr_HR_pred_fun(i)).sum(axis=2))
@@ -553,6 +552,7 @@ class AE_Experiment():
         Rs_true_fun = lambda i : test_data[i,:,:,0] - test_data_ft[i,:,:,0]
         Rs_pred_fun = lambda i : predictions[i,:,:,0] - test_data_ft[i,:,:,0]
         Rs_diff_fun = lambda i : Rs_true_fun(i) - Rs_pred_fun(i)
+        
 
         vmax = Kt_HR_true_fun(100).max()
         vmin_diff = -0.1

@@ -1,4 +1,3 @@
-
 import numpy as np
 import data_manager as dm
 from transectpicker.transectpicker import TransectPicker
@@ -12,16 +11,21 @@ class ComputeTool():
     def __init__(self):
 
         self.grid, self.binary_mask = dm.get_grid()
-        self.mask = np.where(binary_mask==0, np.nan, 1)
-        self.e1 = grid.e1t.data # in m
-        self.e2 = grid.e2t.data # in m
+        self.mask = np.where(self.binary_mask==0, np.nan, 1)
+        self.e1 = self.grid.e1t.data # in m
+        self.e2 = self.grid.e2t.data # in m
         self.tdim = 60 * 60 * 24 # seconds to days
 
-        breakpoint()
+    def inverse_transform(self, data, scaler=None):
+        
+        assert (data.ndim >= 3 and
+                data.ndim <= 4), " wrong data input format "
 
-    def inverse_transform(self, data, scaler):
+        if scaler == None: # bypass this routine
+            return data        
 
-        breakpoint()
+        if data.ndim == 3: # assume time dimension is not present.
+            data = np.expand_dims(data,axis=0)
 
         Nt, Nlat, Nlon, num_channels = data.shape
         return scaler.inverse_transform(data.reshape(Nt,-1))\
@@ -55,3 +59,28 @@ class ComputeTool():
         xi = xi[...,1:,1:]
 
         return zeta, xi
+
+
+    def create_transect(self, field):
+        """Support function that wraps the transectpicker.
+        Supply a field, draw a transect and save to file.
+        
+        input: field
+        """
+
+        # create transect dir if not existing
+        os.system(f'mkdir -p {dm.transect_dir}')
+
+        plt.subplots(figsize=(5,4))
+        im = plt.pcolormesh(field)
+        tpicker = TransectPicker(im, field)
+        plt.show()
+
+        transect_name = input('Give a name for the transect\n')
+        dill_file = f'{dm.transect_dir}/{transect_name}.dill'
+
+        container = {'tpicker' : tpicker}
+
+        print(f'writing to {dill_file}')
+        with open(dill_file, 'wb') as file:
+            dill.dump(container, file)

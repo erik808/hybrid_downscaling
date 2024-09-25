@@ -12,7 +12,7 @@ from sklearn.preprocessing import MinMaxScaler
 from multiprocess import Pool
 
 data_dir      = 'data'
-
+transect_dir  = f'{data_dir}/transects'
 HR_data_files = (f'{data_dir}/cmems_mod_nws_phy_anfc_0.027deg-2D_PT15M-i_'
                  f'uo-vo_4.23E-7.78E_56.81N-58.70N_2023-/*.nc')
 

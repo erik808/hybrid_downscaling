@@ -28,6 +28,9 @@ from ae_model import TriggerESN
 from ae_model import CustomValidation
 from plot_utils import PlotMachine
 from esn_interface import ESN_embedded
+
+import compute_tool
+reload(compute_tool)
 from compute_tool import ComputeTool
 
 #-------------------------------------------------------
@@ -428,12 +431,12 @@ class AE_Experiment():
 
         # grid, binary_mask = dm.get_grid()
 
-        # data_dict = {
-        #     'truth'  : self.data['test']['HR'][:self.future,],
-        #     'lowres' : self.data['test']['LR'][:self.future,],
-        #     'pred'   : self.validation_callback.predictions,
-        #     'scaler' : self.scalers['HR'],
-        # }
+        data_dict = {
+            'truth'  : self.data['test']['HR'][:self.future,],
+            'lowres' : self.data['test']['LR'][:self.future,],
+            'pred'   : self.validation_callback.predictions,
+            'scaler' : self.scalers['HR'],
+        }
 
         # e1 = grid.e1t.data # m
         # e2 = grid.e2t.data # m
@@ -644,7 +647,6 @@ class AE_Experiment():
                                   time_array=test_time,
                                   trial_id=self.trial_id)
 
-        # plotmachine.create_transect(plot_instructions)
         plotmachine.plot_single_frame(50, plot_instructions)
         plotmachine.create_movie(plot_instructions)
 

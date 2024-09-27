@@ -39,7 +39,10 @@ from compute_tool import ComputeTool
 class AE_Experiment():
 
     def __init__(self, existing_model=None, exp_name=None,
-                 tuning_config=None, detide=False, compute_data=False):
+                 tuning_config=None,
+                 detide=False,
+                 compute_data=False,
+                 sigma=[1,1,1]):
 
         self.init_timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
         self.exp_name = exp_name
@@ -76,7 +79,8 @@ class AE_Experiment():
         # Load or compute data
         self.data, self.params, self.scalers, _ = \
             dm.create_training_data(compute_data=compute_data,
-                                    detide=detide)
+                                    detide=detide,
+                                    sigma=sigma)
         # -------------------------------------------------------
         self.trial_id = None
 
@@ -85,8 +89,7 @@ class AE_Experiment():
             'history' : 'all',
             'use_skip_connections' : False,
             'conv_layers_per_block' : 2,
-            'future' : 150,
-            #'future' : 'all',
+            'future' : 400,
             'noise_stddev' : 0.04,
             'dropout_rate' : 0.0,
             'optimizer' : 'adam',
@@ -109,14 +112,19 @@ class AE_Experiment():
                     'args' : {'name':'epochs',
                               'low': 1,
                               'high':50},
-                    'search_space' : [4] },
+                    'search_space' : [12] },
                 'layers_per_block' : {
                     'type' : 'int',
                     'args' : {'name' : 'conv_layers_per_block',
                               'low'  : 1,
                               'high' : 6},
-                    'search_space' : [2] } },
-
+                    'search_space' : [2,3] },
+                'num_filters_red' : {
+                    'type' : 'int',
+                    'args' : {'name' : 'num_filters_red',
+                              'low'  : 1,
+                              'high' : 100},
+                    'search_space' : [7,8,9,10,11] } },
             #-------------------------------------------------------
             'regularization' : {
                 'L2_lambda' : {
@@ -337,6 +345,14 @@ class AE_Experiment():
 
         # print a summary
         autoencoder.summary()
+        # save dot and png
+        model_png_file = f'{mdir}/autoencoder{postfix}.png'
+        keras.utils.plot_model(autoencoder, to_file=model_png_file,
+                               show_shapes=True, rankdir='TB',
+                               dpi=200, show_layer_activations=False,
+                               show_layer_names=True)
+        
+        # graph = keras.utils.model_to_dot(autoencoder, show_shapes=True)
 
         print('----------------------------------------------------------')
         print(f'experiment: {self.folder_id}{self.folder_postfix},       ')
@@ -421,66 +437,15 @@ class AE_Experiment():
 
         self.plot_history()
         self.plot_spectra()
-        self.plot_vorticity()
 
         print(f'final error: {self.validation_callback.final_error}')
         return self.validation_callback.final_error
 
 
-    def plot_vorticity(self):
-
-        # grid, binary_mask = dm.get_grid()
-
-        data_dict = {
-            'truth'  : self.data['test']['HR'][:self.future,],
-            'lowres' : self.data['test']['LR'][:self.future,],
-            'pred'   : self.validation_callback.predictions,
-            'scaler' : self.scalers['HR'],
-        }
-
-        # e1 = grid.e1t.data # m
-        # e2 = grid.e2t.data # m
-
-        # def inverse_transform(data, scaler):
-        #     Nt, Nlat, Nlon, num_channels = data.shape
-        #     return scaler.inverse_transform(data.reshape(Nt,-1))\
-        #                  .reshape(Nt, Nlat, Nlon, num_channels)
-
-
-        # data = inverse_transform(data_dict['lowres'], data_dict['scaler'])
-
-        # u = data[...,0]  # m/s
-        # v = data[...,1]  # m/s
-
-        # mask = np.where(binary_mask==0, np.nan, 1)
-        # ue *= mask
-        # ve *= mask
-
-        # tdim = 3600 * 24
-        # zeta = tdim/(e1*e2)* (np.diff(v*e2, axis=2, prepend=np.nan) -
-        #                       np.diff(u*e1, axis=1, prepend=np.nan))  # cycles /day
-
-        # xi = tdim/(e1*e2) * (np.diff(u*e2, axis=2, prepend=np.nan) +
-        #                      np.diff(v*e1, axis=1, prepend=np.nan)) # cycles /day
-
-        import matplotlib.pyplot as plt
-        ct = ComputeTool()
-        zeta, xi = ct.vorticity_and_divergence(data_dict['lowres'],
-                                               data_dict['scaler'])
-        
-        plt.close('all')
-        plt.figure(figsize=(16,6))
-        plt.subplot(1,2,1)
-        h = plt.pcolormesh(zeta)
-        plt.colorbar(h, label='vorticity (day$^{-1}$)')
-        plt.subplot(1,2,2)
-        h = plt.pcolormesh(xi)
-        plt.colorbar(h, label='divergence/convergence (day$^{-1}$)')
-        plt.savefig('tmp_lowres.png')
-
-
     def plot_spectra(self):
-        test_time  = self.data['test']['time'][:self.future,]
+        reload(plot_utils)
+        from plot_utils import PlotMachine
+
         plotmachine = PlotMachine(results_dir=self.dirs['results'],
                                   trial_id=self.trial_id)
 
@@ -492,11 +457,16 @@ class AE_Experiment():
         }
 
         self.spec_along = \
-            plotmachine.plot_spectrum(transect_name='along_flow',
-                                      data=data_dict)
+            plotmachine.plot_energy_spectrum(transect_name='along_flow',
+                                             data=data_dict)
+        
+        plotmachine.plot_enstrophy_spectrum(transect_name='along_flow',
+                                            data=data_dict)
+        
+        
         self.spec_across = \
-            plotmachine.plot_spectrum(transect_name='across_flow',
-                                      data=data_dict)
+            plotmachine.plot_energy_spectrum(transect_name='across_flow',
+                                             data=data_dict)
 
     def plot_history(self):
         plotmachine = PlotMachine(results_dir=self.dirs['results'],
@@ -510,107 +480,59 @@ class AE_Experiment():
         Nlat = self.params['Nlat']
         num_channels = self.params['num_channels']
 
-        # HR test data
-        test_data      = self.data['test']['HR'][:self.future,]
-        # LR/control/feedthrough test data
-        test_data_ft   = self.data['test']['LR'][:self.future,]
-        test_time      = self.data['test']['time'][:self.future,]
-
+        truth = self.data['test']['HR'][:self.future,]
+        lowres = self.data['test']['LR'][:self.future,]
+        test_time = self.data['test']['time'][:self.future,]
         predictions = self.validation_callback.predictions
 
-        
-        vort_true = lambda i : vorticity
-            
+        ct = ComputeTool()
+        vort_truth = lambda i : ct.vorticity(truth[i,],
+                                             self.scalers['HR'])
+        vort_pred = lambda i : ct.vorticity(predictions[i,],
+                                            self.scalers['HR'])
+        vort_lowres = lambda i : ct.vorticity(lowres[i,],
+                                              self.scalers['HR'])
+        error = lambda i : \
+            np.sqrt(np.square(vort_truth(i) - vort_pred(i)))
 
-        
-       
-
-        # Create dictionary for output visualization
-        xr_HR_true_fun = lambda i : \
-            self.scalers['HR'].inverse_transform(test_data[i,:,:,:]\
-                                                 .reshape(1,-1))\
-                              .reshape(Nlat, Nlon, num_channels)
-
-        # instant kinetic energy
-        Kt_HR_true_fun = lambda i : \
-            (np.square(xr_HR_true_fun(i)).sum(axis=2))
-
-        xr_HR_pred_fun = lambda i : \
-            self.scalers['HR'].inverse_transform(predictions[i,:,:,:]\
-                                                 .reshape(1,-1))\
-                              .reshape(Nlat, Nlon, num_channels)
-
-        # instant kinetic energy
-        Kt_HR_pred_fun = lambda i : \
-            (np.square(xr_HR_pred_fun(i)).sum(axis=2))
-
-        # Create dictionary for output visualization
-        xr_LR_true_fun = lambda i : \
-            self.scalers['HR'].inverse_transform(test_data_ft[i,:,:,:]\
-                                                 .reshape(1,-1))\
-                              .reshape(Nlat, Nlon, num_channels)
-
-        # instant kinetic energy
-        Kt_LR_true_fun = lambda i : \
-            (np.square(xr_LR_true_fun(i)).sum(axis=2))
-
-        xr_HR_diff_fun = lambda i : xr_HR_true_fun(i) - xr_HR_pred_fun(i)
-
-        Kt_HR_diff_fun = lambda i : Kt_HR_true_fun(i) - Kt_HR_pred_fun(i)
-
-        Rs_true_fun = lambda i : test_data[i,:,:,0] - test_data_ft[i,:,:,0]
-        Rs_pred_fun = lambda i : predictions[i,:,:,0] - test_data_ft[i,:,:,0]
-        Rs_diff_fun = lambda i : Rs_true_fun(i) - Rs_pred_fun(i)
-        
-
-        vmax = Kt_HR_true_fun(100).max()
-        vmin_diff = -0.1
-        vmax_diff =  0.1
-        vmax_err = np.abs(Kt_HR_diff_fun(100)).max()
-        vmin_err = -vmax_err
-
-        def get_rolling_spec(field, window_size=4*24):
+        def get_rolling_spec(field, window_size=4*12):
             return xr.DataArray(field,
                                 dims=['time','wavenumber'],
                                 coords={'time' : test_time})\
                      .rolling(time=window_size).mean()
 
+        vort_max = 20
+        vort_min = -vort_max
+        
         plot_instructions = {
-            'Kt_HR true' : {'values' : Kt_HR_true_fun,
-                            'type' : '2d',
-                            'vmin' : 0,
-                            'vmax' : vmax,
-                            'cmap' : 'viridis'},
-
-            'Kt_HR pred' : {'values' : Kt_HR_pred_fun,
-                            'type' : '2d',
-                            'vmin' : 0,
-                            'vmax' : vmax,
-                            'cmap' : 'viridis'},
-
-            'Kt_LR true' : {'values' : Kt_LR_true_fun,
-                            'type' : '2d',
-                            'vmin' : 0,
-                            'vmax' : vmax,
-                            'cmap' : 'viridis'},
-
-            'res true' : {'values' : Rs_true_fun,
-                          'type' : '2d',
-                          'vmin' : vmin_diff,
-                          'vmax' : vmax_diff,
-                          'cmap' : 'RdBu'},
-
-            'res pred' : {'values' : Rs_pred_fun,
-                          'type' : '2d',
-                          'vmin' : vmin_diff,
-                          'vmax' : vmax_diff,
-                          'cmap' : 'RdBu'},
-
-            'error' : {'values' : Kt_HR_diff_fun,
+            'Truth' : {'values' : vort_truth,
                        'type' : '2d',
-                       'vmin' : vmin_err,
-                       'vmax' : vmax_err,
-                       'cmap' : 'RdBu'},
+                       'vmin' : vort_min,
+                       'vmax' : vort_max,
+                       'cmap' : 'RdBu',                       
+                       'cbar_label' : 'vorticity (day$^{-1}$)'},
+
+            'Prediction' : {'values' : vort_pred,
+                            'type' : '2d',
+                            'vmin' : vort_min,
+                            'vmax' : vort_max,
+                            'cmap' : 'RdBu',
+                            'cbar_label' : 'vorticity (day$^{-1}$)'},
+
+            'Low resolution' : {'values' : vort_lowres,
+                                'type' : '2d',
+                                'vmin' : vort_min,
+                                'vmax' : vort_max,
+                                'cmap' : 'RdBu',
+                                'cbar_label' : 'vorticity (day$^{-1}$)'},
+
+            'Error' : {'values' : error,
+                       'type' : '2d',
+                       'vmin' : 0,
+                       'vmax' : vort_max/3,
+                       'cmap' : 'viridis',
+                       'cbar_label' : 'vorticity (day$^{-1}$)'},
+            
 
             'spectrum along flow' :
             {
@@ -623,8 +545,10 @@ class AE_Experiment():
                  'LR forcing' : lambda i :
                  get_rolling_spec(self.spec_along['lowres'])[i,:]
                  },
-                'vmin' : 5e-6,
-                'vmax' : 2,
+                'ymin' : 1e-6,
+                'ymax' : 2,
+                'xmin' : 1,
+                'xmax' : 55,
             },
 
             'spectrum across flow' :
@@ -638,16 +562,27 @@ class AE_Experiment():
                  'LR forcing' : lambda i :
                  get_rolling_spec(self.spec_across['lowres'])[i,:]
                  },
-                'vmin' : 5e-6,
-                'vmax' : 2,
+                'ymin' : 1e-6,
+                'ymax' : 2,
+                'xmin' : 1,
+                'xmax' : 55,
             } }
 
+        import plot_utils
+        reload(plot_utils)
+        from plot_utils import PlotMachine
+        
         plotmachine = PlotMachine(results_dir=self.dirs['results'],
                                   movie_dir=self.dirs['movies'],
                                   time_array=test_time,
                                   trial_id=self.trial_id)
 
-        plotmachine.plot_single_frame(50, plot_instructions)
+        
+        import matplotlib.pyplot as plt
+        plt.close('all')
+        # plotmachine.plot_single_frame(50, plot_instructions)
+        # plt.pause(1)
+        # breakpoint()
         plotmachine.create_movie(plot_instructions)
 
     def create_postfix(self):
@@ -662,8 +597,9 @@ class AE_Experiment():
         return postfix, timestamp
 
 if __name__=="__main__":
-    exp = AE_Experiment(exp_name='test',
+    exp = AE_Experiment(exp_name='blurring_v1',
                         tuning_config='default',
                         detide=False,
-                        compute_data=False)
+                        compute_data=False,
+                        sigma=[1,1.5,1.5])
     exp.run_optuna_study()

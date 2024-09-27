@@ -25,15 +25,16 @@ coords_file = (f'{data_dir}/cmems_mod_nws_phy_anfc_0.027deg-3D_'
 LR_data_file = (f'{data_dir}/cmems_mod_nws_phy-uv_my_7km-2D_PT1H-i_'
                 f'uo-vo_4.22E-7.78E_56.80N-58.67N_2023-01-01-2023-05-01.nc')
 
-def build_grid(ds=None, mask=None):
-    if mask == None:
+def build_grid(ds=[], mask=[]):
+    assert (len(ds) > 0 or
+            len(mask) > 0), 'Either ds or mask should be given'
+
+    if len(mask) == 0:
         lat_arr = ds.latitude
         lon_arr = ds.longitude
-    elif ds == None:
+    else:
         lat_arr = mask.latitude
         lon_arr = mask.longitude
-    else:
-        raise Exception('Either ds or mask should be given')
 
     Nlat = lat_arr.shape[0]
     Nlon = lon_arr.shape[0]
@@ -44,7 +45,7 @@ def build_grid(ds=None, mask=None):
     grid['M'] = Nlon
     grid['lat'] = np.ascontiguousarray(lat_grid)
     grid['lon'] = np.ascontiguousarray(lon_grid)
-    if mask is not None:
+    if len(mask) > 0:
         grid['mask'] = mask
     return grid
 
@@ -131,7 +132,8 @@ def get_grid():
 def load_uv_data(coarsen_in_time=False,
                  detide=False,
                  differences=False,
-                 coarsening_method='gaussian_filter'):
+                 coarsening_method='gaussian_filter',
+                 sigma=[1,1,1]):
 
     bt_HR = xr.open_dataset(HR_bathy_file)
     ds_HR = xr.open_mfdataset(HR_data_files, parallel=True)
@@ -140,7 +142,6 @@ def load_uv_data(coarsen_in_time=False,
     mask = bt_HR.mask[0,:,:]
     grid_HR = build_grid(ds_HR, mask)
     grid_LR = build_grid(ds_LR)
-
 
     interp_HR_LR = xe.Regridder(grid_HR, grid_LR, "bilinear",
                                 extrap_method="inverse_dist")
@@ -227,13 +228,13 @@ def load_uv_data(coarsen_in_time=False,
 
         return da_LR
 
-
     def filter_HR_data(da, sigma):
         tic = time.time()
         print(f'Loading dataset {da.name}... ', end='')
         da.load()
         toc = time.time()
         print(f'done ({toc-tic:.1f}s)')
+        tic = time.time()
         print(f'Apply Gaussian filter with '
               f'sigma={sigma} to {da.name}...', end='')
         out_da = xr.zeros_like(da)
@@ -256,7 +257,6 @@ def load_uv_data(coarsen_in_time=False,
         da_LR_vo = create_da_LR(da_HR_vo, coarsen_in_time)
 
     elif coarsening_method == 'gaussian_filter':
-        sigma = [1,1,1]
         da_LR_uo = filter_HR_data(da_HR_uo, sigma)
         da_LR_vo = filter_HR_data(da_HR_vo, sigma)
     else:
@@ -316,16 +316,20 @@ class CustomScaler():
 def load_training_data(split_factor=4/5,
                        scaling_range=(0,1),
                        coarsen_in_time=False,
+                       coarsening_method='gaussian_filter',
                        detide=False,
                        differences=False,
-                       residual_mode=False):
+                       residual_mode=False,
+                       sigma=[1,1,1]):
     # assume everything has this shape
     params = {}
     data = {}
 
     da_HR, da_LR, da_mask = load_uv_data(coarsen_in_time=coarsen_in_time,
                                          detide=detide,
-                                         differences=differences)
+                                         differences=differences,
+                                         sigma=sigma,
+                                         coarsening_method=coarsening_method)
 
     # create a torch mask
     params['mask'] = torch.tensor(da_mask.values)[None,:,:,None]
@@ -444,12 +448,23 @@ def create_training_data(compute_data=True,
                          encoder=None,
                          residual_mode=False,
                          coarsen_in_time=False,
+                         coarsening_method='gaussian_filter',
                          detide=False,
-                         differences=False):
+                         differences=False,
+                         sigma=[1,1,1]):
 
+    postfix=''
     postfix = '_detided' if detide else ''
     postfix += '_diff' if differences else ''
     postfix += '_residuals' if residual_mode else ''
+
+    if (coarsening_method == 'gaussian_filter' and
+        len(sigma) > 0):
+        sigma_str = str(sigma).replace(', ', '-').replace('.','_')
+        postfix += f'_blur_{sigma_str}'
+    else:
+        postfix += ''
+
     dill_file     = f'{data_dir}/ae_esn_training_data{postfix}.dill'
     dill_file_enc = f'{data_dir}/ae_esn_training_data{postfix}_encoded.dill'
 
@@ -459,9 +474,11 @@ def create_training_data(compute_data=True,
         orig_data, params, scalers  = \
             load_training_data(split_factor=4/5,
                                coarsen_in_time=coarsen_in_time,
+                               coarsening_method=coarsening_method,
                                detide=detide,
                                differences=differences,
-                               residual_mode=residual_mode)
+                               residual_mode=residual_mode,
+                               sigma=sigma)
 
         container = {'data' : orig_data,
                      'params' : params,

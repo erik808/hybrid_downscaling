@@ -4,14 +4,15 @@ import numpy as np
 import os
 from multiprocess import Pool
 from importlib import reload
-from transectpicker.transectpicker import TransectPicker
 import dill
 import data_manager as dm
-from analysis import Analysis
+import compute_tool
+reload(compute_tool)
+from compute_tool import ComputeTool
 
 class PlotMachine():
 
-    def __init__(self, figsize=(20,12),
+    def __init__(self, figsize=(16,8),
                  output_dict={},
                  time_array=None,
                  results_dir=None,
@@ -23,13 +24,10 @@ class PlotMachine():
         self.time_array=time_array
         self.results_dir=results_dir
         self.movie_dir=movie_dir
-        self.cbar_shrinkf=0.7
+        self.cbar_shrinkf=0.5
         self.frame_stride=4
-        self.pool_size=16
+        self.pool_size=4
         self.trial_id=trial_id
-
-        self.transect_dir = f'{dm.data_dir}/transects'
-        os.system(f'mkdir -p {self.transect_dir}')
 
     def plot_single_frame(self, frame_id, output_dict=None):
         self.output_dict = self.output_dict \
@@ -81,7 +79,8 @@ class PlotMachine():
                                cmap=item['cmap'],
                                vmin=item['vmin'],
                                vmax=item['vmax'])
-                plt.colorbar(h, shrink=self.cbar_shrinkf)
+                plt.colorbar(h, shrink=self.cbar_shrinkf,
+                             label=item['cbar_label'])
                 plt.gca().set_title(key)
                 plt.gca().invert_yaxis()
 
@@ -93,11 +92,13 @@ class PlotMachine():
                 plt.legend()
                 plt.grid()
                 plt.gca().set_title(key)
-                plt.gca().set_ylim(item['vmin'], item['vmax'])
+                plt.gca().set_aspect(0.2)
+                plt.gca().set_ylim(item['ymin'], item['ymax'])
+                plt.gca().set_xlim(item['xmin'], item['xmax'])
 
 
         plt.suptitle(f"date: {np.datetime64(self.time_array[id], 'h')}")
-        plt.savefig(fig_name)
+        plt.savefig(fig_name, bbox_inches='tight')
 
     def plot_history(self, hist):
 
@@ -166,73 +167,71 @@ class PlotMachine():
 
         return postfix
 
-    def create_transect(self, field):
 
-        fig, ax  = plt.subplots(figsize=(5,4))
-        im = plt.pcolormesh(field)
-        tpicker = TransectPicker(im, field)
-        plt.show()
+    def plot_enstrophy_spectrum(self, transect_name='along_flow', data = {}):
+        ct = ComputeTool()
+        S_truth  = ct.compute_spectrum_along_transect(
+            data['truth'],
+            data['scaler'],
+            transect_name=transect_name,
+            spectrum_type='enstrophy')
+        S_pred  = ct.compute_spectrum_along_transect(
+            data['pred'],
+            data['scaler'],
+            transect_name=transect_name,
+            spectrum_type='enstrophy')
+        S_lowres  = ct.compute_spectrum_along_transect(
+            data['lowres'],
+            data['scaler'],
+            transect_name=transect_name,
+            spectrum_type='enstrophy')
 
-        transect_name = input('Give a name for the transect\n')
-        dill_file = f'{self.transect_dir}/{transect_name}.dill'
+        # compute mean
+        S_truth_mn  = np.mean(S_truth, axis=0)
+        S_pred_mn   = np.mean(S_pred, axis=0)
+        S_lowres_mn = np.mean(S_lowres, axis=0)
 
-        container = {'tpicker' : tpicker}
+        n = len(S_truth_mn)
+        kvals = np.arange(1,n+1)
 
-        print(f'writing to {dill_file}')
-        with open(dill_file, 'wb') as file:
-            dill.dump(container, file)
+        plt.figure()
+        plt.loglog(S_truth_mn, '.-', label='HR truth')
+        plt.loglog(S_pred_mn, '.-', label='Model prediction')
+        plt.loglog(S_lowres_mn, '.-', label='LR forcing/control')
+        plt.legend()
+        plt.grid()
+        plt.gca().set_ylim([1e-5,1])
+        plt.gca().set_title(f'Mean eddy enstrophy spectrum, {transect_name}')
 
+        postfix = self.create_postfix()
+        fig_name = (f'{self.results_dir}/'
+                    f'enstrophy_spectrum_{transect_name}{postfix}.png')
+        print(fig_name)
+        plt.tight_layout()
+        plt.pause(1)
+        plt.savefig(fig_name)
 
-    def plot_spectrum(self, transect_name='along_flow', data = {}):
-        dill_file = f'{self.transect_dir}/{transect_name}.dill'
-        print(f'Loading transect from {dill_file}')
-        with open(dill_file, 'rb') as file:
-            tpicker = dill.load(file)['tpicker']
+    def plot_energy_spectrum(self, transect_name='along_flow', data = {}):
 
-        transect_res=len(tpicker.x_trans)        
-        regrid = dm.regrid_to_transect(tpicker, resolution=transect_res)
+        ct = ComputeTool()
+        S_truth  = ct.compute_spectrum_along_transect(
+            data['truth'],
+            data['scaler'],
+            transect_name=transect_name,
+            spectrum_type='energy')
 
-        def inverse_transform(data, scaler):
-            Nt, Nlat, Nlon, num_channels = data.shape
-            return scaler.inverse_transform(data.reshape(Nt,-1))\
-                         .reshape(Nt, Nlat, Nlon, num_channels)
+        S_pred  = ct.compute_spectrum_along_transect(
+            data['pred'],
+            data['scaler'],
+            transect_name=transect_name,
+            spectrum_type='energy')
 
-        def invert_and_regrid(data, scaler, regridder):
-            field = inverse_transform(data, scaler)\
-                .transpose(0,3,1,2)
-            field_tr = regrid(np.ascontiguousarray(field))\
-                .transpose(0,2,3,1)\
-                [:, np.arange(transect_res), np.arange(transect_res), :]
-            return field_tr
+        S_lowres  = ct.compute_spectrum_along_transect(
+            data['lowres'],
+            data['scaler'],
+            transect_name=transect_name,
+            spectrum_type='energy')
 
-        # invert transform and restrict to transect
-        truth  = invert_and_regrid(data['truth'],
-                                   data['scaler'], regridder=regrid)
-        lowres = invert_and_regrid(data['lowres'],
-                                   data['scaler'], regridder=regrid)
-        pred   = invert_and_regrid(data['pred'],
-                                   data['scaler'], regridder=regrid)
-
-        # mean_u_v = np.mean(truth, axis=0)
-        # mean_K = np.sum(np.square(time_mean),axis=1)
-        # square_u_v = np.square(truth)
-        # mean_sq_u_v = np.mean(square_u_v, axis=0)
-        # eddy_K = np.sum(mean_sq_u_v) - mean_K
-
-        def compute_spectrum(field):
-            """ normalized energy spectrum
-            """
-            # mean subtract? get eddy component?
-            # field = field - np.mean(field, axis=(0,1))
-            H = np.fft.rfft(field, axis=1)
-            S = 0.5*np.sum(np.square(np.abs(H)), axis=2)
-            S = S / np.max(S)
-            return S
-
-        S_truth  = compute_spectrum(truth)
-        S_pred   = compute_spectrum(pred)
-        S_lowres = compute_spectrum(lowres)
-        
         # compute mean
         S_truth_mn  = np.mean(S_truth, axis=0)
         S_pred_mn   = np.mean(S_pred, axis=0)
@@ -247,22 +246,22 @@ class PlotMachine():
             else 1e1*np.max(S_truth_mn)
 
         plt.figure()
-        h = plt.loglog(S_truth_mn, '.-', label='HR truth')
-        
+        plt.loglog(S_truth_mn, '.-', label='HR truth')
         plt.loglog(S_pred_mn, '.-', label='Model prediction')
         plt.loglog(S_lowres_mn, '.-', label='LR forcing/control')
         plt.loglog(k_1, offset_1 * k_1**(-5/3), '--', label='k^-5/3')
         plt.loglog(k_2, offset_2 * k_2**(-3), ':', label='k^-3')
         plt.legend()
-        plt.gca().set_title(f'Mean energy spectrum, {transect_name}')
+        plt.gca().set_ylim([1e-7,1])
+        plt.gca().set_title(f'Mean eddy kinetic energy spectrum, {transect_name}')
         plt.grid()
 
         postfix = self.create_postfix()
-        fig_name = f'{self.results_dir}/spectrum_{transect_name}{postfix}.png'
+        fig_name = f'{self.results_dir}/energy_spectrum_{transect_name}{postfix}.png'
         print(fig_name)
         plt.tight_layout()
+        plt.pause(1)
         plt.savefig(fig_name)
-        plt.close('all')
 
         return {'truth' : S_truth,
                 'lowres' : S_lowres,

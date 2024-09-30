@@ -26,7 +26,7 @@ class PlotMachine():
         self.movie_dir=movie_dir
         self.cbar_shrinkf=0.5
         self.frame_stride=4
-        self.pool_size=4
+        self.pool_size=1
         self.trial_id=trial_id
 
     def plot_single_frame(self, frame_id, output_dict=None):
@@ -208,7 +208,6 @@ class PlotMachine():
                     f'enstrophy_spectrum_{transect_name}{postfix}.png')
         print(fig_name)
         plt.tight_layout()
-        plt.pause(1)
         plt.savefig(fig_name)
 
     def plot_energy_spectrum(self, transect_name='along_flow', data = {}):
@@ -260,7 +259,6 @@ class PlotMachine():
         fig_name = f'{self.results_dir}/energy_spectrum_{transect_name}{postfix}.png'
         print(fig_name)
         plt.tight_layout()
-        plt.pause(1)
         plt.savefig(fig_name)
 
         return {'truth' : S_truth,

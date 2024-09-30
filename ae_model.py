@@ -127,41 +127,27 @@ class AutoEncoder(keras_tuner.HyperModel):
             dropout_layer_1 = layers.Dropout(self.dropout_rate,
                                              name="dropout_1")
 
-        conv_block_1 = ConvBlock(self.conv_layers_per_block,
-                                 self.num_filters,
-                                 self.kernel_size,
-                                 self.activation_encoder,
-                                 downsample_stride=(2,2),
-                                 regularizer=self.regularizer,
-                                 name="conv_block_1")
+        encoding_layers = Encoder(
+            conv_layers_per_block=self.conv_layers_per_block,
+            num_filters=[self.num_filters,
+                         self.num_filters_exp, # expansion
+                         self.num_filters_red, # reduction
+                         ],
+            kernel_size=self.kernel_size,
+            activation=self.activation_encoder,
+            downsample_strides=[(2,2),
+                                (2,2),
+                                self.inner_stride],
+            regularizer=self.regularizer)
 
-        x = conv_block_1(state_input)
-        x_skip_1 = x if self.use_skip_connections else None
-
-        # second expansion
-        conv_block_2 = ConvBlock(self.conv_layers_per_block,
-                                 self.num_filters_exp,
-                                 self.kernel_size,
-                                 self.activation_encoder,
-                                 downsample_stride=(2,2),
-                                 regularizer=self.regularizer,
-                                 name="conv_block_2")
-
-        x = conv_block_2(x)
-        x_skip_2 = x if self.use_skip_connections else None
-
-        # FIXME dropout here?
-        if use_dropout: x = dropout_layer_1(x)
-
-        conv_block_3 = ConvBlock(self.conv_layers_per_block,
-                                 self.num_filters_red,
-                                 self.kernel_size,
-                                 self.activation_encoder,
-                                 downsample_stride=self.inner_stride,
-                                 regularizer=self.regularizer,
-                                 name="conv_block_3")
-
-        encoded = conv_block_3(x)
+        encoded = encoding_layers(state_input)
+        
+        if self.use_skip_connections:
+            x_skip_1 = encoding_layers.x_skip[0]
+            x_skip_2 = encoding_layers.x_skip[1]
+        else:
+            x_skip_1 = None
+            x_skip_2 = None
 
         self.encoder = \
             Model([state_input, time_input], encoded, name="encoder")
@@ -170,13 +156,7 @@ class AutoEncoder(keras_tuner.HyperModel):
         if (self.esn != None):
             # setup feedthrough control
             if self.use_feedthrough_in_esn:
-                c = conv_block_1(feedthrough)
-                c = conv_block_2(c)
-
-                if use_dropout:
-                    c = dropout_layer_1(c)
-
-                control = conv_block_3(c)
+                control = encoding_layers(c)
             else:
                 control = ops.multiply(encoded, 0.0)
 
@@ -365,6 +345,48 @@ class AutoEncoder(keras_tuner.HyperModel):
             model.summary()
             sys.stdout = original
 
+
+class Encoder():
+    """Encoder. For now hardcoded to contain three convolutional
+    blocks. Hardcoding can be dealt with later.
+
+    """
+
+    def __init__(self,
+                 num_conv_blocks=3,
+                 conv_layers_per_block=2,
+                 num_filters=[32,32,8],
+                 kernel_size=(3,3),
+                 activation='relu',
+                 downsample_strides=[(2,2), (2,2), (1,1)],
+                 regularizer=regularizers.L2(1e-5)
+                 ):
+
+
+        self.block_list = []
+        self.x_skip = []
+
+        for i in range(num_conv_blocks):
+            cb = ConvBlock(conv_layers_per_block=conv_layers_per_block,
+                           num_filters=num_filters[i],
+                           kernel_size=kernel_size,
+                           activation=activation,
+                           downsample_stride=downsample_strides[i],
+                           regularizer=regularizer,
+                           name=f'conv_block_{i+1}')
+
+            self.block_list.append(cb)
+
+    def __call__(self, inputs):
+        x = inputs
+        for block in self.block_list:
+            x = block(x)
+            self.x_skip.append(x)
+
+        return x
+
+
+
 class ConvBlock():
     """Convolutional block with optional downsampling stride in the last
     layer.
@@ -473,23 +495,23 @@ class CustomValidation(keras.callbacks.Callback):
         if self.pars['predict_only']:
             self.predict(epoch, logs)
             self.model.stop_training=True
-        
+
     def on_epoch_end(self, epoch, logs=None):
         if not self.pars['predict_only']:
             self.predict(epoch, logs)
-            
+
     def predict(self, epoch, logs=None):
-        
+
         self.predictions = np.zeros_like(self.test_data)
-        
+
         xk   = self.initial_xk[0]
         xkm1 = self.initial_xk[1]
         pb_i = keras.utils.Progbar(self.N_steps,
                                    stateful_metrics=['error', 'base'],
                                    interval=0.5)
-    
+
         error, base = (0,0)
-        
+
         for i in range(self.N_steps):
 
             xk_LR = np.expand_dims(self.test_data_ft[i,], axis=0)

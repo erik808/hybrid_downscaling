@@ -118,13 +118,13 @@ class AE_Experiment():
                     'args' : {'name' : 'conv_layers_per_block',
                               'low'  : 1,
                               'high' : 6},
-                    'search_space' : [2,3] },
+                    'search_space' : [4] },
                 'num_filters_red' : {
                     'type' : 'int',
                     'args' : {'name' : 'num_filters_red',
                               'low'  : 1,
                               'high' : 100},
-                    'search_space' : [7,8,9,10,11] } },
+                    'search_space' : [1,2,4,8] } },
             #-------------------------------------------------------
             'regularization' : {
                 'L2_lambda' : {
@@ -169,6 +169,7 @@ class AE_Experiment():
         storage = f'sqlite:///{tuning_dir}/storage.db'
         reload_tuning=True
         timeout=60*60*4 # 6h
+        n_trials=1
 
         self.setup_search_space()
 
@@ -184,7 +185,9 @@ class AE_Experiment():
                                 study_name=f'{self.exp_name}_{self.tuning_config}',
                                 load_if_exists=reload_tuning)
 
-        self.study.optimize(self.objective, timeout=timeout)
+        self.study.optimize(self.objective,
+                            n_trials=n_trials,
+                            timeout=timeout)
 
     def objective(self, trial):
         self.trial_id = trial._trial_id-1
@@ -351,7 +354,9 @@ class AE_Experiment():
                                show_shapes=True, rankdir='TB',
                                dpi=200, show_layer_activations=False,
                                show_layer_names=True)
-        
+
+        breakpoint()
+
         # graph = keras.utils.model_to_dot(autoencoder, show_shapes=True)
 
         print('----------------------------------------------------------')
@@ -459,14 +464,17 @@ class AE_Experiment():
         self.spec_along = \
             plotmachine.plot_energy_spectrum(transect_name='along_flow',
                                              data=data_dict)
-        
+
         plotmachine.plot_enstrophy_spectrum(transect_name='along_flow',
                                             data=data_dict)
-        
-        
+
+
         self.spec_across = \
             plotmachine.plot_energy_spectrum(transect_name='across_flow',
                                              data=data_dict)
+        plotmachine.plot_enstrophy_spectrum(transect_name='across_flow',
+                                            data=data_dict)
+
 
     def plot_history(self):
         plotmachine = PlotMachine(results_dir=self.dirs['results'],
@@ -486,14 +494,19 @@ class AE_Experiment():
         predictions = self.validation_callback.predictions
 
         ct = ComputeTool()
-        vort_truth = lambda i : ct.vorticity(truth[i,],
-                                             self.scalers['HR'])
-        vort_pred = lambda i : ct.vorticity(predictions[i,],
-                                            self.scalers['HR'])
-        vort_lowres = lambda i : ct.vorticity(lowres[i,],
-                                              self.scalers['HR'])
-        error = lambda i : \
-            np.sqrt(np.square(vort_truth(i) - vort_pred(i)))
+        vort_truth = ct.vorticity(truth, self.scalers['HR'])
+        vort_truth_fn = lambda i : vort_truth[i,]
+
+        vort_pred = ct.vorticity(predictions,
+                                 self.scalers['HR'])
+        vort_pred_fn = lambda i : vort_pred[i,]
+
+        vort_lowres = ct.vorticity(lowres,
+                                   self.scalers['HR'])
+        vort_lowres_fn = lambda i : vort_lowres[i,]
+
+        error = np.sqrt(np.square(vort_truth - vort_pred))
+        error_fn = lambda i : error[i,]
 
         def get_rolling_spec(field, window_size=4*12):
             return xr.DataArray(field,
@@ -503,36 +516,36 @@ class AE_Experiment():
 
         vort_max = 20
         vort_min = -vort_max
-        
+
         plot_instructions = {
-            'Truth' : {'values' : vort_truth,
+            'Truth' : {'values' : vort_truth_fn,
                        'type' : '2d',
                        'vmin' : vort_min,
                        'vmax' : vort_max,
-                       'cmap' : 'RdBu',                       
+                       'cmap' : 'RdBu',
                        'cbar_label' : 'vorticity (day$^{-1}$)'},
 
-            'Prediction' : {'values' : vort_pred,
+            'Prediction' : {'values' : vort_pred_fn,
                             'type' : '2d',
                             'vmin' : vort_min,
                             'vmax' : vort_max,
                             'cmap' : 'RdBu',
                             'cbar_label' : 'vorticity (day$^{-1}$)'},
 
-            'Low resolution' : {'values' : vort_lowres,
+            'Low resolution' : {'values' : vort_lowres_fn,
                                 'type' : '2d',
                                 'vmin' : vort_min,
                                 'vmax' : vort_max,
                                 'cmap' : 'RdBu',
                                 'cbar_label' : 'vorticity (day$^{-1}$)'},
 
-            'Error' : {'values' : error,
+            'Error' : {'values' : error_fn,
                        'type' : '2d',
                        'vmin' : 0,
                        'vmax' : vort_max/3,
                        'cmap' : 'viridis',
                        'cbar_label' : 'vorticity (day$^{-1}$)'},
-            
+
 
             'spectrum along flow' :
             {
@@ -571,13 +584,13 @@ class AE_Experiment():
         import plot_utils
         reload(plot_utils)
         from plot_utils import PlotMachine
-        
+
         plotmachine = PlotMachine(results_dir=self.dirs['results'],
                                   movie_dir=self.dirs['movies'],
                                   time_array=test_time,
                                   trial_id=self.trial_id)
 
-        
+
         import matplotlib.pyplot as plt
         plt.close('all')
         # plotmachine.plot_single_frame(50, plot_instructions)
@@ -597,7 +610,7 @@ class AE_Experiment():
         return postfix, timestamp
 
 if __name__=="__main__":
-    exp = AE_Experiment(exp_name='blurring_v1',
+    exp = AE_Experiment(exp_name='test',
                         tuning_config='default',
                         detide=False,
                         compute_data=False,

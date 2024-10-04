@@ -7,9 +7,13 @@ import keras
 import dill
 import time
 import pytide
+import scipy
 from scipy.ndimage import gaussian_filter
 from sklearn.preprocessing import MinMaxScaler
 from multiprocess import Pool
+
+
+# TODO::: CREATE CLASSS
 
 data_dir      = 'data'
 transect_dir  = f'{data_dir}/transects'
@@ -23,7 +27,7 @@ coords_file = (f'{data_dir}/cmems_mod_nws_phy_anfc_0.027deg-3D_'
                f'static_e1t-e2t-e3t_4.23E-7.78E_56.81N-58.70N_0.49-643.57m.nc')
 
 LR_data_file = (f'{data_dir}/cmems_mod_nws_phy-uv_my_7km-2D_PT1H-i_'
-                f'uo-vo_4.22E-7.78E_56.80N-58.67N_2023-01-01-2023-05-01.nc')
+                f'uo-vo_4.22E-7.78E_56.80N-58.67N_2023-01-01-2023-12-31.nc')
 
 def build_grid(ds=[], mask=[]):
     assert (len(ds) > 0 or
@@ -88,6 +92,44 @@ def regrid_to_transect(tpicker, resolution=1e2):
                                       extrap_method="inverse_dist")
     return interp_to_transect
 
+
+def create_regridders():
+    print('Create regridders')
+    bt_HR = xr.open_dataset(HR_bathy_file)
+    ds_HR = xr.open_mfdataset(HR_data_files, parallel=True)
+    ds_LR = xr.open_dataset(LR_data_file)
+
+    mask = bt_HR.mask[0,:,:]
+    grid_HR = build_grid(ds_HR, mask)
+    grid_LR = build_grid(ds_LR)
+
+    interp_HR_LR = xe.Regridder(grid_HR, grid_LR, "bilinear",
+                                extrap_method="inverse_dist")
+    interp_LR_HR = xe.Regridder(grid_LR, grid_HR, "bilinear",
+                                extrap_method="inverse_dist")
+
+    return interp_HR_LR, interp_LR_HR, mask
+
+
+def get_coarse_data(time_range, interpolate=False):
+
+    if not interpolate:
+        time_slice=slice(time_range[0],time_range[-1])
+        ds_LR = xr.open_dataset(LR_data_file)\
+                  .sel(time=time_slice)
+    else:
+                  #.fillna(0.0)\
+        ds_LR = xr.open_dataset(LR_data_file)\
+                  .interp(time=time_range, method='linear')
+
+    r0, regridder, mask = create_regridders()
+    da = np.stack([ds_LR['uo'].values,
+                   ds_LR['vo'].values], axis=1)
+    do=np.nan_to_num(crop(regridder(da)))
+
+    return do.transpose(0,2,3,1)
+
+
 def load_u_data():
     bt_HR = xr.open_dataset(HR_bathy_file)
     ds_HR = xr.open_mfdataset(HR_data_files, parallel=True)
@@ -121,6 +163,7 @@ def load_u_data():
 
     return da_HR, da_LR, mask
 
+
 def get_grid():
     " load grid, crop and return "
     coords = xr.open_dataset(coords_file)
@@ -129,11 +172,13 @@ def get_grid():
     coords = xr.merge(l)
     return coords, mask
 
+
 def load_uv_data(coarsen_in_time=False,
                  detide=False,
                  differences=False,
                  coarsening_method='gaussian_filter',
-                 sigma=[1,1,1]):
+                 sigma=[1,1,1],
+                 truncation=20):
 
     bt_HR = xr.open_dataset(HR_bathy_file)
     ds_HR = xr.open_mfdataset(HR_data_files, parallel=True)
@@ -252,6 +297,51 @@ def load_uv_data(coarsen_in_time=False,
         print(f' done ({toc-tic:.1f}s)')
         return out_da
 
+    def reduced_basis(ds, truncation):
+        print('Computing POD basis')
+        orig_shape = list(ds.shape)
+        data = ds.reshape(orig_shape[0], -1)
+        data = data - np.mean(data, axis=0)
+        U,_,_ = scipy.linalg.svd(data.T, False)
+        new_shape = [truncation] + orig_shape[1:]
+        U = U[:,:truncation].T.reshape(new_shape)
+        return U
+
+    def regrid_basis(U):
+        
+        interp_HR_LR, interp_LR_HR, mask = create_regridders()
+        U_HR = interp_LR_HR(np.ascontiguousarray(U.transpose(0,3,1,2)))\
+            .transpose(0,2,3,1)
+        U_HR = np.nan_to_num(U_HR)
+
+        ## renormalize
+        orig_shape = U_HR.shape
+        U_HR_MAT = U_HR.reshape(orig_shape[0], -1)
+        norms = np.linalg.norm(U_HR_MAT, axis=1)
+        U_HR = (U_HR.T / norms).T
+        
+        return U_HR
+
+    def orth_project(U, da):
+        tic = time.time()
+        print(f'Loading dataset {da.name}... ', end='')
+        da.load()
+        toc = time.time()
+        print(f'done ({toc-tic:.1f}s)')
+        print(f'Creating approx. orthogonal projection... ', end='')
+        tic = time.time()
+        truncation = U.shape[0]
+        orig_shape = da.shape
+        out = xr.zeros_like(da)
+        data = da.data.reshape(orig_shape[0], -1)
+        U = U.reshape(truncation,-1)
+        coords = (U @ data.T)
+        da_LR = (U.T @ coords).T
+        out[:,:,:] = da_LR.reshape(orig_shape)
+        toc = time.time()
+        print(f'done ({toc-tic:.1f}s)')
+        return out, coords
+
     if coarsening_method == 'regridding':
         da_LR_uo = create_da_LR(da_HR_uo, coarsen_in_time)
         da_LR_vo = create_da_LR(da_HR_vo, coarsen_in_time)
@@ -259,6 +349,30 @@ def load_uv_data(coarsen_in_time=False,
     elif coarsening_method == 'gaussian_filter':
         da_LR_uo = filter_HR_data(da_HR_uo, sigma)
         da_LR_vo = filter_HR_data(da_HR_vo, sigma)
+
+    elif coarsening_method == 'reduced_basis':
+
+        data_LR = np.stack([ds_LR['uo'].fillna(0.0).values,
+                            ds_LR['vo'].fillna(0.0).values], axis=3)
+        U = reduced_basis(data_LR, truncation)
+        U = regrid_basis(U)
+
+        da_LR_uo, c_uo = orth_project(U[...,0], da_HR_uo)
+        da_LR_vo, c_vo = orth_project(U[...,1], da_HR_vo)
+
+        # plt.close('all')
+        # plt.figure()
+        # plt.imshow(da_HR_uo[0,:,:])
+        # plt.pause(1)
+        # plt.figure()
+        # plt.imshow(da_LR_uo[0,:,:])
+        # plt.pause(1)
+
+        # plt.figure()
+        # plt.loglog(np.mean(np.abs(c_uo),axis=1),'.-')
+        # plt.loglog(np.mean(np.abs(c_vo),axis=1),'.-')
+        # plt.pause(1)
+
     else:
         raise Exception('invalid coarsening_method {coarsening_method}')
 
@@ -320,7 +434,9 @@ def load_training_data(split_factor=4/5,
                        detide=False,
                        differences=False,
                        residual_mode=False,
-                       sigma=[1,1,1]):
+                       sigma=[1,1,1],
+                       truncation=20):
+
     # assume everything has this shape
     params = {}
     data = {}
@@ -329,7 +445,8 @@ def load_training_data(split_factor=4/5,
                                          detide=detide,
                                          differences=differences,
                                          sigma=sigma,
-                                         coarsening_method=coarsening_method)
+                                         coarsening_method=coarsening_method,
+                                         truncation=truncation)
 
     # create a torch mask
     params['mask'] = torch.tensor(da_mask.values)[None,:,:,None]
@@ -343,17 +460,34 @@ def load_training_data(split_factor=4/5,
     # scaler = CustomScaler(scaling_type='minmax_per_feature')
     scalers = {}
     scalers['HR'] = MinMaxScaler(feature_range=scaling_range)
-    scalers['R'] = MinMaxScaler(feature_range=scaling_range)
+    scalers['LR'] = MinMaxScaler(feature_range=scaling_range)
+    scalers['R']  = MinMaxScaler(feature_range=scaling_range)
 
     Nt, Nlat, Nlon, num_channels = data_HR.shape
-
 
     data_HR = scalers['HR'].fit_transform(data_HR.reshape(Nt, -1))\
                            .reshape(Nt, Nlat, Nlon, num_channels)
 
-    data_LR = scalers['HR'].transform(data_LR.reshape(Nt, -1))\
+    data_LR = scalers['LR'].fit_transform(data_LR.reshape(Nt, -1))\
                            .reshape(Nt, Nlat, Nlon, num_channels)
 
+    # import matplotlib.pyplot as plt
+    # plt.close('all')
+    # plt.figure()
+    # h = plt.imshow(data_HR[100,:,:,0])
+    # plt.colorbar(h)
+    # plt.figure()
+    # h = plt.imshow(data_LR[100,:,:,0])
+    # plt.colorbar(h)
+    # plt.figure()
+    # h = plt.imshow(data_HR[100,:,:,1])
+    # plt.colorbar(h)
+    # plt.figure()
+    # h = plt.imshow(data_LR[100,:,:,1])
+    # plt.colorbar(h)
+    # plt.pause(1)    
+    # breakpoint()
+    
     # import matplotlib.pyplot as plt
     # plt.close('all')
     # data_R  = (data_HR - data_LR)
@@ -451,7 +585,8 @@ def create_training_data(compute_data=True,
                          coarsening_method='gaussian_filter',
                          detide=False,
                          differences=False,
-                         sigma=[1,1,1]):
+                         sigma=[1,1,1],
+                         truncation=20):
 
     postfix=''
     postfix = '_detided' if detide else ''
@@ -462,6 +597,8 @@ def create_training_data(compute_data=True,
         len(sigma) > 0):
         sigma_str = str(sigma).replace(', ', '-').replace('.','_')
         postfix += f'_blur_{sigma_str}'
+    elif (coarsening_method == 'reduced_basis'):
+        postfix += f'_reduced_basis_tr{truncation}'
     else:
         postfix += ''
 
@@ -478,7 +615,8 @@ def create_training_data(compute_data=True,
                                detide=detide,
                                differences=differences,
                                residual_mode=residual_mode,
-                               sigma=sigma)
+                               sigma=sigma,
+                               truncation=truncation)
 
         container = {'data' : orig_data,
                      'params' : params,

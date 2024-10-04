@@ -1,5 +1,7 @@
 import numpy as np
+from importlib import reload
 import data_manager as dm
+reload(dm)
 import dill
 
 from transectpicker.transectpicker import TransectPicker

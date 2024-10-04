@@ -11,15 +11,20 @@ import xarray as xr
 
 import numpy as np
 import keras
+from keras import ops
+from keras.src.losses.loss import squeeze_or_expand_to_same_rank
 
 import optuna
 
 import plot_utils
 reload(plot_utils)
+
 import data_manager as dm
 reload(dm)
+
 import ae_model
 reload(ae_model)
+
 import esn_interface
 reload(esn_interface)
 
@@ -28,6 +33,8 @@ from ae_model import TriggerESN
 from ae_model import CustomValidation
 from plot_utils import PlotMachine
 from esn_interface import ESN_embedded
+
+# from sklearn.preprocessing import MinMaxScaler
 
 import compute_tool
 reload(compute_tool)
@@ -42,6 +49,8 @@ class AE_Experiment():
                  tuning_config=None,
                  detide=False,
                  compute_data=False,
+                 coarsening_method='gaussian_filter',
+                 truncation=1000,
                  sigma=[1,1,1]):
 
         self.init_timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
@@ -80,7 +89,9 @@ class AE_Experiment():
         self.data, self.params, self.scalers, _ = \
             dm.create_training_data(compute_data=compute_data,
                                     detide=detide,
-                                    sigma=sigma)
+                                    coarsening_method=coarsening_method,
+                                    sigma=sigma,
+                                    truncation=truncation)
         # -------------------------------------------------------
         self.trial_id = None
 
@@ -112,7 +123,7 @@ class AE_Experiment():
                     'args' : {'name':'epochs',
                               'low': 1,
                               'high':50},
-                    'search_space' : [12] },
+                    'search_space' : [4] },
                 'layers_per_block' : {
                     'type' : 'int',
                     'args' : {'name' : 'conv_layers_per_block',
@@ -124,7 +135,7 @@ class AE_Experiment():
                     'args' : {'name' : 'num_filters_red',
                               'low'  : 1,
                               'high' : 100},
-                    'search_space' : [1,2,4,8] } },
+                    'search_space' : [6,8,10] } },
             #-------------------------------------------------------
             'regularization' : {
                 'L2_lambda' : {
@@ -160,6 +171,9 @@ class AE_Experiment():
             'layers_per_block' : {}, # TODO
             #-------------------------------------------------------
         }
+
+
+        self.ct=ComputeTool()
 
 
     def run_optuna_study(self):
@@ -250,7 +264,8 @@ class AE_Experiment():
                                headers='keys',
                                tablefmt='orgtbl'), file=out)
 
-    def build_and_run_model(self, predict_only=False):
+    def build_and_run_model(self, predict_only=False, evaluate=True,
+                            alternative_control=None):
         # AE-MODEL CONFIG
         use_feedthrough = True
         feedthrough_only = False
@@ -277,12 +292,25 @@ class AE_Experiment():
         train_data_otp = self.data['train']['HR'][1:,][-self.history:,]
         # control/feedthrough data
         train_data_ft  = self.data['train']['LR'][1:,][-self.history:,]
+        train_time_ft  = self.data['train']['time'][1:,][-self.history:,]
 
         # HR test data
         test_data      = self.data['test']['HR'][:self.future,]
         # LR/control/feedthrough test data
         test_data_ft   = self.data['test']['LR'][:self.future,]
         test_time      = self.data['test']['time'][:self.future,]
+
+        if alternative_control == 'coarse_model':
+            x_train = dm.get_coarse_data(train_time_ft, interpolate=True)
+            x_test = dm.get_coarse_data(test_time, interpolate=True)
+            train_data_ft = \
+                self.scalers['R']\
+                    .fit_transform(x_train.reshape(len(train_time_ft),-1))\
+                    .reshape(x_train.shape)
+            test_data_ft = \
+                self.scalers['R']\
+                    .transform(x_test.reshape(len(test_time),-1))\
+                    .reshape(x_test.shape)
 
         mask = self.params['mask']
         Nt   = self.params['Nt']
@@ -296,9 +324,45 @@ class AE_Experiment():
 
         mdir = self.dirs['models']
         postfix, timestamp = self.create_postfix()
-        if self.load_existing_model:
 
-            autoencoder = keras.models.load_model(self.load_path_autoencoder)
+        def my_loss(y_true, y_pred):
+            
+            y_pred = ops.convert_to_tensor(y_pred)
+            y_true = ops.convert_to_tensor(y_true, dtype=y_pred.dtype)
+            
+            def compute_2d_energy_spectrum(tensor):
+                im = ops.zeros_like(tensor[...,0])
+                s_u = ops.fft2((tensor[...,0], im))
+                s_v = ops.fft2((tensor[...,1], im))                
+                u = ops.square(ops.sqrt(ops.square(s_u[0]) +
+                                        ops.square(s_u[1])))
+                v = ops.square(ops.sqrt(ops.square(s_v[0]) +
+                                        ops.square(s_v[1])))
+                E = (u + v)/2
+                E = E / ops.max(E)
+                
+                return E
+
+            # y_pred = self.scalers['HR'].inverse_transform(data.reshape(Nt,-1))\
+            #                            .reshape(Nt, Nlat, Nlon, num_channels)
+            s_true = compute_2d_energy_spectrum(y_true)
+            s_pred = compute_2d_energy_spectrum(y_pred)
+
+            epsilon = 1e-10
+            bias=0.0
+            first_log = ops.log(ops.maximum(s_true, epsilon) + bias)
+            second_log = ops.log(ops.maximum(s_pred, epsilon) + bias)
+            out = ops.mean(ops.square(first_log - second_log), axis=(1,2))
+            return out
+
+        if self.load_existing_model:
+            # autoencoder = \
+            #     keras.models.load_model(self.load_path_autoencoder,
+            #                             compile=False)
+            # autoencoder.compile(loss=my_loss)
+            autoencoder = \
+                keras.models.load_model(self.load_path_autoencoder)
+
             encoder = keras.models.load_model(self.load_path_encoder)
             decoder = keras.models.load_model(self.load_path_decoder)
 
@@ -311,8 +375,10 @@ class AE_Experiment():
                 timetns = np.expand_dims(timeids, axis=[1,2,3])
                 print('create training data for embedded ESN')
                 esn.setPars(esn_params, num_samples=num_samples)
-                values  = esn.pixel_shuffle(encoder.predict([train_data_inp, timetns]))
-                control = esn.pixel_shuffle(encoder.predict([train_data_ft, timetns]))
+                values  = esn.pixel_shuffle(encoder.predict([train_data_inp,
+                                                             timetns]))
+                control = esn.pixel_shuffle(encoder.predict([train_data_ft,
+                                                             timetns]))
                 esn.initialize(values, control)
                 esn.populate_storage(values, timeids, control)
             else:
@@ -326,7 +392,8 @@ class AE_Experiment():
             ae = AutoEncoder(test_vec=train_data_inp[0,:,:,:],
                              mask=mask,
                              log_file=self.files['log'] + f'{postfix}',
-                             esn=esn)
+                             esn=esn,
+                             scalers=self.scalers)
 
             autoencoder, encoder, decoder = \
                 ae.build_model(
@@ -334,8 +401,10 @@ class AE_Experiment():
                     feedthrough_only=feedthrough_only,
                     feedthrough_type='multiply',
                     learning_rate=self.hyper_params['learning_rate'],
-                    conv_layers_per_block=self.hyper_params['conv_layers_per_block'],
-                    use_skip_connections=self.hyper_params['use_skip_connections'],
+                    conv_layers_per_block=\
+                    self.hyper_params['conv_layers_per_block'],
+                    use_skip_connections=\
+                    self.hyper_params['use_skip_connections'],
                     optimizer=self.hyper_params['optimizer'],
                     L2_lambda=self.hyper_params['L2_lambda'],
                     dropout_rate=self.hyper_params['dropout_rate'],
@@ -354,8 +423,6 @@ class AE_Experiment():
                                show_shapes=True, rankdir='TB',
                                dpi=200, show_layer_activations=False,
                                show_layer_names=True)
-
-        breakpoint()
 
         # graph = keras.utils.model_to_dot(autoencoder, show_shapes=True)
 
@@ -400,7 +467,8 @@ class AE_Experiment():
                              plotmachine=plotmachine,
                              pars = {'feedthrough_only': feedthrough_only,
                                      'use_feedthrough': use_feedthrough,
-                                     'predict_only' : predict_only},
+                                     'predict_only' : predict_only,
+                                     'evaluate' : evaluate},
                              scalers = self.scalers)
 
         callbacks = [esn_callback, self.validation_callback]
@@ -448,9 +516,6 @@ class AE_Experiment():
 
 
     def plot_spectra(self):
-        reload(plot_utils)
-        from plot_utils import PlotMachine
-
         plotmachine = PlotMachine(results_dir=self.dirs['results'],
                                   trial_id=self.trial_id)
 
@@ -458,7 +523,9 @@ class AE_Experiment():
             'truth'  : self.data['test']['HR'][:self.future,],
             'lowres' : self.data['test']['LR'][:self.future,],
             'pred'   : self.validation_callback.predictions,
-            'scaler' : self.scalers['HR'],
+            'scaler_truth' : self.scalers['HR'],
+            'scaler_lowres' : self.scalers['LR'],
+            'time'   : self.data['test']['time'][:self.future,]
         }
 
         self.spec_along = \
@@ -482,7 +549,7 @@ class AE_Experiment():
         plotmachine.plot_history(self.hist)
 
 
-    def create_movie(self):
+    def create_movie(self, alternative_control=False):
 
         Nlon = self.params['Nlon']
         Nlat = self.params['Nlat']
@@ -491,18 +558,25 @@ class AE_Experiment():
         truth = self.data['test']['HR'][:self.future,]
         lowres = self.data['test']['LR'][:self.future,]
         test_time = self.data['test']['time'][:self.future,]
+
+        if alternative_control == 'coarse_model':
+            x = dm.get_coarse_data(test_time, interpolate=True)
+            lowres = self.scalers['LR']\
+                         .transform(x.reshape(len(test_time),-1))\
+                         .reshape(x.shape)
+
+
         predictions = self.validation_callback.predictions
 
-        ct = ComputeTool()
-        vort_truth = ct.vorticity(truth, self.scalers['HR'])
+        vort_truth = self.ct.vorticity(truth, self.scalers['HR'])
         vort_truth_fn = lambda i : vort_truth[i,]
 
-        vort_pred = ct.vorticity(predictions,
+        vort_pred = self.ct.vorticity(predictions,
                                  self.scalers['HR'])
         vort_pred_fn = lambda i : vort_pred[i,]
 
-        vort_lowres = ct.vorticity(lowres,
-                                   self.scalers['HR'])
+        vort_lowres = self.ct.vorticity(lowres,
+                                   self.scalers['LR'])
         vort_lowres_fn = lambda i : vort_lowres[i,]
 
         error = np.sqrt(np.square(vort_truth - vort_pred))
@@ -610,9 +684,11 @@ class AE_Experiment():
         return postfix, timestamp
 
 if __name__=="__main__":
-    exp = AE_Experiment(exp_name='test',
+    exp = AE_Experiment(exp_name='short_test',
                         tuning_config='default',
                         detide=False,
                         compute_data=False,
-                        sigma=[1,1.5,1.5])
+                        coarsening_method='reduced_basis',
+                        truncation=500)
     exp.run_optuna_study()
+    exp.create_movie()

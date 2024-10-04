@@ -17,7 +17,8 @@ class PlotMachine():
                  time_array=None,
                  results_dir=None,
                  movie_dir=None,
-                 trial_id=None):
+                 trial_id=None,
+                 scalers=None):
 
         self.figsize=figsize
         self.output_dict=output_dict
@@ -45,9 +46,15 @@ class PlotMachine():
             if output_dict == None else output_dict
 
         fig = plt.figure(figsize=self.figsize)
-        with Pool(self.pool_size) as p:
-            p.map(self.plot_frame, range(0,len(self.time_array),
-                                         self.frame_stride))
+
+        if self.pool_size == 1:
+            for i in range(0,len(self.time_array),
+                           self.frame_stride):
+                self.plot_frame(i)
+        else:                    
+            with Pool(self.pool_size) as p:
+                p.map(self.plot_frame, range(0,len(self.time_array),
+                                             self.frame_stride))
 
         postfix = self.create_postfix()
         movie_name = f'movie{postfix}.mov'
@@ -68,7 +75,7 @@ class PlotMachine():
         plt.clf()
         if fig_name == None:
             fig_name = f'{self.movie_dir}/frame-{id:06d}.png'
-
+            
         Nsub = len(self.output_dict)
         dim0 = int(np.ceil(np.sqrt(Nsub)))
         dim1 = int(np.ceil(Nsub / dim0))
@@ -135,11 +142,18 @@ class PlotMachine():
         plt.tight_layout()
         plt.savefig(fig_name)
 
-    def plot_prediction_error(self, X, Y, Z, add_name=''):
+    def plot_prediction_error(self, X, Y, Z, add_name='', scalers=None):
 
         postfix = self.create_postfix(add_name)
         fig_name = f'{self.results_dir}/errors{postfix}.png'
-
+        
+        X = scalers['HR'].inverse_transform(X.reshape(X.shape[0],-1))\
+                         .reshape(X.shape)
+        Y = scalers['HR'].inverse_transform(Y.reshape(Y.shape[0],-1))\
+                         .reshape(Y.shape)
+        Z = scalers['LR'].inverse_transform(Z.reshape(Z.shape[0],-1))\
+                         .reshape(Z.shape)
+        
         RSE_Y = np.sqrt(np.sum(np.square(X-Y),axis=(1,2,3)))
         RSE_Z = np.sqrt(np.sum(np.square(X-Z),axis=(1,2,3)))
 
@@ -169,27 +183,37 @@ class PlotMachine():
 
 
     def plot_enstrophy_spectrum(self, transect_name='along_flow', data = {}):
+
+        # get coarse data:
+        do = dm.get_coarse_data(data['time'])
+
         ct = ComputeTool()
         S_truth  = ct.compute_spectrum_along_transect(
             data['truth'],
-            data['scaler'],
+            data['scaler_truth'],
             transect_name=transect_name,
             spectrum_type='enstrophy')
         S_pred  = ct.compute_spectrum_along_transect(
             data['pred'],
-            data['scaler'],
+            data['scaler_truth'],
             transect_name=transect_name,
             spectrum_type='enstrophy')
         S_lowres  = ct.compute_spectrum_along_transect(
             data['lowres'],
-            data['scaler'],
+            data['scaler_lowres'],
             transect_name=transect_name,
             spectrum_type='enstrophy')
+        S_coarse  = ct.compute_spectrum_along_transect(
+            do,
+            None,
+            transect_name=transect_name,
+            spectrum_type='energy')
 
         # compute mean
         S_truth_mn  = np.mean(S_truth, axis=0)
         S_pred_mn   = np.mean(S_pred, axis=0)
         S_lowres_mn = np.mean(S_lowres, axis=0)
+        S_coarse_mn = np.mean(S_coarse, axis=0)
 
         n = len(S_truth_mn)
         kvals = np.arange(1,n+1)
@@ -198,6 +222,7 @@ class PlotMachine():
         plt.loglog(S_truth_mn, '.-', label='HR truth')
         plt.loglog(S_pred_mn, '.-', label='Model prediction')
         plt.loglog(S_lowres_mn, '.-', label='LR forcing/control')
+        plt.loglog(S_coarse_mn, '.-', label='Coarse model')
         plt.legend()
         plt.grid()
         plt.gca().set_ylim([1e-5,1])
@@ -212,22 +237,30 @@ class PlotMachine():
 
     def plot_energy_spectrum(self, transect_name='along_flow', data = {}):
 
+        do = dm.get_coarse_data(data['time'])
+
         ct = ComputeTool()
         S_truth  = ct.compute_spectrum_along_transect(
             data['truth'],
-            data['scaler'],
+            data['scaler_truth'],
             transect_name=transect_name,
             spectrum_type='energy')
 
         S_pred  = ct.compute_spectrum_along_transect(
             data['pred'],
-            data['scaler'],
+            data['scaler_truth'],
             transect_name=transect_name,
             spectrum_type='energy')
 
         S_lowres  = ct.compute_spectrum_along_transect(
             data['lowres'],
-            data['scaler'],
+            data['scaler_lowres'],
+            transect_name=transect_name,
+            spectrum_type='energy')
+
+        S_coarse  = ct.compute_spectrum_along_transect(
+            do,
+            None,
             transect_name=transect_name,
             spectrum_type='energy')
 
@@ -235,6 +268,7 @@ class PlotMachine():
         S_truth_mn  = np.mean(S_truth, axis=0)
         S_pred_mn   = np.mean(S_pred, axis=0)
         S_lowres_mn = np.mean(S_lowres, axis=0)
+        S_coarse_mn = np.mean(S_coarse, axis=0)
 
         k_1 = np.linspace(1.7,np.ceil(len(S_truth_mn)/2), 100)
         k_2 = np.linspace(7,len(S_truth_mn), 100)
@@ -245,9 +279,10 @@ class PlotMachine():
             else 1e1*np.max(S_truth_mn)
 
         plt.figure()
-        plt.loglog(S_truth_mn, '.-', label='HR truth')
-        plt.loglog(S_pred_mn, '.-', label='Model prediction')
+        plt.loglog(S_truth_mn, '.-' , label='HR truth')
+        plt.loglog(S_pred_mn, '.-'  , label='Model prediction')
         plt.loglog(S_lowres_mn, '.-', label='LR forcing/control')
+        plt.loglog(S_coarse_mn, '.-', label='Coarse model')
         plt.loglog(k_1, offset_1 * k_1**(-5/3), '--', label='k^-5/3')
         plt.loglog(k_2, offset_2 * k_2**(-3), ':', label='k^-3')
         plt.legend()
@@ -260,6 +295,7 @@ class PlotMachine():
         print(fig_name)
         plt.tight_layout()
         plt.savefig(fig_name)
+        # plt.pause(1)
 
         return {'truth' : S_truth,
                 'lowres' : S_lowres,

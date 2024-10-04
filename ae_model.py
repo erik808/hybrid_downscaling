@@ -8,6 +8,8 @@ from keras import ops
 from keras import regularizers
 from keras.models import Model
 
+from compute_tool import ComputeTool
+
 # create custom masking class
 @keras.saving.register_keras_serializable(name="custom_masking")
 class Masking(layers.Layer):
@@ -32,7 +34,8 @@ class Masking(layers.Layer):
 
 class AutoEncoder(keras_tuner.HyperModel):
 
-    def __init__(self, test_vec, mask, log_file, esn=None):
+    def __init__(self, test_vec, mask, log_file,
+                 esn=None, scalers=None):
         super(AutoEncoder, self).__init__()
 
         self.test_vec = test_vec
@@ -42,6 +45,7 @@ class AutoEncoder(keras_tuner.HyperModel):
         self.resblock_ctr = 0
         self.esn_combine_mode = 'replace'
         self.needs_building = True
+        self.ct = ComputeTool()
 
         self.log('AutoEncoder\n', 'w')
 
@@ -141,7 +145,7 @@ class AutoEncoder(keras_tuner.HyperModel):
             regularizer=self.regularizer)
 
         encoded = encoding_layers(state_input)
-        
+
         if self.use_skip_connections:
             x_skip_1 = encoding_layers.x_skip[0]
             x_skip_2 = encoding_layers.x_skip[1]
@@ -156,7 +160,7 @@ class AutoEncoder(keras_tuner.HyperModel):
         if (self.esn != None):
             # setup feedthrough control
             if self.use_feedthrough_in_esn:
-                control = encoding_layers(c)
+                control = encoding_layers(feedthrough)
             else:
                 control = ops.multiply(encoded, 0.0)
 
@@ -273,9 +277,12 @@ class AutoEncoder(keras_tuner.HyperModel):
                             outputs=outputs,
                             name="autoencoder")
 
+
+
         loss = keras.losses.\
             MeanSquaredError(reduction="sum_over_batch_size",
                              name="mean_squared_error")
+
 
         if optimizer == 'adam':
             optim = keras.optimizers.Adam(learning_rate=learning_rate)
@@ -500,6 +507,10 @@ class CustomValidation(keras.callbacks.Callback):
         if not self.pars['predict_only']:
             self.predict(epoch, logs)
 
+    def inverse_transform(self, field, scaler):
+        return scaler.inverse_transform(field.reshape(1,-1))\
+                     .reshape(field.shape)        
+
     def predict(self, epoch, logs=None):
 
         self.predictions = np.zeros_like(self.test_data)
@@ -509,7 +520,6 @@ class CustomValidation(keras.callbacks.Callback):
         pb_i = keras.utils.Progbar(self.N_steps,
                                    stateful_metrics=['error', 'base'],
                                    interval=0.5)
-
         error, base = (0,0)
 
         for i in range(self.N_steps):
@@ -535,19 +545,32 @@ class CustomValidation(keras.callbacks.Callback):
                          .reshape(xk.shape) + xk_LR
 
             self.predictions[i,] = xk
-            xk_true = np.expand_dims(self.test_data[i,], axis=0)
-            error += (np.sum(np.square(xk - xk_true)))
-            base += (np.sum(np.square(xk_LR - xk_true)))
-            values = [('error', np.sqrt(error/(i+1))),
-                      ('base', np.sqrt(base/(i+1)))]
-            pb_i.add(1, values=values)
 
-        self.plotmachine.plot_prediction_error(self.test_data,
-                                               self.predictions,
-                                               self.test_data_ft,
-                                               f'epoch_{epoch}')
+            if self.pars['evaluate']:
+                
+                xk = self.inverse_transform(xk, self.scalers['HR'])
+                
+                xk_true = np.expand_dims(self.test_data[i,], axis=0)
+                xk_true = self.inverse_transform(xk_true, self.scalers['HR'])
+                xk_LR = self.inverse_transform(xk_LR, self.scalers['LR'])
 
-        self.final_error = np.sqrt(error/(i+1))
-        self.final_base = np.sqrt(base/(i+1))
-        logs['error'] = self.final_error
-        logs['base']  = self.final_base
+                error += (np.sum(np.square(xk - xk_true)))
+                base += (np.sum(np.square(xk_LR - xk_true)))
+                values = [('error', np.sqrt(error/(i+1))),
+                          ('base', np.sqrt(base/(i+1)))]
+
+                pb_i.add(1, values=values)
+            else:
+                pb_i.add(1)
+
+        if self.pars['evaluate']:
+            self.plotmachine.plot_prediction_error(self.test_data,
+                                                   self.predictions,
+                                                   self.test_data_ft,
+                                                   f'epoch_{epoch}',
+                                                   scalers=self.scalers)
+
+            self.final_error = np.sqrt(error/(i+1))
+            self.final_base = np.sqrt(base/(i+1))
+            logs['error'] = self.final_error
+            logs['base']  = self.final_base

@@ -51,7 +51,7 @@ class PlotMachine():
             for i in range(0,len(self.time_array),
                            self.frame_stride):
                 self.plot_frame(i)
-        else:                    
+        else:
             with Pool(self.pool_size) as p:
                 p.map(self.plot_frame, range(0,len(self.time_array),
                                              self.frame_stride))
@@ -75,7 +75,7 @@ class PlotMachine():
         plt.clf()
         if fig_name == None:
             fig_name = f'{self.movie_dir}/frame-{id:06d}.png'
-            
+
         Nsub = len(self.output_dict)
         dim0 = int(np.ceil(np.sqrt(Nsub)))
         dim1 = int(np.ceil(Nsub / dim0))
@@ -107,53 +107,57 @@ class PlotMachine():
         plt.suptitle(f"date: {np.datetime64(self.time_array[id], 'h')}")
         plt.savefig(fig_name, bbox_inches='tight')
 
-    def plot_history(self, hist):
+    def plot_history(self, hist, managed=False, add='', plot_baseline=True):
 
-        postfix = self.create_postfix()
-        fig_name = f'{self.results_dir}/history{postfix}.png'
+        if not managed:
+            postfix = self.create_postfix()
+            fig_name = f'{self.results_dir}/history{postfix}.png'
+            plt.close('all')
 
-        plt.close('all')
-        plt.subplot(2,1,1)
+        plt.subplot(1,2,1)
         plt.semilogy(hist.history['loss'],'.-',
-                     label='loss')
+                     label=f'loss {add}')
 
         plt.grid()
         plt.legend()
         plt.gca().set_xlabel('epoch')
 
         if 'val_loss' in hist.history:
-            plt.subplot(2,1,1)
+            plt.subplot(1,2,1)
             plt.semilogy(hist.history['val_loss'],'.-',
-                         label='validation loss')
+                         label=f'validation loss {add}')
 
-        plt.subplot(2,1,2)
+        plt.subplot(1,2,2)            
         if 'error' in hist.history:
             plt.semilogy(hist.history['error'],'.-',
-                         label='validation error')
+                         label=f'validation error {add}')
 
-        if 'base' in hist.history:
+        if 'base' in hist.history and plot_baseline:
             plt.semilogy(hist.history['base'],'.-',
-                         label='validation baseline')
+                         label=f'validation baseline')
+
+
         plt.grid()
         plt.legend()
         plt.gca().set_xlabel('epoch')
 
-        print(fig_name)
-        plt.tight_layout()
-        plt.savefig(fig_name)
+        if not managed:
+            print(fig_name)
+            plt.tight_layout()
+            plt.savefig(fig_name)
 
     def plot_prediction_error(self, X, Y, Z, add_name='', scalers=None):
 
         postfix = self.create_postfix(add_name)
         fig_name = f'{self.results_dir}/errors{postfix}.png'
-        
+
         # X = scalers['HR'].inverse_transform(X.reshape(X.shape[0],-1))\
         #                  .reshape(X.shape)
         # Y = scalers['HR'].inverse_transform(Y.reshape(Y.shape[0],-1))\
         #                  .reshape(Y.shape)
         # Z = scalers['LR'].inverse_transform(Z.reshape(Z.shape[0],-1))\
         #                  .reshape(Z.shape)
-        
+
         RSE_Y = np.sqrt(np.sum(np.square(X-Y),axis=(1,2,3)))
         RSE_Z = np.sqrt(np.sum(np.square(X-Z),axis=(1,2,3)))
 

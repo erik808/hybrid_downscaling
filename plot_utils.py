@@ -147,12 +147,12 @@ class PlotMachine():
         postfix = self.create_postfix(add_name)
         fig_name = f'{self.results_dir}/errors{postfix}.png'
         
-        X = scalers['HR'].inverse_transform(X.reshape(X.shape[0],-1))\
-                         .reshape(X.shape)
-        Y = scalers['HR'].inverse_transform(Y.reshape(Y.shape[0],-1))\
-                         .reshape(Y.shape)
-        Z = scalers['LR'].inverse_transform(Z.reshape(Z.shape[0],-1))\
-                         .reshape(Z.shape)
+        # X = scalers['HR'].inverse_transform(X.reshape(X.shape[0],-1))\
+        #                  .reshape(X.shape)
+        # Y = scalers['HR'].inverse_transform(Y.reshape(Y.shape[0],-1))\
+        #                  .reshape(Y.shape)
+        # Z = scalers['LR'].inverse_transform(Z.reshape(Z.shape[0],-1))\
+        #                  .reshape(Z.shape)
         
         RSE_Y = np.sqrt(np.sum(np.square(X-Y),axis=(1,2,3)))
         RSE_Z = np.sqrt(np.sum(np.square(X-Z),axis=(1,2,3)))
@@ -182,10 +182,11 @@ class PlotMachine():
         return postfix
 
 
-    def plot_enstrophy_spectrum(self, transect_name='along_flow', data = {}):
+    def plot_enstrophy_spectrum(self, transect_name='along_flow', data = {}, add_coarse_data=False):
 
         # get coarse data:
-        do = dm.get_coarse_data(data['time'])
+        if add_coarse_data:
+            do = dm.get_coarse_data(data['time'])
 
         ct = ComputeTool()
         S_truth  = ct.compute_spectrum_along_transect(
@@ -203,17 +204,20 @@ class PlotMachine():
             data['scaler_lowres'],
             transect_name=transect_name,
             spectrum_type='enstrophy')
-        S_coarse  = ct.compute_spectrum_along_transect(
-            do,
-            None,
-            transect_name=transect_name,
-            spectrum_type='energy')
+
+        if add_coarse_data:
+            S_coarse  = ct.compute_spectrum_along_transect(
+                do,
+                None,
+                transect_name=transect_name,
+                spectrum_type='energy')
 
         # compute mean
         S_truth_mn  = np.mean(S_truth, axis=0)
         S_pred_mn   = np.mean(S_pred, axis=0)
         S_lowres_mn = np.mean(S_lowres, axis=0)
-        S_coarse_mn = np.mean(S_coarse, axis=0)
+        if add_coarse_data:
+            S_coarse_mn = np.mean(S_coarse, axis=0)
 
         n = len(S_truth_mn)
         kvals = np.arange(1,n+1)
@@ -222,7 +226,8 @@ class PlotMachine():
         plt.loglog(S_truth_mn, '.-', label='HR truth')
         plt.loglog(S_pred_mn, '.-', label='Model prediction')
         plt.loglog(S_lowres_mn, '.-', label='LR forcing/control')
-        plt.loglog(S_coarse_mn, '.-', label='Coarse model')
+        if add_coarse_data:
+            plt.loglog(S_coarse_mn, '.-', label='Coarse model')
         plt.legend()
         plt.grid()
         plt.gca().set_ylim([1e-5,1])
@@ -235,9 +240,10 @@ class PlotMachine():
         plt.tight_layout()
         plt.savefig(fig_name)
 
-    def plot_energy_spectrum(self, transect_name='along_flow', data = {}):
+    def plot_energy_spectrum(self, transect_name='along_flow', data = {}, add_coarse_data=False):
 
-        do = dm.get_coarse_data(data['time'])
+        if add_coarse_data:
+            do = dm.get_coarse_data(data['time'])
 
         ct = ComputeTool()
         S_truth  = ct.compute_spectrum_along_transect(
@@ -258,17 +264,19 @@ class PlotMachine():
             transect_name=transect_name,
             spectrum_type='energy')
 
-        S_coarse  = ct.compute_spectrum_along_transect(
-            do,
-            None,
-            transect_name=transect_name,
-            spectrum_type='energy')
+        if add_coarse_data:
+            S_coarse  = ct.compute_spectrum_along_transect(
+                do,
+                None,
+                transect_name=transect_name,
+                spectrum_type='energy')
 
         # compute mean
         S_truth_mn  = np.mean(S_truth, axis=0)
         S_pred_mn   = np.mean(S_pred, axis=0)
         S_lowres_mn = np.mean(S_lowres, axis=0)
-        S_coarse_mn = np.mean(S_coarse, axis=0)
+        if add_coarse_data:
+            S_coarse_mn = np.mean(S_coarse, axis=0)
 
         k_1 = np.linspace(1.7,np.ceil(len(S_truth_mn)/2), 100)
         k_2 = np.linspace(7,len(S_truth_mn), 100)
@@ -282,7 +290,8 @@ class PlotMachine():
         plt.loglog(S_truth_mn, '.-' , label='HR truth')
         plt.loglog(S_pred_mn, '.-'  , label='Model prediction')
         plt.loglog(S_lowres_mn, '.-', label='LR forcing/control')
-        plt.loglog(S_coarse_mn, '.-', label='Coarse model')
+        if add_coarse_data:
+            plt.loglog(S_coarse_mn, '.-', label='Coarse model')
         plt.loglog(k_1, offset_1 * k_1**(-5/3), '--', label='k^-5/3')
         plt.loglog(k_2, offset_2 * k_2**(-3), ':', label='k^-3')
         plt.legend()

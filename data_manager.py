@@ -10,6 +10,7 @@ import pytide
 import scipy
 from scipy.ndimage import gaussian_filter
 from sklearn.preprocessing import MinMaxScaler
+from sklearn.preprocessing import StandardScaler
 from multiprocess import Pool
 
 
@@ -354,8 +355,12 @@ def load_uv_data(coarsen_in_time=False,
 
         data_LR = np.stack([ds_LR['uo'].fillna(0.0).values,
                             ds_LR['vo'].fillna(0.0).values], axis=3)
+        
         U = reduced_basis(data_LR, truncation)
         U = regrid_basis(U)
+        
+        # da_LR_uo = filter_HR_data(da_HR_uo, sigma)
+        # da_LR_vo = filter_HR_data(da_HR_vo, sigma)
 
         da_LR_uo, c_uo = orth_project(U[...,0], da_HR_uo)
         da_LR_vo, c_vo = orth_project(U[...,1], da_HR_vo)
@@ -464,28 +469,41 @@ def load_training_data(split_factor=4/5,
     scalers['R']  = MinMaxScaler(feature_range=scaling_range)
 
     Nt, Nlat, Nlon, num_channels = data_HR.shape
+    data_HR_orig = data_HR
+    data_LR_orig = data_LR
 
     data_HR = scalers['HR'].fit_transform(data_HR.reshape(Nt, -1))\
                            .reshape(Nt, Nlat, Nlon, num_channels)
 
-    data_LR = scalers['LR'].fit_transform(data_LR.reshape(Nt, -1))\
-                           .reshape(Nt, Nlat, Nlon, num_channels)
+    use_same_scaler = True
+    if use_same_scaler:
+        scalers['LR'] = scalers['HR']
+        data_LR = scalers['LR'].transform(data_LR.reshape(Nt, -1))\
+                               .reshape(Nt, Nlat, Nlon, num_channels)
+    else:
+        data_LR = scalers['LR'].fit_transform(data_LR.reshape(Nt, -1))\
+                               .reshape(Nt, Nlat, Nlon, num_channels)
 
-    # import matplotlib.pyplot as plt
+    import matplotlib.pyplot as plt
+
+    scale = scalers['HR'].scale_.reshape(Nlat,Nlon,num_channels)
+    
     # plt.close('all')
-    # plt.figure()
-    # h = plt.imshow(data_HR[100,:,:,0])
+    # plt.subplot(2,2,1)
+    # h = plt.imshow(data_HR[100,:,:,0], vmin=0, vmax=1)
+    # #h = plt.imshow(scale[...,0])
     # plt.colorbar(h)
-    # plt.figure()
-    # h = plt.imshow(data_LR[100,:,:,0])
+    # plt.subplot(2,2,2)
+    # h = plt.imshow(data_LR[100,:,:,0], vmin=0, vmax=1)
+    # #h = plt.imshow(scale[...,1])
     # plt.colorbar(h)
-    # plt.figure()
-    # h = plt.imshow(data_HR[100,:,:,1])
+    # plt.subplot(2,2,3)
+    # h = plt.imshow(data_HR[100,:,:,1], vmin=0, vmax=1)
     # plt.colorbar(h)
-    # plt.figure()
-    # h = plt.imshow(data_LR[100,:,:,1])
+    # plt.subplot(2,2,4)
+    # h = plt.imshow(data_LR[100,:,:,1], vmin=0, vmax=1)
     # plt.colorbar(h)
-    # plt.pause(1)    
+    # plt.savefig('tmp.png')
     # breakpoint()
     
     # import matplotlib.pyplot as plt

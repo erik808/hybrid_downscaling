@@ -79,6 +79,7 @@ class AutoEncoder(keras_tuner.HyperModel):
                     noise_stddev=0.0,
                     dropout_rate=0.0,
                     conv_layers_per_block=1,
+                    num_feedthrough_layers=2,
                     kernel_size=(3,3),
                     num_filters=32,
                     num_filters_exp=32,
@@ -100,6 +101,7 @@ class AutoEncoder(keras_tuner.HyperModel):
         self.noise_stddev = noise_stddev
         self.dropout_rate = dropout_rate
         self.conv_layers_per_block = conv_layers_per_block
+        self.num_feedthrough_layers = num_feedthrough_layers
         self.num_filters = num_filters
         self.kernel_size = kernel_size
         self.num_filters_red = num_filters_red
@@ -216,12 +218,12 @@ class AutoEncoder(keras_tuner.HyperModel):
                                          name="dropout_2")
 
         # Should these be residual blocks instead?
-        feedthrough_layer_1 = ConvBlock(self.conv_layers_per_block,
-                                        self.num_filters,
-                                        self.kernel_size,
-                                        activation=self.activation_decoder,
-                                        regularizer=self.regularizer,
-                                        name='feedthrough_layer_1')
+        feedthrough_block = ConvBlock(self.num_feedthrough_layers,
+                                      self.num_filters,
+                                      self.kernel_size,
+                                      activation=self.activation_decoder,
+                                      regularizer=self.regularizer,
+                                      name='feedthrough_block')
 
         output_layer = ConvBlock(1, num_channels,
                                  self.kernel_size,
@@ -238,14 +240,14 @@ class AutoEncoder(keras_tuner.HyperModel):
         y = upsample_layer_3(y)
 
         if self.feedthrough_only:
-            output = feedthrough_layer_1(feedthrough)
+            output = feedthrough_block(feedthrough)
             output = output_layer(output)
 
             inputs_decoder=[feedthrough]
             inputs_autoencoder=[feedthrough]
 
         elif self.use_feedthrough:
-            z = feedthrough_layer_1(feedthrough)
+            z = feedthrough_block(feedthrough)
 
             if feedthrough_type == 'concatenate':
                 output = layers.Concatenate()([y, z])
@@ -548,11 +550,11 @@ class CustomValidation(keras.callbacks.Callback):
 
             if self.pars['evaluate']:
                 
-                xk = self.inverse_transform(xk, self.scalers['HR'])
+                # xk = self.inverse_transform(xk, self.scalers['HR'])
                 
                 xk_true = np.expand_dims(self.test_data[i,], axis=0)
-                xk_true = self.inverse_transform(xk_true, self.scalers['HR'])
-                xk_LR = self.inverse_transform(xk_LR, self.scalers['LR'])
+                # xk_true = self.inverse_transform(xk_true, self.scalers['HR'])
+                # xk_LR = self.inverse_transform(xk_LR, self.scalers['LR'])
 
                 error += (np.sum(np.square(xk - xk_true)))
                 base += (np.sum(np.square(xk_LR - xk_true)))

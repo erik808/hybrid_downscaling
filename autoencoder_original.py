@@ -51,12 +51,14 @@ class AE_Experiment():
                  compute_data=False,
                  coarsening_method='gaussian_filter',
                  truncation=1000,
-                 sigma=[1,1,1]):
+                 sigma=[1,1,1],
+                 feedthrough_type='hybrid'):
 
         self.init_timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
         self.exp_name = exp_name
         self.tuning_config = tuning_config
         self.do_gridsearch = True
+        self.feedthrough_type = feedthrough_type
 
         self.folder_id = self.init_timestamp \
             if self.exp_name == None else self.exp_name
@@ -123,7 +125,7 @@ class AE_Experiment():
                     'args' : {'name':'epochs',
                               'low': 1,
                               'high':50},
-                    'search_space' : [4] },
+                    'search_space' : [24] },
                 'layers_per_block' : {
                     'type' : 'int',
                     'args' : {'name' : 'conv_layers_per_block',
@@ -135,7 +137,7 @@ class AE_Experiment():
                     'args' : {'name' : 'num_filters_red',
                               'low'  : 1,
                               'high' : 100},
-                    'search_space' : [6,8,10] } },
+                    'search_space' : [8] } },
             #-------------------------------------------------------
             'regularization' : {
                 'L2_lambda' : {
@@ -267,9 +269,17 @@ class AE_Experiment():
     def build_and_run_model(self, predict_only=False, evaluate=True,
                             alternative_control=None):
         # AE-MODEL CONFIG
-        use_feedthrough = True
-        feedthrough_only = False
+        use_feedthrough = True if (self.feedthrough_type == 'hybrid' or
+                                   self.feedthrough_type == 'only') else False
+        feedthrough_only = (self.feedthrough_type == 'only')
+
+        print(f'feedthrough_type: {self.feedthrough_type}')
+        print(f'  - use_feedthrough: {use_feedthrough}')
+        print(f'  - feedthrough_only: {feedthrough_only}')
+
+        # disabled for now
         use_embedded_ESN = False
+        if feedthrough_only: use_embedded_ESN = False
 
         # DATA CONFIG
         self.history = self.hyper_params['history']
@@ -320,27 +330,27 @@ class AE_Experiment():
 
         esn_params = esn_interface.hyperparams
 
-        if feedthrough_only: use_embedded_ESN = False
+        
 
         mdir = self.dirs['models']
         postfix, timestamp = self.create_postfix()
 
         def my_loss(y_true, y_pred):
-            
+
             y_pred = ops.convert_to_tensor(y_pred)
             y_true = ops.convert_to_tensor(y_true, dtype=y_pred.dtype)
-            
+
             def compute_2d_energy_spectrum(tensor):
                 im = ops.zeros_like(tensor[...,0])
                 s_u = ops.fft2((tensor[...,0], im))
-                s_v = ops.fft2((tensor[...,1], im))                
+                s_v = ops.fft2((tensor[...,1], im))
                 u = ops.square(ops.sqrt(ops.square(s_u[0]) +
                                         ops.square(s_u[1])))
                 v = ops.square(ops.sqrt(ops.square(s_v[0]) +
                                         ops.square(s_v[1])))
                 E = (u + v)/2
                 E = E / ops.max(E)
-                
+
                 return E
 
             # y_pred = self.scalers['HR'].inverse_transform(data.reshape(Nt,-1))\
@@ -684,11 +694,13 @@ class AE_Experiment():
         return postfix, timestamp
 
 if __name__=="__main__":
-    exp = AE_Experiment(exp_name='short_test',
+    exp = AE_Experiment(exp_name='gaussian_FT_hybrid_2lrs',
                         tuning_config='default',
                         detide=False,
                         compute_data=False,
-                        coarsening_method='reduced_basis',
-                        truncation=500)
+                        coarsening_method='gaussian_filter',
+                        truncation=100,
+                        sigma=[1,1.5,1.5],
+                        feedthrough_type='hybrid')
     exp.run_optuna_study()
     exp.create_movie()

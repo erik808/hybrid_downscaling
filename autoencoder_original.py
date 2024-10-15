@@ -139,7 +139,7 @@ class AE_Experiment():
                               'high' : 100},
                     'search_space' : [8] } },
             #-------------------------------------------------------
-            'regularization' : {
+            'regularization' : {w
                 'L2_lambda' : {
                     'type' : 'float',
                     'args' : {'name' : 'L2_lambda',
@@ -330,8 +330,6 @@ class AE_Experiment():
 
         esn_params = esn_interface.hyperparams
 
-        
-
         mdir = self.dirs['models']
         postfix, timestamp = self.create_postfix()
 
@@ -444,7 +442,8 @@ class AE_Experiment():
         tic = time.time()
 
         # really necessary to expand to 4 dims?
-        T_train = np.expand_dims(np.arange(train_data_inp.shape[0]), axis=[1,2,3])
+        T_train = np.expand_dims(np.arange(train_data_inp.shape[0]),
+                                 axis=[1,2,3])
         T_test  = np.expand_dims(np.arange(train_data_inp.shape[0],
                                            train_data_inp.shape[0] +
                                            test_data.shape[0]),

@@ -1,14 +1,3 @@
-* Housekeeping
-
-** TODO data_manager should become a class
-   This will make a lot of things more efficient, especially storage
-   of interpolators.
-
-** TODO rename main tuning script
-   from autoencoder_original to something that makes sense
-
-
-
 * Implement lookback and a recurrent cell
 
 ** TODO Change tensor dimensions everywhere from 4D to 5D
@@ -21,3 +10,20 @@
    - ESN
    - LSTM
    - GRU
+
+* Housekeeping
+
+** TODO data_manager should become a class
+   This will make a lot of things more efficient, especially storage
+   of interpolators.
+
+** TODO rename main tuning script
+   from autoencoder_original to something that makes sense
+   
+** TODO get rid of residual mode in everything
+   I don't think it will work. And at a later stage it might be easier
+   to implement again if the code is cleaner.
+
+** TODO get rid of old code
+   put it somewhere for reference
+   

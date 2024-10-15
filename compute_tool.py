@@ -1,7 +1,8 @@
 import numpy as np
 from importlib import reload
-import data_manager as dm
-reload(dm)
+import data_manager
+reload(data_manager)
+from data_manager import DataManager
 import dill
 
 from transectpicker.transectpicker import TransectPicker
@@ -14,7 +15,8 @@ class ComputeTool():
 
     def __init__(self):
 
-        self.grid, self.binary_mask = dm.get_grid()
+        self.dm = DataManager()
+        self.grid, self.binary_mask = self.dm.get_grid()
         self.mask = np.where(self.binary_mask==0, np.nan, 1)
         self.e1 = self.grid.e1t.data # in m
         self.e2 = self.grid.e2t.data # in m
@@ -27,15 +29,15 @@ class ComputeTool():
             return
         else:
             self.transect_regridder = transect_name
-            dill_file = f'{dm.transect_dir}/{transect_name}.dill'
+            dill_file = f'{self.dm.transect_dir}/{transect_name}.dill'
             print(f'Loading transect from {dill_file}')
             with open(dill_file, 'rb') as file:
                 tpicker = dill.load(file)['tpicker']
 
                 transect_res=len(tpicker.x_trans)
                 self.regridder = \
-                    dm.regrid_to_transect(tpicker,
-                                          resolution=transect_res)
+                    self.dm.regrid_to_transect(tpicker,
+                                               resolution=transect_res)
 
 
     def compute_spectrum_along_transect(self, data, scaler=None,
@@ -199,7 +201,7 @@ class ComputeTool():
         """
 
         # create transect dir if not existing
-        os.system(f'mkdir -p {dm.transect_dir}')
+        os.system(f'mkdir -p {self.dm.transect_dir}')
 
         plt.subplots(figsize=(5,4))
         im = plt.pcolormesh(field)
@@ -207,7 +209,7 @@ class ComputeTool():
         plt.show()
 
         transect_name = input('Give a name for the transect\n')
-        dill_file = f'{dm.transect_dir}/{transect_name}.dill'
+        dill_file = f'{self.dm.transect_dir}/{transect_name}.dill'
 
         container = {'tpicker' : tpicker}
 

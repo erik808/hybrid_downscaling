@@ -1,8 +1,9 @@
 * Implement lookback and a recurrent cell
 
-** TODO Change tensor dimensions everywhere from 4D to 5D
-   Dimension should be
+** TODO Change tensor dimensions inside the model from 4D to 5D
+   Dimension should be:
    sample x lookback x lats x lons x channels
+   - [ ] Achieve this using generators
 
 ** TODO RNN
    Can be

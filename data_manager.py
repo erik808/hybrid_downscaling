@@ -19,21 +19,21 @@ class DataManager():
     def __init__(self):
 
         self.data_dir      = 'data'
-        self.transect_dir  = f'{data_dir}/transects'
+        self.transect_dir  = f'{self.data_dir}/transects'
         self.HR_data_files = \
-            (f'{data_dir}/cmems_mod_nws_phy_anfc_0.027deg-2D_PT15M-i_'
+            (f'{self.data_dir}/cmems_mod_nws_phy_anfc_0.027deg-2D_PT15M-i_'
              f'uo-vo_4.23E-7.78E_56.81N-58.70N_2023-/*.nc')
 
         self.HR_bathy_file = \
-            (f'{data_dir}/cmems_mod_nws_phy_anfc_0.027deg-3D_'
+            (f'{self.data_dir}/cmems_mod_nws_phy_anfc_0.027deg-3D_'
              f'static_multi-vars_4.23E-7.78E_56.81N-58.70N_0.49-643.57m.nc')
 
         self.coords_file = \
-            (f'{data_dir}/cmems_mod_nws_phy_anfc_0.027deg-3D_'
+            (f'{self.data_dir}/cmems_mod_nws_phy_anfc_0.027deg-3D_'
              f'static_e1t-e2t-e3t_4.23E-7.78E_56.81N-58.70N_0.49-643.57m.nc')
 
         self.LR_data_file = \
-            (f'{data_dir}/cmems_mod_nws_phy-uv_my_7km-2D_PT1H-i_'
+            (f'{self.data_dir}/cmems_mod_nws_phy-uv_my_7km-2D_PT1H-i_'
              f'uo-vo_4.22E-7.78E_56.80N-58.67N_2023-01-01-2023-12-31.nc')
 
 
@@ -373,7 +373,7 @@ class DataManager():
                            coarsen_in_time=False,
                            coarsening_method='gaussian_filter',
                            detide=False,
-                           differences=False
+                           differences=False,
                            sigma=[1,1,1],
                            truncation=20):
 
@@ -444,14 +444,14 @@ class DataManager():
 
     def create_training_data(self,
                              compute_data=True,
-                             encoder=None,                             
+                             encoder=None,
                              coarsen_in_time=False,
                              coarsening_method='gaussian_filter',
                              detide=False,
                              differences=False,
                              sigma=[1,1,1],
                              truncation=20,
-                             lookback=1):
+                             lookback=0):
 
         postfix =  ''
         postfix =  '_detided' if detide else ''
@@ -477,7 +477,7 @@ class DataManager():
                                         coarsen_in_time=coarsen_in_time,
                                         coarsening_method=coarsening_method,
                                         detide=detide,
-                                        differences=differences
+                                        differences=differences,
                                         sigma=sigma,
                                         truncation=truncation)
 
@@ -524,43 +524,42 @@ class DataManager():
             else:
                 enc_data = None
 
-
-        orig_data = self.create_lookback(orig_data)
-
         return orig_data, params, scalers, enc_data
 
 
-    def create_lookback(self, orig_data, lookback=1):
-        print('Create input data with lookback')
+    def create_lookback(self, data, lookback=0):
         
-        # For now we implement this only for the HR data
-
-        lookback = 4
-
+        print('Create input data with lookback')        
         # append train and test data along samples axis
-        train_range = range(lookback,
-                            orig_data['train']['time'].shape[0])        
-        
-        time_array = np.append(orig_data['train']['time'],
-                               orig_data['test']['time'],
-                               axis=0)
+        orig_train_length = data['train']['time'].shape[0]
+        orig_test_length = data['test']['time'].shape[0]
 
-        time_array = np.expand_dims(time_array, axis=1)
-        n_samples = time_array.shape[0]
-        fields = list()
+        train_range = range(0, orig_train_length - lookback)
+        test_range = range(train_range.stop,
+                           train_range.stop + orig_test_length)
 
-        for lb in range(lookback):
-            print(lb)
-            # lookback field
-            lb_field = time_array[lookback-lb-1:n_samples-lb]
-            print(lb_field.shape)
+        for key in ['HR', 'LR', 'time']:
+            X = np.append(data['train'][key],
+                          data['test'][key],
+                          axis=0)
 
-            fields.append(time_array[lookback:n_samples-lb])
+            n_samples = X.shape[0]
+            fields = list()
+            for lb in range(lookback+1):
+                # lookback field
+                lb_field = X[lookback-lb:n_samples-lb,]
+                fields.append(lb_field)
 
+            tic = time.time()
+            print(f'Stacking lookback fields: {key}')
+            data = np.stack(fields, axis=1)
+            data['train'][key] = data[train_range,]
+            data['test'][key] = data[test_range,]
+            toc = time.time()
+            print(f'done ({toc-tic:.1f}s)')
 
-        breakpoint()
-
-
+        return orig_data
+    
 
     def setup_directories(self, experiment_id, add_id):
         models_dir = f'experiments/{experiment_id}{add_id}/models'

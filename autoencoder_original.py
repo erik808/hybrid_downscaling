@@ -53,8 +53,7 @@ class AE_Experiment():
                  coarsening_method='gaussian_filter',
                  truncation=1000,
                  sigma=[1,1,1],
-                 feedthrough_type='hybrid',
-                 lookback=1):
+                 feedthrough_type='hybrid'):
 
         self.init_timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
         self.exp_name = exp_name
@@ -96,8 +95,7 @@ class AE_Experiment():
                                          detide=detide,
                                          coarsening_method=coarsening_method,
                                          sigma=sigma,
-                                         truncation=truncation,
-                                         lookback=lookback)
+                                         truncation=truncation)
         # -------------------------------------------------------
         self.trial_id = None
 

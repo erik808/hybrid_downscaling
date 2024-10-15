@@ -5,7 +5,9 @@ import os
 from multiprocess import Pool
 from importlib import reload
 import dill
-import data_manager as dm
+import data_manager
+reload(data_manager)
+from data_manager import DataManager
 import compute_tool
 reload(compute_tool)
 from compute_tool import ComputeTool
@@ -29,6 +31,7 @@ class PlotMachine():
         self.frame_stride=4
         self.pool_size=1
         self.trial_id=trial_id
+        self.dm = DataManager()
 
     def plot_single_frame(self, frame_id, output_dict=None):
         self.output_dict = self.output_dict \
@@ -184,13 +187,16 @@ class PlotMachine():
         postfix += f'_{timestamp}'
 
         return postfix
+    
 
-
-    def plot_enstrophy_spectrum(self, transect_name='along_flow', data = {}, add_coarse_data=False):
+    def plot_enstrophy_spectrum(self,
+                                transect_name='along_flow',
+                                data = {},
+                                add_coarse_data=False):
 
         # get coarse data:
         if add_coarse_data:
-            do = dm.get_coarse_data(data['time'])
+            do = self.dm.get_coarse_data(data['time'])
 
         ct = ComputeTool()
         S_truth  = ct.compute_spectrum_along_transect(
@@ -244,10 +250,13 @@ class PlotMachine():
         plt.tight_layout()
         plt.savefig(fig_name)
 
-    def plot_energy_spectrum(self, transect_name='along_flow', data = {}, add_coarse_data=False):
+    def plot_energy_spectrum(self,
+                             transect_name='along_flow',
+                             data = {},
+                             add_coarse_data=False):
 
         if add_coarse_data:
-            do = dm.get_coarse_data(data['time'])
+            do = self.dm.get_coarse_data(data['time'])
 
         ct = ComputeTool()
         S_truth  = ct.compute_spectrum_along_transect(

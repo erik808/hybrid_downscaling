@@ -15,12 +15,13 @@ from keras import ops
 from keras.src.losses.loss import squeeze_or_expand_to_same_rank
 
 import optuna
+import data_manager
+reload(data_manager)
+
+from data_manager import DataManager
 
 import plot_utils
 reload(plot_utils)
-
-import data_manager as dm
-reload(dm)
 
 import ae_model
 reload(ae_model)
@@ -68,8 +69,9 @@ class AE_Experiment():
             if self.tuning_config == None else f'-{self.tuning_config}'
 
         # setup new or existing directories
+        self.dm = DataManager()
         self.dirs, self.files = \
-            dm.setup_directories(self.folder_id, self.folder_postfix)
+            self.dm.setup_directories(self.folder_id, self.folder_postfix)
 
         if existing_model == None:
             self.load_existing_model = False
@@ -90,12 +92,12 @@ class AE_Experiment():
         # -------------------------------------------------------
         # Load or compute data
         self.data, self.params, self.scalers, _ = \
-            dm.create_training_data(compute_data=compute_data,
-                                    detide=detide,
-                                    coarsening_method=coarsening_method,
-                                    sigma=sigma,
-                                    truncation=truncation,
-                                    lookback=lookback)
+            self.dm.create_training_data(compute_data=compute_data,
+                                         detide=detide,
+                                         coarsening_method=coarsening_method,
+                                         sigma=sigma,
+                                         truncation=truncation,
+                                         lookback=lookback)
         # -------------------------------------------------------
         self.trial_id = None
 
@@ -141,7 +143,7 @@ class AE_Experiment():
                               'high' : 100},
                     'search_space' : [8] } },
             #-------------------------------------------------------
-            'regularization' : {w
+            'regularization' : {
                 'L2_lambda' : {
                     'type' : 'float',
                     'args' : {'name' : 'L2_lambda',
@@ -315,8 +317,8 @@ class AE_Experiment():
         breakpoint()
 
         if alternative_control == 'coarse_model':
-            x_train = dm.get_coarse_data(train_time_ft, interpolate=True)
-            x_test = dm.get_coarse_data(test_time, interpolate=True)
+            x_train = self.dm.get_coarse_data(train_time_ft, interpolate=True)
+            x_test = self.dm.get_coarse_data(test_time, interpolate=True)
             train_data_ft = \
                 self.scalers['R']\
                     .fit_transform(x_train.reshape(len(train_time_ft),-1))\
@@ -573,7 +575,7 @@ class AE_Experiment():
         test_time = self.data['test']['time'][:self.future,]
 
         if alternative_control == 'coarse_model':
-            x = dm.get_coarse_data(test_time, interpolate=True)
+            x = self.dm.get_coarse_data(test_time, interpolate=True)
             lowres = self.scalers['LR']\
                          .transform(x.reshape(len(test_time),-1))\
                          .reshape(x.shape)

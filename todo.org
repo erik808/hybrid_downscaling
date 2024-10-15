@@ -13,7 +13,7 @@
 
 * Housekeeping
 
-** TODO data_manager should become a class
+** DONE data_manager should become a class
    This will make a lot of things more efficient, especially storage
    of interpolators.
 

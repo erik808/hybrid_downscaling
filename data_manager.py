@@ -23,7 +23,7 @@ class DataManager():
         self.HR_data_files = \
             (f'{data_dir}/cmems_mod_nws_phy_anfc_0.027deg-2D_PT15M-i_'
              f'uo-vo_4.23E-7.78E_56.81N-58.70N_2023-/*.nc')
-        
+
         self.HR_bathy_file = \
             (f'{data_dir}/cmems_mod_nws_phy_anfc_0.027deg-3D_'
              f'static_multi-vars_4.23E-7.78E_56.81N-58.70N_0.49-643.57m.nc')
@@ -36,7 +36,7 @@ class DataManager():
             (f'{data_dir}/cmems_mod_nws_phy-uv_my_7km-2D_PT1H-i_'
              f'uo-vo_4.22E-7.78E_56.80N-58.67N_2023-01-01-2023-12-31.nc')
 
-    
+
 
     def build_grid(self, ds=[], mask=[]):
         assert (len(ds) > 0 or
@@ -373,8 +373,7 @@ class DataManager():
                            coarsen_in_time=False,
                            coarsening_method='gaussian_filter',
                            detide=False,
-                           differences=False,
-                           residual_mode=False,
+                           differences=False
                            sigma=[1,1,1],
                            truncation=20):
 
@@ -421,24 +420,7 @@ class DataManager():
             data_LR = scalers['LR'].fit_transform(data_LR.reshape(Nt, -1))\
                                    .reshape(Nt, Nlat, Nlon, num_channels)
 
-        import matplotlib.pyplot as plt
-
         scale = scalers['HR'].scale_.reshape(Nlat,Nlon,num_channels)
-
-        if residual_mode:
-            # create residual and secant predictor data
-            data_R  = (data_HR - data_LR)[2:,]
-            secant  = 2*data_HR[1:-1,] - data_HR[:-2,]
-            data_FT = secant - data_LR[2:,]
-            Nt_R = data_R.shape[0]
-
-            data_R = scalers['R'].fit_transform(data_R.reshape(Nt_R, -1))\
-                                 .reshape(Nt_R, Nlat, Nlon, num_channels)
-            data_FT = scalers['R'].transform(data_FT.reshape(Nt_R, -1))\
-                                  .reshape(Nt_R, Nlat, Nlon, num_channels)
-
-
-        Nt = Nt_R if residual_mode else Nt
 
         params.update({'Nt'   : Nt,
                        'Nlat' : Nlat,
@@ -446,36 +428,23 @@ class DataManager():
                        'num_channels' : num_channels})
 
         split = int(Nt*split_factor)
-        train_range = range(0, split)
-        spinup_range = range(split-10,split)
-        test_range = range(split, Nt)
+        self.train_range = range(0, split)
+        self.test_range = range(split, Nt)
 
-        if residual_mode:
-            data['train'] = {'R'    : data_R[train_range,],
-                             'LR'   : data_LR[2:,][train_range,],
-                             'HR'   : data_HR[2:,][spinup_range,],
-                             'time' : da_LR['uo'].time.values[2:][train_range]}
+        data['train'] = {'HR'   : data_HR[self.train_range,],
+                         'LR'   : data_LR[self.train_range,],
+                         'time' : da_LR['uo'].time.values[self.train_range]}
 
-            data['test']  = {'R'    : data_R[test_range,],
-                             'LR'   : data_LR[2:,][test_range,],
-                             'HR'   : data_HR[2:,][test_range,],
-                             'time' : da_LR['uo'].time.values[2:][test_range]}
-        else:
-            data['train'] = {'HR'   : data_HR[train_range,],
-                             'LR'   : data_LR[train_range,],
-                             'time' : da_LR['uo'].time.values[train_range]}
-
-            data['test']  = {'HR'   : data_HR[test_range,],
-                             'LR'   : data_LR[test_range,],
-                             'time' : da_LR['uo'].time.values[test_range]}
+        data['test']  = {'HR'   : data_HR[self.test_range,],
+                         'LR'   : data_LR[self.test_range,],
+                         'time' : da_LR['uo'].time.values[self.test_range]}
 
         return data, params, scalers
 
 
     def create_training_data(self,
                              compute_data=True,
-                             encoder=None,
-                             residual_mode=False,
+                             encoder=None,                             
                              coarsen_in_time=False,
                              coarsening_method='gaussian_filter',
                              detide=False,
@@ -487,7 +456,6 @@ class DataManager():
         postfix =  ''
         postfix =  '_detided' if detide else ''
         postfix += '_diff' if differences else ''
-        postfix += '_residuals' if residual_mode else ''
 
         if (coarsening_method == 'gaussian_filter' and
             len(sigma) > 0):
@@ -509,8 +477,7 @@ class DataManager():
                                         coarsen_in_time=coarsen_in_time,
                                         coarsening_method=coarsening_method,
                                         detide=detide,
-                                        differences=differences,
-                                        residual_mode=residual_mode,
+                                        differences=differences
                                         sigma=sigma,
                                         truncation=truncation)
 
@@ -558,20 +525,40 @@ class DataManager():
                 enc_data = None
 
 
-        orig_data = self.add_lookback(orig_data)
+        orig_data = self.create_lookback(orig_data)
 
         return orig_data, params, scalers, enc_data
 
 
-    def add_lookback(self, orig_data, lookback=1):
-
+    def create_lookback(self, orig_data, lookback=1):
+        print('Create input data with lookback')
+        
         # For now we implement this only for the HR data
-        lookback = 2
+
+        lookback = 4
+
+        # append train and test data along samples axis
+        train_range = range(lookback,
+                            orig_data['train']['time'].shape[0])        
+        
+        time_array = np.append(orig_data['train']['time'],
+                               orig_data['test']['time'],
+                               axis=0)
+
+        time_array = np.expand_dims(time_array, axis=1)
+        n_samples = time_array.shape[0]
+        fields = list()
+
+        for lb in range(lookback):
+            print(lb)
+            # lookback field
+            lb_field = time_array[lookback-lb-1:n_samples-lb]
+            print(lb_field.shape)
+
+            fields.append(time_array[lookback:n_samples-lb])
+
 
         breakpoint()
-        # for lb in range(lookback)
-
-
 
 
 
@@ -600,9 +587,9 @@ class DataManager():
         return dirs, files
 
 
-    
+
 class CustomScaler():
-    
+
     def __init__(self, scaling_type = 'minmax_per_feature'):
         self.scaling_type = scaling_type
         self.shift = None
@@ -639,4 +626,3 @@ class CustomScaler():
     def inverse_transform(self, data):
         if not fitted: raise Exception('scaler not fitted')
         return (x / self.scale) + self.shift
-

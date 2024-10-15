@@ -540,12 +540,6 @@ class CustomValidation(keras.callbacks.Callback):
             else:
                 xk = self.model.predict([xk, tid], verbose=0)
 
-            if ('residual_mode' in self.pars and
-                self.pars['residual_mode']):
-                xk = self.scalers['R']\
-                         .inverse_transform(xk.reshape(1,-1))\
-                         .reshape(xk.shape) + xk_LR
-
             self.predictions[i,] = xk
 
             if self.pars['evaluate']:

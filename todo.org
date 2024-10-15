@@ -20,7 +20,7 @@
 ** TODO rename main tuning script
    from autoencoder_original to something that makes sense
    
-** TODO get rid of residual mode in everything
+** DONE get rid of residual mode in everything
    I don't think it will work. And at a later stage it might be easier
    to implement again if the code is cleaner.
 

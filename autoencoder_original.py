@@ -52,7 +52,8 @@ class AE_Experiment():
                  coarsening_method='gaussian_filter',
                  truncation=1000,
                  sigma=[1,1,1],
-                 feedthrough_type='hybrid'):
+                 feedthrough_type='hybrid',
+                 lookback=1):
 
         self.init_timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
         self.exp_name = exp_name
@@ -93,7 +94,8 @@ class AE_Experiment():
                                     detide=detide,
                                     coarsening_method=coarsening_method,
                                     sigma=sigma,
-                                    truncation=truncation)
+                                    truncation=truncation,
+                                    lookback=lookback)
         # -------------------------------------------------------
         self.trial_id = None
 
@@ -309,6 +311,8 @@ class AE_Experiment():
         # LR/control/feedthrough test data
         test_data_ft   = self.data['test']['LR'][:self.future,]
         test_time      = self.data['test']['time'][:self.future,]
+
+        breakpoint()
 
         if alternative_control == 'coarse_model':
             x_train = dm.get_coarse_data(train_time_ft, interpolate=True)

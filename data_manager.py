@@ -604,7 +604,8 @@ def create_training_data(compute_data=True,
                          detide=False,
                          differences=False,
                          sigma=[1,1,1],
-                         truncation=20):
+                         truncation=20,
+                         lookback=1):
 
     postfix=''
     postfix = '_detided' if detide else ''
@@ -678,6 +679,9 @@ def create_training_data(compute_data=True,
             enc_data = data_enc['data']
         else:
             enc_data = None
+
+
+    orig_data = add_lookback(orig_data)
 
     return orig_data, params, scalers, enc_data
 

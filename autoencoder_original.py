@@ -404,7 +404,7 @@ class AE_Experiment():
                              mask=mask,
                              log_file=self.files['log'] + f'{postfix}',
                              esn=esn,
-                             scalers=self.scalers)
+                             lookback=lookback)
 
             model_pars = {
                 'use_feedthrough':use_feedthrough,
@@ -446,11 +446,13 @@ class AE_Experiment():
 
         tic = time.time()
 
-        datagenerator = DataGenerator(x = [train_data_inp, train_data_ft],
-                                      y = [train_data_otp],
-                                      ft_type = self.feedthrough_type,
-                                      batch_size=batch_size)
-
+        datagenerator = DataGenerator(
+            x = [train_data_inp, train_data_ft],
+            y = [train_data_otp],
+            ft_type = self.feedthrough_type,
+            batch_size=batch_size,
+            shuffle=shuffle,
+        )
 
         esn_callback = TriggerESN(esn,
                                   train_in_epochs=esn_train_in_epochs,
@@ -479,7 +481,6 @@ class AE_Experiment():
         # TRAINING --------------------------------------------
         self.hist = autoencoder.fit(x=datagenerator,
                                     epochs=epochs,
-                                    shuffle=shuffle,
                                     callbacks=callbacks)
 
         toc = time.time()
@@ -670,7 +671,7 @@ class AE_Experiment():
     def create_postfix(self):
 
         postfix = ''
-        if self.trial_id != None: 
+        if self.trial_id != None:
             postfix += f'_trial_{self.trial_id}'
 
         timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')

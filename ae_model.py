@@ -10,38 +10,18 @@ from keras.models import Model
 
 from compute_tool import ComputeTool
 
-# create custom masking class
-@keras.saving.register_keras_serializable(name="custom_masking")
-class Masking(layers.Layer):
-    def __init__(self, mask, **kwargs):
-        super().__init__(**kwargs)
-        self.mask = mask
-
-    def get_config(self):
-        config = super().get_config()
-        config.update({
-            'mask' : keras.saving.serialize_keras_object(self.mask)})
-        return config
-
-    @classmethod
-    def from_config(cls, config):
-        mask_config = config.pop("mask")
-        mask = keras.saving.deserialize_keras_object(mask_config)
-        return cls(mask, **config)
-
-    def call(self, inputs):
-        return ops.multiply(inputs, self.mask)
-
 class AutoEncoder(keras_tuner.HyperModel):
 
-    def __init__(self, test_vec, mask, log_file,
-                 esn=None, scalers=None):
+    def __init__(self, test_vec,
+                 mask, log_file,
+                 esn=None, lookback=0):
         super(AutoEncoder, self).__init__()
 
         self.test_vec = test_vec
         self.mask = mask
         self.log_file = log_file
         self.esn = esn
+        self.lookback = lookback
         self.resblock_ctr = 0
         self.esn_combine_mode = 'replace'
         self.needs_building = True
@@ -110,16 +90,18 @@ class AutoEncoder(keras_tuner.HyperModel):
 
         use_dropout = True if self.dropout_rate > 0 else False
 
+        # infer dimensions
         Nlat, Nlon, num_channels = self.test_vec.shape
+        N_lb = self.lookback + 1 # lookback dimension
 
         masking_layer = Masking(self.mask, name="masking_layer")
         masking_layer_ft = Masking(self.mask, name="masking_layer_ft")
-
-        state_input = layers.Input(shape=(Nlat, Nlon, num_channels),
+        
+        state_input = layers.Input(shape=(N_lb, Nlat, Nlon, num_channels),
                                    name="full_state_input")
 
         if self.use_feedthrough:
-            feedthrough = layers.Input(shape=(Nlat, Nlon, num_channels),
+            feedthrough = layers.Input(shape=(N_lb, Nlat, Nlon, num_channels),
                                        name="feedthrough_input")
 
         # Encoder ------------------------------------------------------
@@ -437,6 +419,28 @@ class ConvBlock():
             x = layer(x)
         return x
 
+# custom masking class
+@keras.saving.register_keras_serializable(name="custom_masking")
+class Masking(layers.Layer):
+    def __init__(self, mask, **kwargs):
+        super().__init__(**kwargs)
+        self.mask = mask
+
+    def get_config(self):
+        config = super().get_config()
+        config.update({
+            'mask' : keras.saving.serialize_keras_object(self.mask)})
+        return config
+
+    @classmethod
+    def from_config(cls, config):
+        mask_config = config.pop("mask")
+        mask = keras.saving.deserialize_keras_object(mask_config)
+        return cls(mask, **config)
+
+    def call(self, inputs):
+        return ops.multiply(inputs, self.mask)
+    
 
 class TriggerESN(keras.callbacks.Callback):
     """Callback to control the ESN during training of the AE

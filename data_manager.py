@@ -442,6 +442,7 @@ class DataManager():
 
 
     def create_training_data(self,
+                             split_data=False,
                              compute_data=True,
                              encoder=None,
                              coarsen_in_time=False,
@@ -522,42 +523,26 @@ class DataManager():
             else:
                 enc_data = None
 
-        return orig_data, params, scalers, enc_data
+        if not split_data:
+            out_data = {}
+            out_data['HR'] = np.append(
+                orig_data['train']['HR'], orig_data['test']['HR'],
+                axis=0)
+            out_data['LR'] = np.append(
+                orig_data['train']['LR'], orig_data['test']['LR'],
+                axis=0)
+            out_data['time'] = np.append(
+                orig_data['train']['time'], orig_data['test']['time'],
+                axis=0)
 
-
-    def create_lookback(self, data, lookback):
-
-        print('Create input data with lookback')
-        # append train and test data along samples axis
-        orig_train_length = data['train']['time'].shape[0]
-        orig_test_length = data['test']['time'].shape[0]
-
-        train_range = range(0, orig_train_length - lookback)
-        test_range = range(train_range.stop,
-                           train_range.stop + orig_test_length)
-
-        for key in ['HR', 'LR', 'time']:
-            X = np.append(data['train'][key],
-                          data['test'][key],
-                          axis=0)
-
-            n_samples = X.shape[0]
-            fields = list()
-            for lb in range(lookback+1):
-                # lookback field
-                lb_field = X[lookback-lb:n_samples-lb,]
-                fields.append(lb_field)
-
-            tic = time.time()
-            print(f'Stacking lookback fields: {key}')
-            data = np.stack(fields, axis=1)
-            data['train'][key] = data[train_range,]
-            data['test'][key] = data[test_range,]
-            toc = time.time()
-            print(f'done ({toc-tic:.1f}s)')
-
-        return orig_data
-
+            len_train = orig_data['train']['time'].shape[0]
+            len_test = orig_data['test']['time'].shape[0] 
+            params['train_range'] = range(0, len_train)
+            params['test_range'] = range(len_train, len_train + len_test)
+        else:
+            out_data = orig_data
+            
+        return out_data, params, scalers, enc_data
 
     def setup_directories(self, experiment_id, add_id):
         models_dir = f'experiments/{experiment_id}{add_id}/models'
@@ -616,45 +601,41 @@ class DataGenerator(keras.utils.PyDataset):
         else:
             self.x = [x[0]]
         self.y = y
-        
+
 
     def __len__(self):
         # number of batches
         return int(np.ceil(self.n / self.batch_size))
-    
+
 
     def __getitem__(self, index):
         low  = index * self.batch_size
         high = np.min([low + self.batch_size, self.n])
         inds = self.indices[low:high]
-
-        batch_x = self.__create_lookback(inds, self.x)
+        batch_x = create_lookback(inds, self.x, self.lookback)
         batch_y = [y[inds,] for y in self.y]
         return (batch_x, batch_y)
-    
 
     def __do_shuffle(self):
         if self.shuffle:
             np.random.shuffle(self.indices)
 
-
-    def __create_lookback(self, inds, data):
-
-        batch = list()
-        for var in data:
-            lb_fields = list() # lookback fields
-            for lb in range(self.lookback+1):
-                lb_field = var[inds-lb,]
-                lb_fields.append(lb_field)
-
-            batch.append(np.stack(lb_fields, axis=1))
-
-        return batch
-
-
     def on_epoch_end(self):
         self.__do_shuffle()
+        
 
+def create_lookback(inds, data, lookback, axis=1):
+    batch = list()
+    
+    for var in data:
+        lb_fields = list() # lookback fields
+        for lb in range(lookback+1):
+            lb_field = var[inds-lb,]
+            lb_fields.append(lb_field)
+
+        batch.append(np.stack(lb_fields, axis=axis))
+
+    return batch
 
 class CustomScaler():
 

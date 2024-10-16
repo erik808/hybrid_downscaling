@@ -19,8 +19,7 @@ class PlotMachine():
                  time_array=None,
                  results_dir=None,
                  movie_dir=None,
-                 trial_id=None,
-                 scalers=None):
+                 trial_id=None):
 
         self.figsize=figsize
         self.output_dict=output_dict
@@ -149,17 +148,10 @@ class PlotMachine():
             plt.tight_layout()
             plt.savefig(fig_name)
 
-    def plot_prediction_error(self, X, Y, Z, add_name='', scalers=None):
+    def plot_prediction_error(self, X, Y, Z, add_name=''):
 
         postfix = self.create_postfix(add_name)
         fig_name = f'{self.results_dir}/errors{postfix}.png'
-
-        # X = scalers['HR'].inverse_transform(X.reshape(X.shape[0],-1))\
-        #                  .reshape(X.shape)
-        # Y = scalers['HR'].inverse_transform(Y.reshape(Y.shape[0],-1))\
-        #                  .reshape(Y.shape)
-        # Z = scalers['LR'].inverse_transform(Z.reshape(Z.shape[0],-1))\
-        #                  .reshape(Z.shape)
 
         RSE_Y = np.sqrt(np.sum(np.square(X-Y),axis=(1,2,3)))
         RSE_Z = np.sqrt(np.sum(np.square(X-Z),axis=(1,2,3)))

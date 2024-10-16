@@ -623,9 +623,6 @@ class DataGenerator(keras.utils.PyDataset):
         return (batch_x, batch_y)
 
 
-
-
-
 class CustomScaler():
 
     def __init__(self, scaling_type = 'minmax_per_feature'):

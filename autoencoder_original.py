@@ -679,7 +679,7 @@ class AE_Experiment():
         return postfix, timestamp
 
 if __name__=="__main__":
-    exp = AE_Experiment(exp_name='gaussian_FT_hybrid_2lrs',
+    exp = AE_Experiment(exp_name='testing',
                         tuning_config='default',
                         detide=False,
                         compute_data=False,

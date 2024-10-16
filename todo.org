@@ -4,6 +4,8 @@
    Dimension should be:
    sample x lookback x lats x lons x channels
    - [ ] Achieve this using generators
+   - [X] Start by replacing current setup with generators and test
+     sanity and performance
 
 ** TODO RNN
    Can be
@@ -25,6 +27,11 @@
    I don't think it will work. And at a later stage it might be easier
    to implement again if the code is cleaner.
 
+** TODO get rid of timeindices in ae_model
+   not necessary if we can use a lookback
+
 ** TODO get rid of old code
    put it somewhere for reference
+
+   
    

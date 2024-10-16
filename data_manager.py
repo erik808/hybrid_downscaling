@@ -528,8 +528,8 @@ class DataManager():
 
 
     def create_lookback(self, data, lookback=0):
-        
-        print('Create input data with lookback')        
+
+        print('Create input data with lookback')
         # append train and test data along samples axis
         orig_train_length = data['train']['time'].shape[0]
         orig_test_length = data['test']['time'].shape[0]
@@ -559,7 +559,7 @@ class DataManager():
             print(f'done ({toc-tic:.1f}s)')
 
         return orig_data
-    
+
 
     def setup_directories(self, experiment_id, add_id):
         models_dir = f'experiments/{experiment_id}{add_id}/models'
@@ -584,6 +584,45 @@ class DataManager():
         files = {'log' : log_file}
 
         return dirs, files
+
+
+
+class DataGenerator(keras.utils.PyDataset):
+
+    def __init__(self, x, y,
+                 ft_type,
+                 batch_size, **kwargs):
+
+        super().__init__(**kwargs)
+        self.batch_size = batch_size
+        self.ft_type = ft_type
+        self.__setup_data(x, y)
+
+    def __setup_data(self, x, y):
+        assert len(x) == 2
+        assert len(y) == 1
+        self.n = y[0].shape[0]
+
+        if self.ft_type == 'hybrid':
+            self.x = x
+        elif self.ft_type == 'only':
+            self.x = [x[1]]
+        else:
+            self.x = [x[0]]
+        self.y = y
+
+    def __len__(self):
+        # number of batches
+        return int(np.ceil(self.n / self.batch_size))
+
+    def __getitem__(self, index):
+        low = index * self.batch_size
+        high = np.min([low + self.batch_size, self.n])
+        batch_x = [x[low:high,] for x in self.x]
+        batch_y = [y[low:high,] for y in self.y]
+        return (batch_x, batch_y)
+
+
 
 
 

@@ -103,7 +103,7 @@ class AE_Experiment():
         # default hyperparams
         self.hyper_params = {
             'history' : 'all',
-            'lookback' : 0,
+            'lookback' : 3,
             'use_skip_connections' : False,
             'conv_layers_per_block' : 2,
             'future' : 400,
@@ -453,6 +453,7 @@ class AE_Experiment():
             ft_type = self.feedthrough_type,
             batch_size=batch_size,
             shuffle=shuffle,
+            lookback=self.hyper_params['lookback']
         )
 
         esn_callback = TriggerESN(esn,
@@ -681,7 +682,7 @@ class AE_Experiment():
         return postfix, timestamp
 
 if __name__=="__main__":
-    exp = AE_Experiment(exp_name='testing',
+    exp = AE_Experiment(exp_name='testing_2',
                         tuning_config='default',
                         detide=False,
                         compute_data=False,

@@ -139,7 +139,7 @@ class AE_Experiment():
                               'high' : 100},
                     'search_space' : [8] } },
             #-------------------------------------------------------
-            'regularization' : {w
+            'regularization' : {
                 'L2_lambda' : {
                     'type' : 'float',
                     'args' : {'name' : 'L2_lambda',

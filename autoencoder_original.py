@@ -451,6 +451,15 @@ class AE_Experiment():
                                       ft_type = self.feedthrough_type,
                                       batch_size=batch_size)
 
+        if feedthrough_only:
+            X_train = [train_data_ft]
+        elif use_feedthrough:
+            X_train = [train_data_inp, train_data_ft]
+        else:
+            X_train = [train_data_inp]
+
+        Y_train = train_data_otp
+
         esn_callback = TriggerESN(esn,
                                   train_in_epochs=esn_train_in_epochs,
                                   num_samples=train_data_inp.shape[0])
@@ -476,10 +485,19 @@ class AE_Experiment():
         callbacks = [esn_callback, self.validation_callback]
 
         # TRAINING --------------------------------------------
-        self.hist = autoencoder.fit(x=datagenerator,
+        self.hist = autoencoder.fit(x=X_train,
+                                    y=Y_train,
                                     epochs=epochs,
+                                    batch_size=batch_size,
                                     shuffle=shuffle,
-                                    callbacks=callbacks)
+                                    callbacks=callbacks
+                                    )
+
+        # self.hist = autoencoder.fit(x=datagenerator,
+        #                             epochs=epochs,
+        #                             shuffle=shuffle,
+        #                             callbacks=callbacks)
+
         toc = time.time()
         print(f'total training time: {(toc-tic)/60}m')
 
@@ -668,7 +686,7 @@ class AE_Experiment():
     def create_postfix(self):
 
         postfix = ''
-        if self.trial_id != None:
+        if self.trial_id != None: 
             postfix += f'_trial_{self.trial_id}'
 
         timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
@@ -677,7 +695,7 @@ class AE_Experiment():
         return postfix, timestamp
 
 if __name__=="__main__":
-    exp = AE_Experiment(exp_name='testing',
+    exp = AE_Experiment(exp_name='gaussian_FT_hybrid_2lrs',
                         tuning_config='default',
                         detide=False,
                         compute_data=False,

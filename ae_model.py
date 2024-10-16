@@ -9,6 +9,7 @@ from keras import regularizers
 from keras.models import Model
 
 from compute_tool import ComputeTool
+import data_manager as dm
 
 class AutoEncoder(keras_tuner.HyperModel):
 
@@ -470,20 +471,25 @@ class CustomValidation(keras.callbacks.Callback):
     """
     """
 
-    def __init__(self, test_data, initial_xk,
-                 plotmachine, pars, scalers):
+    def __init__(self,
+                 data,
+                 test_inds,
+                 plotmachine,
+                 pars):
+
         super().__init__()
 
-        self.initial_xk = initial_xk
-        self.test_data = test_data[0]
+        self.data = data
+        self.test_inds = test_inds
+        self.test_data = self.data['HR'][test_inds,]
+        self.test_data_ft = self.data['LR'][test_inds,]
         self.N_steps = self.test_data.shape[0]
-        self.test_data_ft = test_data[1]
         self.plotmachine = plotmachine
         self.pars = pars
-        self.scalers = scalers
         self.predictions = []
         self.final_error = []
         self.final_base = []
+        self.lookback = self.pars['lookback']
 
     def on_epoch_begin(self, epoch, logs=None):
         if self.pars['predict_only']:
@@ -494,16 +500,17 @@ class CustomValidation(keras.callbacks.Callback):
         if not self.pars['predict_only']:
             self.predict(epoch, logs)
 
-    def inverse_transform(self, field, scaler):
-        return scaler.inverse_transform(field.reshape(1,-1))\
-                     .reshape(field.shape)
 
     def predict(self, epoch, logs=None):
 
         self.predictions = np.zeros_like(self.test_data)
 
-        xk   = self.initial_xk[0]
-        xkm1 = self.initial_xk[1]
+        init_ind = self.test_inds[0]-1
+
+        xk_lb = np.expand_dims(
+            dm.create_lookback(init_ind, [self.data['HR']],
+                               self.lookback,axis=0)[0], axis=0)
+        
         pb_i = keras.utils.Progbar(self.N_steps,
                                    stateful_metrics=['error', 'base'],
                                    interval=0.5)
@@ -511,28 +518,23 @@ class CustomValidation(keras.callbacks.Callback):
 
         for i in range(self.N_steps):
 
-            xk_LR = np.expand_dims(self.test_data_ft[i,], axis=0)
-
+            xk_LR = np.expand_dims(
+                dm.create_lookback(self.test_inds[i], [self.data['LR']],
+                                   self.lookback, axis=0)[0], axis=0)            
             Pxk = xk_LR
-
-            xkm1 = xk
 
             if self.pars['feedthrough_only']:
                 xk = self.model.predict([Pxk], verbose=0)
             elif self.pars['use_feedthrough']:
-                xk = self.model.predict([xk, Pxk], verbose=0)
+                xk = self.model.predict([xk_lb, Pxk], verbose=0)
             else:
-                xk = self.model.predict([xk], verbose=0)
+                xk = self.model.predict([xk_lb], verbose=0)
 
             self.predictions[i,] = xk
 
             if self.pars['evaluate']:
 
-                # xk = self.inverse_transform(xk, self.scalers['HR'])
-
                 xk_true = np.expand_dims(self.test_data[i,], axis=0)
-                # xk_true = self.inverse_transform(xk_true, self.scalers['HR'])
-                # xk_LR = self.inverse_transform(xk_LR, self.scalers['LR'])
 
                 error += (np.sum(np.square(xk - xk_true)))
                 base += (np.sum(np.square(xk_LR - xk_true)))
@@ -543,12 +545,16 @@ class CustomValidation(keras.callbacks.Callback):
             else:
                 pb_i.add(1)
 
+            xk = np.expand_dims(xk, axis=1)
+            xk_lb = np.concatenate([xk, xk_lb], axis=1)\
+                [:,:self.lookback+1,]
+            
+
         if self.pars['evaluate']:
             self.plotmachine.plot_prediction_error(self.test_data,
                                                    self.predictions,
                                                    self.test_data_ft,
-                                                   f'epoch_{epoch}',
-                                                   scalers=self.scalers)
+                                                   f'epoch_{epoch}')
 
             self.final_error = np.sqrt(error/(i+1))
             self.final_base = np.sqrt(base/(i+1))

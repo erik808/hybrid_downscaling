@@ -270,8 +270,11 @@ class AE_Experiment():
                                headers='keys',
                                tablefmt='orgtbl'), file=out)
 
-    def build_and_run_model(self, predict_only=False, evaluate=True,
+    def build_and_run_model(self,
+                            predict_only=False,
+                            evaluate=True,
                             alternative_control=None):
+
         # AE-MODEL CONFIG
         use_feedthrough = True if (self.feedthrough_type == 'hybrid' or
                                    self.feedthrough_type == 'only') else False
@@ -295,24 +298,21 @@ class AE_Experiment():
         esn_train_in_epochs = [0,2,4,8]
         shuffle = True
 
-        if self.history == 'all':  # use all data we have
-            self.history = self.data['train']['HR'].shape[0]
-        if self.future == 'all':  # use all data we have
-            self.future = self.data['test']['HR'].shape[0]
+        self.setup_ranges(self.params)
 
         # input data
-        train_data_inp = self.data['train']['HR'][:-1,][-self.history:,]
+        train_data_inp = self.data['HR'][self.train_range_km1,]
         # output data
-        train_data_otp = self.data['train']['HR'][1:,][-self.history:,]
+        train_data_otp = self.data['HR'][self.train_range_k,]
         # control/feedthrough data
-        train_data_ft  = self.data['train']['LR'][1:,][-self.history:,]
-        train_time_ft  = self.data['train']['time'][1:,][-self.history:,]
+        train_data_ft  = self.data['LR'][self.train_range_k,]
+        train_time_ft  = self.data['time'][self.train_range_k,]
 
         # HR test data
-        test_data      = self.data['test']['HR'][:self.future,]
+        test_data      = self.data['HR'][self.test_range,]
         # LR/control/feedthrough test data
-        test_data_ft   = self.data['test']['LR'][:self.future,]
-        test_time      = self.data['test']['time'][:self.future,]
+        test_data_ft   = self.data['LR'][self.test_range,]
+        test_time      = self.data['time'][self.test_range,]
 
         if alternative_control == 'coarse_model':
             x_train = self.dm.get_coarse_data(train_time_ft, interpolate=True)
@@ -326,86 +326,30 @@ class AE_Experiment():
                     .transform(x_test.reshape(len(test_time),-1))\
                     .reshape(x_test.shape)
 
-        mask = self.params['mask']
-        Nt   = self.params['Nt']
-        Nlon = self.params['Nlon']
-        Nlat = self.params['Nlat']
-        num_channels = self.params['num_channels']
 
         esn_params = esn_interface.hyperparams
 
         mdir = self.dirs['models']
         postfix, timestamp = self.create_postfix()
 
-        def my_loss(y_true, y_pred):
-
-            y_pred = ops.convert_to_tensor(y_pred)
-            y_true = ops.convert_to_tensor(y_true, dtype=y_pred.dtype)
-
-            def compute_2d_energy_spectrum(tensor):
-                im = ops.zeros_like(tensor[...,0])
-                s_u = ops.fft2((tensor[...,0], im))
-                s_v = ops.fft2((tensor[...,1], im))
-                u = ops.square(ops.sqrt(ops.square(s_u[0]) +
-                                        ops.square(s_u[1])))
-                v = ops.square(ops.sqrt(ops.square(s_v[0]) +
-                                        ops.square(s_v[1])))
-                E = (u + v)/2
-                E = E / ops.max(E)
-
-                return E
-
-            # y_pred = self.scalers['HR'].inverse_transform(data.reshape(Nt,-1))\
-            #                            .reshape(Nt, Nlat, Nlon, num_channels)
-            s_true = compute_2d_energy_spectrum(y_true)
-            s_pred = compute_2d_energy_spectrum(y_pred)
-
-            epsilon = 1e-10
-            bias=0.0
-            first_log = ops.log(ops.maximum(s_true, epsilon) + bias)
-            second_log = ops.log(ops.maximum(s_pred, epsilon) + bias)
-            out = ops.mean(ops.square(first_log - second_log), axis=(1,2))
-            return out
-
         if self.load_existing_model:
-            # autoencoder = \
-            #     keras.models.load_model(self.load_path_autoencoder,
-            #                             compile=False)
-            # autoencoder.compile(loss=my_loss)
             autoencoder = \
                 keras.models.load_model(self.load_path_autoencoder)
 
             encoder = keras.models.load_model(self.load_path_encoder)
             decoder = keras.models.load_model(self.load_path_decoder)
 
-            if use_embedded_ESN:
-                esn = autoencoder.get_layer('esn_embedded')
-                # overwrite parameters
-
-                num_samples = train_data_inp.shape[0]
-                timeids = np.arange(num_samples)
-                timetns = np.expand_dims(timeids, axis=[1,2,3])
-                print('create training data for embedded ESN')
-                esn.setPars(esn_params, num_samples=num_samples)
-                values  = esn.pixel_shuffle(encoder.predict([train_data_inp,
-                                                             timetns]))
-                control = esn.pixel_shuffle(encoder.predict([train_data_ft,
-                                                             timetns]))
-                esn.initialize(values, control)
-                esn.populate_storage(values, timeids, control)
-            else:
-                esn_params['external']['bypass_mode'] = True
-                esn = ESN_embedded(esn_params=esn_params)
+            esn_params['external']['bypass_mode'] = not use_embedded_ESN
+            esn = ESN_embedded(esn_params=esn_params)
         else:
 
             esn_params['external']['bypass_mode'] = not use_embedded_ESN
             esn = ESN_embedded(esn_params=esn_params)
-
-            ae = AutoEncoder(test_vec=train_data_inp[0,:,:,:],
-                             mask=mask,
-                             log_file=self.files['log'] + f'{postfix}',
-                             esn=esn,
-                             lookback=self.hyper_params['lookback'])
+            ae = AutoEncoder(test_vec = self.data['HR'][0,:,:,:],
+                             mask = self.params['mask'],
+                             log_file = self.files['log'] + f'{postfix}',
+                             esn = esn,
+                             lookback = self.hyper_params['lookback'])
 
             model_pars = {
                 'use_feedthrough':use_feedthrough,
@@ -438,50 +382,44 @@ class AE_Experiment():
                                dpi=200, show_layer_activations=False,
                                show_layer_names=True)
 
-        # graph = keras.utils.model_to_dot(autoencoder, show_shapes=True)
-
         print('----------------------------------------------------------')
         print(f'experiment: {self.folder_id}{self.folder_postfix},       ')
         print(f'model: {postfix}                                         ')
         print('--------------------------------------------------------- ')
 
         tic = time.time()
-
-        datagenerator = DataGenerator(
+        lookback = self.hyper_params['lookback']
+        datagen_train = DataGenerator(
             x = [train_data_inp, train_data_ft],
             y = [train_data_otp],
             ft_type = self.feedthrough_type,
             batch_size=batch_size,
             shuffle=shuffle,
-            lookback=self.hyper_params['lookback']
+            lookback=lookback
         )
 
         esn_callback = TriggerESN(esn,
                                   train_in_epochs=esn_train_in_epochs,
-                                  num_samples=train_data_inp.shape[0])
+                                  num_samples=self.params['train_range'].stop)
 
-        # we create a custom validation using a callback at every
-        # epoch end
-        initial_xk   = np.expand_dims(self.data['train']['HR'][-1,:,:,:], axis=0)
-        initial_xkm1 = np.expand_dims(self.data['train']['HR'][-2,:,:,:], axis=0)
 
         plotmachine = PlotMachine(results_dir=self.dirs['results'],
                                   trial_id=self.trial_id)
-
+        
         self.validation_callback = \
-            CustomValidation(test_data=(test_data, test_data_ft),
-                             initial_xk=(initial_xk, initial_xkm1),
+            CustomValidation(data = self.data,
+                             test_inds = self.test_range,
                              plotmachine=plotmachine,
                              pars = {'feedthrough_only': feedthrough_only,
                                      'use_feedthrough': use_feedthrough,
                                      'predict_only' : predict_only,
-                                     'evaluate' : evaluate},
-                             scalers = self.scalers)
+                                     'evaluate' : evaluate,
+                                     'lookback' : lookback})
 
         callbacks = [esn_callback, self.validation_callback]
 
         # TRAINING --------------------------------------------
-        self.hist = autoencoder.fit(x=datagenerator,
+        self.hist = autoencoder.fit(x=datagen_train,
                                     epochs=epochs,
                                     callbacks=callbacks)
 
@@ -519,17 +457,71 @@ class AE_Experiment():
         return self.validation_callback.final_error
 
 
+    def setup_ranges(self, params):
+
+        if self.history == 'all':  # use all data we have
+            self.history = params['train_range'].stop
+        if self.future == 'all':  # use all data we have
+            self.future = params['test_range'].stop
+
+        # setup ranges
+        full_train_range = np.arange(params['train_range'].start,
+                                     params['train_range'].stop)
+
+        self.train_range_km1 = full_train_range[:-1,][-self.history:,]
+        self.train_range_k = full_train_range[1:,][-self.history:,]
+
+        full_test_range = np.arange(params['test_range'].start,
+                                    params['test_range'].stop)
+        self.test_range = full_test_range[:self.future,]
+
+
+    def my_loss(self, y_true, y_pred):
+
+        # usage:
+        # autoencoder = \
+        #     keras.models.load_model(self.load_path_autoencoder,
+        #                             compile=False)
+        # autoencoder.compile(loss=self.my_loss)
+
+        y_pred = ops.convert_to_tensor(y_pred)
+        y_true = ops.convert_to_tensor(y_true, dtype=y_pred.dtype)
+
+        def compute_2d_energy_spectrum(tensor):
+            im = ops.zeros_like(tensor[...,0]) # imaginary part
+            s_u = ops.fft2((tensor[...,0], im))
+            s_v = ops.fft2((tensor[...,1], im))
+            u = ops.square(ops.sqrt(ops.square(s_u[0]) +
+                                    ops.square(s_u[1])))
+            v = ops.square(ops.sqrt(ops.square(s_v[0]) +
+                                    ops.square(s_v[1])))
+            E = (u + v)/2
+            E = E / ops.max(E)
+
+            return E
+
+        s_true = compute_2d_energy_spectrum(y_true)
+        s_pred = compute_2d_energy_spectrum(y_pred)
+
+        epsilon = 1e-10
+        bias=0.0
+        first_log = ops.log(ops.maximum(s_true, epsilon) + bias)
+        second_log = ops.log(ops.maximum(s_pred, epsilon) + bias)
+        out = ops.mean(ops.square(first_log - second_log), axis=(1,2))
+        return out
+
+
     def plot_spectra(self):
         plotmachine = PlotMachine(results_dir=self.dirs['results'],
                                   trial_id=self.trial_id)
 
         data_dict = {
-            'truth'  : self.data['test']['HR'][:self.future,],
-            'lowres' : self.data['test']['LR'][:self.future,],
+            'truth'  : self.data['HR'][self.test_range,],
+            'lowres' : self.data['LR'][self.test_range,],
             'pred'   : self.validation_callback.predictions,
             'scaler_truth' : self.scalers['HR'],
             'scaler_lowres' : self.scalers['LR'],
-            'time'   : self.data['test']['time'][:self.future,]
+            'time'   : self.data['time'][self.test_range,]
         }
 
         self.spec_along = \
@@ -559,9 +551,9 @@ class AE_Experiment():
         Nlat = self.params['Nlat']
         num_channels = self.params['num_channels']
 
-        truth = self.data['test']['HR'][:self.future,]
-        lowres = self.data['test']['LR'][:self.future,]
-        test_time = self.data['test']['time'][:self.future,]
+        truth = self.data['HR'][self.test_range,]
+        lowres = self.data['LR'][self.test_range,]
+        test_time = self.data['time'][self.test_range,]
 
         if alternative_control == 'coarse_model':
             x = self.dm.get_coarse_data(test_time, interpolate=True)
@@ -682,7 +674,7 @@ class AE_Experiment():
         return postfix, timestamp
 
 if __name__=="__main__":
-    exp = AE_Experiment(exp_name='testing_2',
+    exp = AE_Experiment(exp_name='testing_feature_lookback',
                         tuning_config='default',
                         detide=False,
                         compute_data=False,
@@ -690,5 +682,6 @@ if __name__=="__main__":
                         truncation=100,
                         sigma=[1,1.5,1.5],
                         feedthrough_type='hybrid')
+    # exp.hyper_params['history']=500
     exp.run_optuna_study()
     exp.create_movie()

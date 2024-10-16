@@ -600,6 +600,7 @@ class DataGenerator(keras.utils.PyDataset):
         self.shuffle = shuffle
         self.lookback = lookback
         self.__setup_data(x, y)
+        
 
     def __setup_data(self, x, y):
         assert len(x) == 2
@@ -615,10 +616,12 @@ class DataGenerator(keras.utils.PyDataset):
         else:
             self.x = [x[0]]
         self.y = y
+        
 
     def __len__(self):
         # number of batches
         return int(np.ceil(self.n / self.batch_size))
+    
 
     def __getitem__(self, index):
         low  = index * self.batch_size
@@ -627,8 +630,8 @@ class DataGenerator(keras.utils.PyDataset):
 
         batch_x = self.__create_lookback(inds, self.x)
         batch_y = [y[inds,] for y in self.y]
-
         return (batch_x, batch_y)
+    
 
     def __do_shuffle(self):
         if self.shuffle:

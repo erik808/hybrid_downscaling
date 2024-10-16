@@ -14,6 +14,10 @@
    - LSTM
    - GRU
 
+** TODO take another look at the scaling
+   Scaling the feedthrough fields with the same scaler as the HR
+   fields still gives problems at the boundaries.
+
 * Housekeeping
 
 ** DONE data_manager should become a class
@@ -33,5 +37,6 @@
 ** TODO get rid of old code
    put it somewhere for reference
 
-   
+** TODO implement tests
+   - [ ] single epoch, short history
    

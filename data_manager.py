@@ -37,7 +37,6 @@ class DataManager():
              f'uo-vo_4.22E-7.78E_56.80N-58.67N_2023-01-01-2023-12-31.nc')
 
 
-
     def build_grid(self, ds=[], mask=[]):
         assert (len(ds) > 0 or
                 len(mask) > 0), 'Either ds or mask should be given'
@@ -591,18 +590,23 @@ class DataGenerator(keras.utils.PyDataset):
     def __init__(self, x, y,
                  ft_type,
                  batch_size,
+                 shuffle=False,
                  lookback=0,
                  **kwargs):
 
         super().__init__(**kwargs)
         self.batch_size = batch_size
         self.ft_type = ft_type
+        self.shuffle = shuffle
+        self.lookback = lookback
         self.__setup_data(x, y)
 
     def __setup_data(self, x, y):
         assert len(x) == 2
         assert len(y) == 1
-        self.n = y[0].shape[0]
+        self.indices = np.arange(self.lookback, x[0].shape[0])
+        self.n = len(self.indices)
+        self.__do_shuffle()
 
         if self.ft_type == 'hybrid':
             self.x = x
@@ -617,11 +621,36 @@ class DataGenerator(keras.utils.PyDataset):
         return int(np.ceil(self.n / self.batch_size))
 
     def __getitem__(self, index):
-        low = index * self.batch_size
+        low  = index * self.batch_size
         high = np.min([low + self.batch_size, self.n])
-        batch_x = [x[low:high,] for x in self.x]
-        batch_y = [y[low:high,] for y in self.y]
+        inds = self.indices[low:high]
+
+        batch_x = self.__create_lookback(inds, self.x)
+        batch_y = [y[inds,] for y in self.y]
+
         return (batch_x, batch_y)
+
+    def __do_shuffle(self):
+        if self.shuffle:
+            np.random.shuffle(self.indices)
+
+
+    def __create_lookback(self, inds, data):
+
+        batch = list()
+        for var in data:
+            lb_fields = list() # lookback fields
+            for lb in range(self.lookback+1):
+                lb_field = var[inds-lb,]
+                lb_fields.append(lb_field)
+
+            batch.append(np.stack(lb_fields, axis=1))
+
+        return batch
+
+
+    def on_epoch_end(self):
+        self.__do_shuffle()
 
 
 class CustomScaler():

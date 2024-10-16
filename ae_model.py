@@ -73,8 +73,7 @@ class AutoEncoder(keras_tuner.HyperModel):
                     verbosity=20,
                     use_feedthrough=True,
                     feedthrough_only=False,
-                    use_skip_connections=False,
-                    use_timeinput=True,
+                    use_skip_connections=False,                    
                     feedthrough_type='multiply',
                     noise_stddev=0.0,
                     dropout_rate=0.0,
@@ -97,7 +96,6 @@ class AutoEncoder(keras_tuner.HyperModel):
         self.feedthrough_type = feedthrough_type
         if self.feedthrough_only: self.use_feedthrough = True
 
-        self.use_timeinput = use_timeinput
         self.noise_stddev = noise_stddev
         self.dropout_rate = dropout_rate
         self.conv_layers_per_block = conv_layers_per_block
@@ -119,10 +117,6 @@ class AutoEncoder(keras_tuner.HyperModel):
 
         state_input = layers.Input(shape=(Nlat, Nlon, num_channels),
                                    name="full_state_input")
-
-        if self.use_timeinput:
-            time_input = layers.Input(shape=(1,1,1),
-                                      name="time_input")
 
         if self.use_feedthrough:
             feedthrough = layers.Input(shape=(Nlat, Nlon, num_channels),
@@ -156,25 +150,26 @@ class AutoEncoder(keras_tuner.HyperModel):
             x_skip_2 = None
 
         self.encoder = \
-            Model([state_input, time_input], encoded, name="encoder")
+            Model(state_input, encoded, name="encoder")
 
+        # !!! THIS WAY OF CALLING THE ESN LAYER IS DEPRECATED !!!
         # Call ESN layer in the latent space
-        if (self.esn != None):
-            # setup feedthrough control
-            if self.use_feedthrough_in_esn:
-                control = encoding_layers(feedthrough)
-            else:
-                control = ops.multiply(encoded, 0.0)
+        # if (self.esn != None):
+        #     # setup feedthrough control
+        #     if self.use_feedthrough_in_esn:
+        #         control = encoding_layers(feedthrough)
+        #     else:
+        #         control = ops.multiply(encoded, 0.0)
 
-            esn_step = self.esn(encoded, time_input, control)
+            # esn_step = self.esn(encoded, time_input, control)
 
-            if (self.esn_combine_mode == 'replace' or
-                self.esn.bypass_mode):
-                encoded = esn_step
-            elif self.esn_combine_mode == 'multiply':
-                encoded = layers.Multiply()([esn_step, encoded])
-            elif self.esn_combine_mode == 'add':
-                encoded = layers.Add()([esn_step, encoded])
+            # if (self.esn_combine_mode == 'replace' or
+            #     self.esn.bypass_mode):
+            #     encoded = esn_step
+            # elif self.esn_combine_mode == 'multiply':
+            #     encoded = layers.Multiply()([esn_step, encoded])
+            # elif self.esn_combine_mode == 'add':
+            #     encoded = layers.Add()([esn_step, encoded])
 
         if self.noise_stddev > 0:
             encoded = layers.GaussianNoise(self.noise_stddev)(encoded)
@@ -261,12 +256,12 @@ class AutoEncoder(keras_tuner.HyperModel):
 
             output = output_layer(output)
             inputs_decoder=[encoded, feedthrough]
-            inputs_autoencoder=[state_input, time_input, feedthrough]
+            inputs_autoencoder=[state_input, feedthrough]
 
         else:
             output = output_layer(y)
             inputs_decoder=[encoded]
-            inputs_autoencoder=[state_input, time_input]
+            inputs_autoencoder=[state_input]
 
         outputs = [masking_layer(output)]
 
@@ -278,8 +273,6 @@ class AutoEncoder(keras_tuner.HyperModel):
         self.autoencoder = Model(inputs=inputs_autoencoder,
                             outputs=outputs,
                             name="autoencoder")
-
-
 
         loss = keras.losses.\
             MeanSquaredError(reduction="sum_over_batch_size",
@@ -491,8 +484,7 @@ class CustomValidation(keras.callbacks.Callback):
         self.initial_xk = initial_xk
         self.test_data = test_data[0]
         self.N_steps = self.test_data.shape[0]
-        self.T_test = test_data[1]
-        self.test_data_ft = test_data[2]
+        self.test_data_ft = test_data[1]
         self.plotmachine = plotmachine
         self.pars = pars
         self.scalers = scalers
@@ -529,16 +521,15 @@ class CustomValidation(keras.callbacks.Callback):
             xk_LR = np.expand_dims(self.test_data_ft[i,], axis=0)
 
             Pxk = xk_LR
-
-            tid = np.expand_dims(self.T_test[i,], axis=0)
+            
             xkm1 = xk
 
             if self.pars['feedthrough_only']:
                 xk = self.model.predict([Pxk], verbose=0)
             elif self.pars['use_feedthrough']:
-                xk = self.model.predict([xk, tid, Pxk], verbose=0)
+                xk = self.model.predict([xk, Pxk], verbose=0)
             else:
-                xk = self.model.predict([xk, tid], verbose=0)
+                xk = self.model.predict([xk], verbose=0)
 
             self.predictions[i,] = xk
 

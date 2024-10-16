@@ -19,6 +19,7 @@ import data_manager
 reload(data_manager)
 
 from data_manager import DataManager
+from data_manager import DataGenerator
 
 import plot_utils
 reload(plot_utils)
@@ -312,8 +313,6 @@ class AE_Experiment():
         test_data_ft   = self.data['test']['LR'][:self.future,]
         test_time      = self.data['test']['time'][:self.future,]
 
-        breakpoint()
-
         if alternative_control == 'coarse_model':
             x_train = self.dm.get_coarse_data(train_time_ft, interpolate=True)
             x_test = self.dm.get_coarse_data(test_time, interpolate=True)
@@ -407,25 +406,27 @@ class AE_Experiment():
                              esn=esn,
                              scalers=self.scalers)
 
-            autoencoder, encoder, decoder = \
-                ae.build_model(
-                    use_feedthrough=use_feedthrough,
-                    feedthrough_only=feedthrough_only,
-                    feedthrough_type='multiply',
-                    learning_rate=self.hyper_params['learning_rate'],
-                    conv_layers_per_block=\
-                    self.hyper_params['conv_layers_per_block'],
-                    use_skip_connections=\
-                    self.hyper_params['use_skip_connections'],
-                    optimizer=self.hyper_params['optimizer'],
-                    L2_lambda=self.hyper_params['L2_lambda'],
-                    dropout_rate=self.hyper_params['dropout_rate'],
-                    noise_stddev=self.hyper_params['noise_stddev'],
-                    num_filters=self.hyper_params['num_filters'],
-                    num_filters_red=self.hyper_params['num_filters_red'],
-                    num_filters_exp=self.hyper_params['num_filters_exp'],
-                    inner_stride=self.hyper_params['inner_stride'],
-                )
+            model_pars = {
+                'use_feedthrough':use_feedthrough,
+                'feedthrough_only':feedthrough_only,
+                'feedthrough_type':'multiply',
+                'learning_rate':self.hyper_params['learning_rate'],
+                'conv_layers_per_block':\
+                self.hyper_params['conv_layers_per_block'],
+                'use_skip_connections':\
+                self.hyper_params['use_skip_connections'],
+                'optimizer':self.hyper_params['optimizer'],
+                'L2_lambda':self.hyper_params['L2_lambda'],
+                'dropout_rate':self.hyper_params['dropout_rate'],
+                'noise_stddev':self.hyper_params['noise_stddev'],
+                'num_filters':self.hyper_params['num_filters'],
+                'num_filters_red':self.hyper_params['num_filters_red'],
+                'num_filters_exp':self.hyper_params['num_filters_exp'],
+                'inner_stride':self.hyper_params['inner_stride']
+            }
+
+            autoencoder, encoder, decoder =  ae.build_model(**model_pars)
+
 
         # print a summary
         autoencoder.summary()
@@ -445,26 +446,14 @@ class AE_Experiment():
 
         tic = time.time()
 
-        # really necessary to expand to 4 dims?
-        T_train = np.expand_dims(np.arange(train_data_inp.shape[0]),
-                                 axis=[1,2,3])
-        T_test  = np.expand_dims(np.arange(train_data_inp.shape[0],
-                                           train_data_inp.shape[0] +
-                                           test_data.shape[0]),
-                                 axis=[1,2,3])
-
-        if feedthrough_only:
-            X_train = [train_data_ft]
-        elif use_feedthrough:
-            X_train = [train_data_inp, T_train, train_data_ft]
-        else:
-            X_train = [train_data_inp, T_train]
-
-        Y_train = train_data_otp
+        datagenerator = DataGenerator(x = [train_data_inp, train_data_ft],
+                                      y = [train_data_otp],
+                                      ft_type = self.feedthrough_type,
+                                      batch_size=batch_size)
 
         esn_callback = TriggerESN(esn,
                                   train_in_epochs=esn_train_in_epochs,
-                                  num_samples=X_train[0].shape[0])
+                                  num_samples=train_data_inp.shape[0])
 
         # we create a custom validation using a callback at every
         # epoch end
@@ -475,7 +464,7 @@ class AE_Experiment():
                                   trial_id=self.trial_id)
 
         self.validation_callback = \
-            CustomValidation(test_data=(test_data, T_test, test_data_ft),
+            CustomValidation(test_data=(test_data, test_data_ft),
                              initial_xk=(initial_xk, initial_xkm1),
                              plotmachine=plotmachine,
                              pars = {'feedthrough_only': feedthrough_only,
@@ -487,13 +476,10 @@ class AE_Experiment():
         callbacks = [esn_callback, self.validation_callback]
 
         # TRAINING --------------------------------------------
-        self.hist = autoencoder.fit(x=X_train,
-                                    y=Y_train,
+        self.hist = autoencoder.fit(x=datagenerator,
                                     epochs=epochs,
-                                    batch_size=batch_size,
                                     shuffle=shuffle,
-                                    callbacks=callbacks
-                                    )
+                                    callbacks=callbacks)
         toc = time.time()
         print(f'total training time: {(toc-tic)/60}m')
 
@@ -677,12 +663,6 @@ class AE_Experiment():
                                   time_array=test_time,
                                   trial_id=self.trial_id)
 
-
-        import matplotlib.pyplot as plt
-        plt.close('all')
-        # plotmachine.plot_single_frame(50, plot_instructions)
-        # plt.pause(1)
-        # breakpoint()
         plotmachine.create_movie(plot_instructions)
 
     def create_postfix(self):
@@ -697,7 +677,7 @@ class AE_Experiment():
         return postfix, timestamp
 
 if __name__=="__main__":
-    exp = AE_Experiment(exp_name='gaussian_FT_hybrid_2lrs',
+    exp = AE_Experiment(exp_name='testing',
                         tuning_config='default',
                         detide=False,
                         compute_data=False,

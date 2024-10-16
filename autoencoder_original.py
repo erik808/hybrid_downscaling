@@ -103,6 +103,7 @@ class AE_Experiment():
         # default hyperparams
         self.hyper_params = {
             'history' : 'all',
+            'lookback' : 0,
             'use_skip_connections' : False,
             'conv_layers_per_block' : 2,
             'future' : 400,
@@ -404,7 +405,7 @@ class AE_Experiment():
                              mask=mask,
                              log_file=self.files['log'] + f'{postfix}',
                              esn=esn,
-                             lookback=lookback)
+                             lookback=self.hyper_params['lookback'])
 
             model_pars = {
                 'use_feedthrough':use_feedthrough,

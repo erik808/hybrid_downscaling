@@ -53,7 +53,7 @@ class AutoEncoder(keras_tuner.HyperModel):
                     verbosity=20,
                     use_feedthrough=True,
                     feedthrough_only=False,
-                    use_skip_connections=False,                    
+                    use_skip_connections=False,
                     feedthrough_type='multiply',
                     noise_stddev=0.0,
                     dropout_rate=0.0,
@@ -96,13 +96,21 @@ class AutoEncoder(keras_tuner.HyperModel):
 
         masking_layer = Masking(self.mask, name="masking_layer")
         masking_layer_ft = Masking(self.mask, name="masking_layer_ft")
-        
-        state_input = layers.Input(shape=(N_lb, Nlat, Nlon, num_channels),
+
+        state_input = layers.Input(shape=(N_lb, Nlat, Nlon,
+                                          num_channels),
                                    name="full_state_input")
 
+        state_inputs = [ops.squeeze(t,axis=1) \
+                        for t in ops.split(state_input, N_lb, axis=1)]
+
+
         if self.use_feedthrough:
-            feedthrough = layers.Input(shape=(N_lb, Nlat, Nlon, num_channels),
-                                       name="feedthrough_input")
+            feedthrough = layers.Input(shape=(N_lb, Nlat, Nlon,
+                                            num_channels),
+                                     name="feedthrough_input")
+            ft_inputs = [ops.squeeze(t,axis=1) \
+                         for t in ops.split(feedthrough, N_lb, axis=1)]
 
         # Encoder ------------------------------------------------------
         if use_dropout:
@@ -122,7 +130,7 @@ class AutoEncoder(keras_tuner.HyperModel):
                                 self.inner_stride],
             regularizer=self.regularizer)
 
-        encoded = encoding_layers(state_input)
+        encoded = encoding_layers(state_inputs[0])
 
         if self.use_skip_connections:
             x_skip_1 = encoding_layers.x_skip[0]
@@ -217,14 +225,14 @@ class AutoEncoder(keras_tuner.HyperModel):
         y = upsample_layer_3(y)
 
         if self.feedthrough_only:
-            output = feedthrough_block(feedthrough)
+            output = feedthrough_block(ft_inputs[0])
             output = output_layer(output)
 
             inputs_decoder=[feedthrough]
             inputs_autoencoder=[feedthrough]
 
         elif self.use_feedthrough:
-            z = feedthrough_block(feedthrough)
+            z = feedthrough_block(ft_inputs[0])
 
             if feedthrough_type == 'concatenate':
                 output = layers.Concatenate()([y, z])
@@ -276,25 +284,6 @@ class AutoEncoder(keras_tuner.HyperModel):
         self.needs_building = False
 
         return self.autoencoder, self.encoder, self.decoder
-
-    def res_block(self, inputs):
-        self.resblock_ctr += 1
-        name_conv_a = f"residual_block_conv2d_a_{self.resblock_ctr}"
-        name_conv_b = f"residual_block_conv2d_b_{self.resblock_ctr}"
-        name_add_layer = f"residual_add_{self.resblock_ctr}"
-
-        x = layers.Conv2D(self.num_filters,
-                          self.kernel_size,
-                          padding="same",
-                          activation="relu",
-                          name=name_conv_a)(inputs)
-        x = layers.Conv2D(self.num_filters,
-                          self.kernel_size,
-                          padding="same",
-                          name=name_conv_b)(x)
-        x = layers.Add(name=name_add_layer)([inputs, x])
-        return x
-
 
     # build model for hyperparameter tuning
     def build(self, hp):
@@ -440,7 +429,7 @@ class Masking(layers.Layer):
 
     def call(self, inputs):
         return ops.multiply(inputs, self.mask)
-    
+
 
 class TriggerESN(keras.callbacks.Callback):
     """Callback to control the ESN during training of the AE
@@ -507,7 +496,7 @@ class CustomValidation(keras.callbacks.Callback):
 
     def inverse_transform(self, field, scaler):
         return scaler.inverse_transform(field.reshape(1,-1))\
-                     .reshape(field.shape)        
+                     .reshape(field.shape)
 
     def predict(self, epoch, logs=None):
 
@@ -525,7 +514,7 @@ class CustomValidation(keras.callbacks.Callback):
             xk_LR = np.expand_dims(self.test_data_ft[i,], axis=0)
 
             Pxk = xk_LR
-            
+
             xkm1 = xk
 
             if self.pars['feedthrough_only']:
@@ -538,9 +527,9 @@ class CustomValidation(keras.callbacks.Callback):
             self.predictions[i,] = xk
 
             if self.pars['evaluate']:
-                
+
                 # xk = self.inverse_transform(xk, self.scalers['HR'])
-                
+
                 xk_true = np.expand_dims(self.test_data[i,], axis=0)
                 # xk_true = self.inverse_transform(xk_true, self.scalers['HR'])
                 # xk_LR = self.inverse_transform(xk_LR, self.scalers['LR'])

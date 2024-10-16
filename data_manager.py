@@ -450,8 +450,7 @@ class DataManager():
                              detide=False,
                              differences=False,
                              sigma=[1,1,1],
-                             truncation=20,
-                             lookback=0):
+                             truncation=20):
 
         postfix =  ''
         postfix =  '_detided' if detide else ''
@@ -527,7 +526,7 @@ class DataManager():
         return orig_data, params, scalers, enc_data
 
 
-    def create_lookback(self, data, lookback=0):
+    def create_lookback(self, data, lookback):
 
         print('Create input data with lookback')
         # append train and test data along samples axis
@@ -591,7 +590,9 @@ class DataGenerator(keras.utils.PyDataset):
 
     def __init__(self, x, y,
                  ft_type,
-                 batch_size, **kwargs):
+                 batch_size,
+                 lookback=0,
+                 **kwargs):
 
         super().__init__(**kwargs)
         self.batch_size = batch_size

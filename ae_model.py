@@ -510,7 +510,7 @@ class CustomValidation(keras.callbacks.Callback):
         xk_lb = np.expand_dims(
             dm.create_lookback(init_ind, [self.data['HR']],
                                self.lookback,axis=0)[0], axis=0)
-        
+
         pb_i = keras.utils.Progbar(self.N_steps,
                                    stateful_metrics=['error', 'base'],
                                    interval=0.5)
@@ -520,7 +520,7 @@ class CustomValidation(keras.callbacks.Callback):
 
             xk_LR = np.expand_dims(
                 dm.create_lookback(self.test_inds[i], [self.data['LR']],
-                                   self.lookback, axis=0)[0], axis=0)            
+                                   self.lookback, axis=0)[0], axis=0)
             Pxk = xk_LR
 
             if self.pars['feedthrough_only']:
@@ -535,9 +535,8 @@ class CustomValidation(keras.callbacks.Callback):
             if self.pars['evaluate']:
 
                 xk_true = np.expand_dims(self.test_data[i,], axis=0)
-
                 error += (np.sum(np.square(xk - xk_true)))
-                base += (np.sum(np.square(xk_LR - xk_true)))
+                base += (np.sum(np.square(xk_LR[:,0,] - xk_true)))
                 values = [('error', np.sqrt(error/(i+1))),
                           ('base', np.sqrt(base/(i+1)))]
 
@@ -548,7 +547,7 @@ class CustomValidation(keras.callbacks.Callback):
             xk = np.expand_dims(xk, axis=1)
             xk_lb = np.concatenate([xk, xk_lb], axis=1)\
                 [:,:self.lookback+1,]
-            
+
 
         if self.pars['evaluate']:
             self.plotmachine.plot_prediction_error(self.test_data,

@@ -405,7 +405,7 @@ class AE_Experiment():
 
         plotmachine = PlotMachine(results_dir=self.dirs['results'],
                                   trial_id=self.trial_id)
-        
+
         self.validation_callback = \
             CustomValidation(data = self.data,
                              test_inds = self.test_range,
@@ -682,6 +682,6 @@ if __name__=="__main__":
                         truncation=100,
                         sigma=[1,1.5,1.5],
                         feedthrough_type='hybrid')
-    # exp.hyper_params['history']=500
+    exp.hyper_params['history']=500
     exp.run_optuna_study()
     exp.create_movie()

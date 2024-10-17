@@ -637,6 +637,7 @@ def create_lookback(inds, data, lookback, axis=1):
 
     return batch
 
+
 class CustomScaler():
 
     def __init__(self, scaling_type = 'minmax_per_feature'):

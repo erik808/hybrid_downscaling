@@ -54,7 +54,6 @@ class AutoEncoder(keras_tuner.HyperModel):
                     verbosity=20,
                     use_feedthrough=True,
                     feedthrough_only=False,
-                    use_skip_connections=False,
                     feedthrough_type='multiply',
                     noise_stddev=0.0,
                     dropout_rate=0.0,
@@ -71,7 +70,6 @@ class AutoEncoder(keras_tuner.HyperModel):
         self.activation_encoder = 'relu'
         self.activation_decoder = 'relu'
         self.use_feedthrough = use_feedthrough
-        self.use_skip_connections = use_skip_connections
         self.use_feedthrough_in_esn = use_feedthrough
         self.feedthrough_only = feedthrough_only
         self.feedthrough_type = feedthrough_type
@@ -102,14 +100,11 @@ class AutoEncoder(keras_tuner.HyperModel):
                                           num_channels),
                                    name="full_state_input")
 
-        state_inputs = [ops.squeeze(t,axis=1) \
-                        for t in ops.split(state_input, N_lb, axis=1)]
 
 
         if self.use_feedthrough:
-            feedthrough = layers.Input(shape=(N_lb, Nlat, Nlon,
-                                            num_channels),
-                                     name="feedthrough_input")
+            feedthrough = layers.Input(shape=(N_lb, Nlat, Nlon, num_channels),
+                                       name="feedthrough_input")
             ft_inputs = [ops.squeeze(t,axis=1) \
                          for t in ops.split(feedthrough, N_lb, axis=1)]
 
@@ -131,17 +126,19 @@ class AutoEncoder(keras_tuner.HyperModel):
                                 self.inner_stride],
             regularizer=self.regularizer)
 
-        encoded = encoding_layers(state_inputs[0])
+        # split inputs
+        state_inputs = [ops.squeeze(t,axis=1) \
+                        for t in ops.split(state_input, N_lb, axis=1)]
 
-        if self.use_skip_connections:
-            x_skip_1 = encoding_layers.x_skip[0]
-            x_skip_2 = encoding_layers.x_skip[1]
-        else:
-            x_skip_1 = None
-            x_skip_2 = None
+        # apply encoder separately
+        encoded_outputs = [ encoding_layers(inpt) for inpt in state_inputs]
+
+
+        # join encoded outputs
+        encoded_outputs = ops.stack(encoded_outputs, axis=1)
 
         self.encoder = \
-            Model(state_input, encoded, name="encoder")
+            Model(state_inputs[0], encoded_outputs[0], name="encoder")
 
         # !!! THIS WAY OF CALLING THE ESN LAYER IS DEPRECATED !!!
         # Call ESN layer in the latent space
@@ -162,12 +159,21 @@ class AutoEncoder(keras_tuner.HyperModel):
             # elif self.esn_combine_mode == 'add':
             #     encoded = layers.Add()([esn_step, encoded])
 
+        # Apply noise
         if self.noise_stddev > 0:
-            encoded = layers.GaussianNoise(self.noise_stddev)(encoded)
+            encoded_outputs = \
+                layers.GaussianNoise(self.noise_stddev)(encoded_outputs)
 
+        # Apply dropout
         if use_dropout:
-            encoded = layers.Dropout(self.dropout_rate,
-                                     name="dropout_1")(encoded)
+            encoded_outputs = \
+                layers.Dropout(self.dropout_rate)(encoded_outputs)
+
+        # Run with the RNN
+        RNN_output = RNNBlock(model='RNN',
+                              activation=self.activation_encoder,
+                              reduction_factor=self.num_filters_red)\
+                              (encoded_outputs)
 
         # Decoder blocks
         dec_conv_block_1 = ConvBlock(self.conv_layers_per_block,
@@ -217,12 +223,12 @@ class AutoEncoder(keras_tuner.HyperModel):
                                  regularizer=self.regularizer,
                                  name='output_layer')
 
-        # Decoder:
-        y = dec_conv_block_1(encoded)
+
+        y = dec_conv_block_1(RNN_output)
         y = upsample_layer_1(y)
-        y = dec_conv_block_2(y, x_skip_2)
+        y = dec_conv_block_2(y)
         y = upsample_layer_2(y)
-        y = dec_conv_block_3(y, x_skip_1)
+        y = dec_conv_block_3(y)
         y = upsample_layer_3(y)
 
         if self.feedthrough_only:
@@ -246,12 +252,12 @@ class AutoEncoder(keras_tuner.HyperModel):
                                 ' using feedthrough')
 
             output = output_layer(output)
-            inputs_decoder=[encoded, feedthrough]
+            inputs_decoder=[RNN_output, feedthrough]
             inputs_autoencoder=[state_input, feedthrough]
 
         else:
             output = output_layer(y)
-            inputs_decoder=[encoded]
+            inputs_decoder=[RNN_output]
             inputs_autoencoder=[state_input]
 
         outputs = [masking_layer(output)]
@@ -408,6 +414,75 @@ class ConvBlock():
         for layer in self.layer_list:
             x = layer(x)
         return x
+
+
+
+class RNNBlock():
+
+    def __init__(self,
+                 model='RNN',
+                 activation='relu',
+                 reduction_factor=1,
+                 unroll=False,
+                 filters=32,
+                 kernel_size=(3,3)):
+
+        self.model = model
+        self.activation = activation
+        self.reduction_factor = reduction_factor
+        self.filters = filters
+        self.kernel_size = kernel_size
+        self.unroll = unroll
+
+    def __call__(self, inputs):
+        if self.model == 'RNN':
+            return self.RNN(inputs)
+        elif self.model == 'RNN_res':
+            return self.RNN_res(inputs)
+        elif self.model == 'ConvLSTM':
+            return self.ConvLSTM(inputs)
+        else:
+            return self.most_recent(inputs)
+
+    def ConvLSTM(self, inputs):
+        lstm_input = ops.flip(inputs, axis=1)
+        lstm_output = \
+            layers.ConvLSTM2D(padding='same',
+                              filters=self.filters,
+                              kernel_size=self.kernel_size)\
+                              (lstm_input)
+        return lstm_output
+
+    def RNN(self, inputs):
+
+        Nlb, Nj, Ni, Nc = inputs.shape[1:]
+        N_feats = Nj * Ni * Nc
+        RNN_rdim = N_feats // self.reduction_factor
+        RNN_input = layers.Reshape((Nlb, N_feats))(inputs)
+        RNN_input = layers.Dense(RNN_rdim,
+                                 activation = self.activation)(RNN_input)
+        RNN_input = ops.flip(RNN_input, axis=1)
+        RNN_output = layers.SimpleRNN(RNN_rdim)(RNN_input)
+        RNN_output = layers.Dense(N_feats,
+                                  activation = self.activation)(RNN_output)
+        return layers.Reshape((Nj, Ni, Nc))(RNN_output)
+
+    def RNN_res(self, inputs):
+        x = self.most_recent(inputs)
+        y = self.RNN(inputs)
+        return layers.Add()([x,y])
+
+    def most_recent(self, inputs):
+        # assume 5D tensor, time dim ordered from recent to past
+        N_lb = inputs.shape[1]
+        inputs_splitted = \
+            [ops.squeeze(t,axis=1) \
+             for t in ops.split(inputs, N_lb, axis=1)]
+
+        # return most recent time
+        return inputs_splitted[0]
+
+
 
 # custom masking class
 @keras.saving.register_keras_serializable(name="custom_masking")

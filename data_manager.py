@@ -536,12 +536,12 @@ class DataManager():
                 axis=0)
 
             len_train = orig_data['train']['time'].shape[0]
-            len_test = orig_data['test']['time'].shape[0] 
+            len_test = orig_data['test']['time'].shape[0]
             params['train_range'] = range(0, len_train)
             params['test_range'] = range(len_train, len_train + len_test)
         else:
             out_data = orig_data
-            
+
         return out_data, params, scalers, enc_data
 
     def setup_directories(self, experiment_id, add_id):
@@ -585,7 +585,7 @@ class DataGenerator(keras.utils.PyDataset):
         self.shuffle = shuffle
         self.lookback = lookback
         self.__setup_data(x, y)
-        
+
 
     def __setup_data(self, x, y):
         assert len(x) == 2
@@ -622,11 +622,11 @@ class DataGenerator(keras.utils.PyDataset):
 
     def on_epoch_end(self):
         self.__do_shuffle()
-        
+
 
 def create_lookback(inds, data, lookback, axis=1):
     batch = list()
-    
+
     for var in data:
         lb_fields = list() # lookback fields
         for lb in range(lookback+1):

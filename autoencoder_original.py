@@ -103,8 +103,7 @@ class AE_Experiment():
         # default hyperparams
         self.hyper_params = {
             'history' : 'all',
-            'lookback' : 3,
-            'use_skip_connections' : False,
+            'lookback' : 7,
             'conv_layers_per_block' : 2,
             'future' : 400,
             'noise_stddev' : 0.04,
@@ -116,8 +115,8 @@ class AE_Experiment():
             'learning_rate' : 0.002,
             'num_filters' : 32,
             'num_filters_exp' : 32,
-            'num_filters_red' : 9,
-            'inner_stride' : 1,
+            'num_filters_red' : 8,
+            'inner_stride' : 2,
         }
 
         ## maybe read from ini or xml instead?
@@ -129,7 +128,7 @@ class AE_Experiment():
                     'args' : {'name':'epochs',
                               'low': 1,
                               'high':50},
-                    'search_space' : [24] },
+                    'search_space' : [20] },
                 'layers_per_block' : {
                     'type' : 'int',
                     'args' : {'name' : 'conv_layers_per_block',
@@ -141,7 +140,20 @@ class AE_Experiment():
                     'args' : {'name' : 'num_filters_red',
                               'low'  : 1,
                               'high' : 100},
-                    'search_space' : [8] } },
+                    'search_space' : [8] },
+                'lookback' : {
+                    'type' : 'int',
+                    'args' : {'name' : 'lookback',
+                              'low'  : 0,
+                              'high' : 9},
+                    'search_space' : [0,1,2,3,4,5,6,7,8,9] },
+                'batch_size' : {
+                    'type' : 'int',
+                    'args' : {'name':'batch_size',
+                              'low':1,
+                              'high':100},
+                    'search_space' : [4] } },
+
             #-------------------------------------------------------
             'regularization' : {
                 'L2_lambda' : {
@@ -358,8 +370,6 @@ class AE_Experiment():
                 'learning_rate':self.hyper_params['learning_rate'],
                 'conv_layers_per_block':\
                 self.hyper_params['conv_layers_per_block'],
-                'use_skip_connections':\
-                self.hyper_params['use_skip_connections'],
                 'optimizer':self.hyper_params['optimizer'],
                 'L2_lambda':self.hyper_params['L2_lambda'],
                 'dropout_rate':self.hyper_params['dropout_rate'],
@@ -674,7 +684,7 @@ class AE_Experiment():
         return postfix, timestamp
 
 if __name__=="__main__":
-    exp = AE_Experiment(exp_name='testing_feature_lookback',
+    exp = AE_Experiment(exp_name='rnn_test',
                         tuning_config='default',
                         detide=False,
                         compute_data=False,
@@ -682,6 +692,6 @@ if __name__=="__main__":
                         truncation=100,
                         sigma=[1,1.5,1.5],
                         feedthrough_type='hybrid')
-    exp.hyper_params['history']=500
+    
     exp.run_optuna_study()
     exp.create_movie()

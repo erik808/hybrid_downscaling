@@ -132,7 +132,7 @@ class AutoEncoder(keras_tuner.HyperModel):
 
         # apply encoder separately
         encoded_outputs = [ encoding_layers(inpt) for inpt in state_inputs]
-
+        encoded_ft = encoding_layers(ft_inputs[0])
 
         # join encoded outputs
         encoded_outputs = ops.stack(encoded_outputs, axis=1)
@@ -174,6 +174,10 @@ class AutoEncoder(keras_tuner.HyperModel):
                               activation=self.activation_encoder,
                               reduction_factor=self.num_filters_red)\
                               (encoded_outputs)
+
+        # use_encoded_feedthrough = True
+        # if use_encoded_feedthrough:
+        #     RNN_output = layers.Multiply()([RNN_output, encoded_ft])
 
         # Decoder blocks
         dec_conv_block_1 = ConvBlock(self.conv_layers_per_block,

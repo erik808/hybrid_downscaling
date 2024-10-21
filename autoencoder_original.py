@@ -103,7 +103,7 @@ class AE_Experiment():
         # default hyperparams
         self.hyper_params = {
             'history' : 'all',
-            'lookback' : 7,
+            'lookback' : 2,
             'conv_layers_per_block' : 2,
             'future' : 400,
             'noise_stddev' : 0.04,
@@ -146,7 +146,7 @@ class AE_Experiment():
                     'args' : {'name' : 'lookback',
                               'low'  : 0,
                               'high' : 9},
-                    'search_space' : [0,1,2,3,4,5,6,7,8,9] },
+                    'search_space' : [7] },
                 'batch_size' : {
                     'type' : 'int',
                     'args' : {'name':'batch_size',
@@ -341,7 +341,8 @@ class AE_Experiment():
 
         esn_params = esn_interface.hyperparams
 
-        mdir = self.dirs['models']
+
+
         postfix, timestamp = self.create_postfix()
 
         if self.load_existing_model:
@@ -386,6 +387,7 @@ class AE_Experiment():
         # print a summary
         autoencoder.summary()
         # save dot and png
+        mdir = self.dirs['models']
         model_png_file = f'{mdir}/autoencoder{postfix}.png'
         keras.utils.plot_model(autoencoder, to_file=model_png_file,
                                show_shapes=True, rankdir='TB',
@@ -426,7 +428,15 @@ class AE_Experiment():
                                      'evaluate' : evaluate,
                                      'lookback' : lookback})
 
-        callbacks = [esn_callback, self.validation_callback]
+        cdir = self.dirs['checkpoints']
+        model_checkpoint_file = f'{cdir}/autoencoder{postfix}.checkpoint.keras'
+        model_checkpoint_callback = keras.callbacks.ModelCheckpoint(
+            filepath=model_checkpoint_file,
+            monitor='error',
+            mode='min',
+            save_best_only=True)
+
+        callbacks = [esn_callback, self.validation_callback, model_checkpoint_callback]
 
         # TRAINING --------------------------------------------
         self.hist = autoencoder.fit(x=datagen_train,
@@ -684,7 +694,8 @@ class AE_Experiment():
         return postfix, timestamp
 
 if __name__=="__main__":
-    exp = AE_Experiment(exp_name='rnn_test',
+
+    exp = AE_Experiment(exp_name='lookback_test',
                         tuning_config='default',
                         detide=False,
                         compute_data=False,
@@ -692,6 +703,7 @@ if __name__=="__main__":
                         truncation=100,
                         sigma=[1,1.5,1.5],
                         feedthrough_type='hybrid')
-    
+
+    exp.hyper_params['history']=5000
     exp.run_optuna_study()
     exp.create_movie()

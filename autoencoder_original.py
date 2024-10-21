@@ -116,7 +116,6 @@ class AE_Experiment():
             'num_filters' : 32,
             'num_filters_exp' : 32,
             'num_filters_red' : 8,
-            'inner_stride' : 2,
         }
 
         ## maybe read from ini or xml instead?
@@ -377,7 +376,6 @@ class AE_Experiment():
                 'num_filters':self.hyper_params['num_filters'],
                 'num_filters_red':self.hyper_params['num_filters_red'],
                 'num_filters_exp':self.hyper_params['num_filters_exp'],
-                'inner_stride':self.hyper_params['inner_stride']
             }
 
             autoencoder, encoder, decoder =  ae.build_model(**model_pars)

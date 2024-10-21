@@ -596,11 +596,15 @@ class DataGenerator(keras.utils.PyDataset):
 
         if self.ft_type == 'hybrid':
             self.x = x
+            self.y = [y[0], x[0]]
+            
         elif self.ft_type == 'only':
             self.x = [x[1]]
+            self.y = y
         else:
+            
             self.x = [x[0]]
-        self.y = y
+            self.y = [y[0], x[0]]
 
 
     def __len__(self):

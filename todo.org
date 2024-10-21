@@ -19,9 +19,9 @@
    of predictions to several outputs. This can be used to separate the
    models I think.
 
-*** TODO Factorize the decoder
-    - [ ] Dynamically choose number of blocks in decoder based on
-      number of downsamplings
+*** DONE Factorize the decoder
+    - [X] Dynamically choose number of blocks in decoder based on
+      number of downsamplings. No, just use same variable used in Encoder.
 *** TODO Create autoencoder-only pathway
     Should be doable
 *** TODO Create RNN-only pathway

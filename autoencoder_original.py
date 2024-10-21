@@ -132,7 +132,7 @@ class AE_Experiment():
                     'args' : {'name' : 'conv_layers_per_block',
                               'low'  : 1,
                               'high' : 6},
-                    'search_space' : [4] },
+                    'search_space' : [1] },
                 'num_filters_last' : {
                     'type' : 'int',
                     'args' : {'name' : 'num_filters_last',
@@ -144,7 +144,7 @@ class AE_Experiment():
                     'args' : {'name' : 'lookback',
                               'low'  : 0,
                               'high' : 9},
-                    'search_space' : [2] },
+                    'search_space' : [7] },
                 'batch_size' : {
                     'type' : 'int',
                     'args' : {'name':'batch_size',

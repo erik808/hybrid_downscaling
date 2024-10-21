@@ -25,13 +25,22 @@
 *** DONE Create autoencoder-only pathway
     Should be doable
 *** TODO Create RNN-only pathway
-    Maybe need add_loss here
+    - [ ] Test passing encoding_layers to DataGenerator
+    - [ ] Maybe need add_loss here
+    - [ ] Try to create custom loss inside ae_model
+    - [ ] Of gebruik layers van het model in de DataGenerator
+
 *** DONE Create feedthrough-only pathway
     Already exists and defeats the purpose
 
 ** TODO take another look at the scaling
    Scaling the feedthrough fields with the same scaler as the HR
    fields still gives problems at the boundaries.
+
+** TODO Test different feedthrough
+   let FT go through full AE, then combine with decoded RNN output
+
+** TODO Compare against old loss formulation using simple setup   
 
 * Housekeeping
 

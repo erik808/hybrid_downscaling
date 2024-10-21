@@ -58,6 +58,7 @@ class AutoEncoder(keras_tuner.HyperModel):
                     feedthrough_type='multiply',
                     noise_stddev=0.0,
                     dropout_rate=0.0,
+                    num_conv_blocks=3,
                     conv_layers_per_block=1,
                     num_feedthrough_layers=2,
                     kernel_size=(3,3),
@@ -76,6 +77,7 @@ class AutoEncoder(keras_tuner.HyperModel):
 
         self.noise_stddev = noise_stddev
         self.dropout_rate = dropout_rate
+        self.num_conv_blocks = num_conv_blocks
         self.conv_layers_per_block = conv_layers_per_block
         self.num_feedthrough_layers = num_feedthrough_layers
         self.num_filters = num_filters
@@ -108,7 +110,8 @@ class AutoEncoder(keras_tuner.HyperModel):
             dropout_layer_1 = layers.Dropout(self.dropout_rate,
                                              name="dropout_1")
 
-        encoding_layers = Encoder(
+        self.encoding_layers = Encoder(
+            num_conv_blocks=self.num_conv_blocks,
             conv_layers_per_block=self.conv_layers_per_block,
             num_filters=self.num_filters,
             num_filters_last=self.num_filters_last,
@@ -121,12 +124,12 @@ class AutoEncoder(keras_tuner.HyperModel):
                         for t in ops.split(state_input, N_lb, axis=1)]
 
         # apply encoder separately
-        encoded_outputs = [ encoding_layers(inpt) for inpt in state_inputs]
+        encoded_outputs = [ self.encoding_layers(inpt) for inpt in state_inputs]
         encoded_outputs_0 = encoded_outputs[0]
 
         # apply encoder to feedthrough
         # if use_encoded_feedthrough:
-        #    encoded_ft = encoding_layers(ft_inputs[0])
+        #    encoded_ft = self.encoding_layers(ft_inputs[0])
 
         # join encoded outputs
         encoded_outputs = ops.stack(encoded_outputs, axis=1)
@@ -139,7 +142,7 @@ class AutoEncoder(keras_tuner.HyperModel):
         # if (self.esn != None):
         #     # setup feedthrough control
         #     if self.use_feedthrough_in_esn:
-        #         control = encoding_layers(feedthrough)
+        #         control = self.encoding_layers(feedthrough)
         #     else:
         #         control = ops.multiply(encoded, 0.0)
 
@@ -174,7 +177,8 @@ class AutoEncoder(keras_tuner.HyperModel):
         #     RNN_output = layers.Multiply()([RNN_output, encoded_ft])
 
         # Decoder blocks
-        decoding_layers = Decoder(
+        self.decoding_layers = Decoder(
+            num_conv_blocks=self.num_conv_blocks,
             conv_layers_per_block=self.conv_layers_per_block,
             num_filters=self.num_filters,
             num_filters_last=self.num_filters_last,
@@ -182,8 +186,8 @@ class AutoEncoder(keras_tuner.HyperModel):
             activation=self.activation_encoder,
             regularizer=self.regularizer)
 
-        decoded_RNN = decoding_layers(RNN_output)
-        decoded_AE_only = decoding_layers(encoded_outputs_0)        
+        decoded_RNN = self.decoding_layers(RNN_output)
+        decoded_AE_only = self.decoding_layers(encoded_outputs_0)        
 
         # Should these be residual blocks instead?
         feedthrough_block = ConvBlock(self.num_feedthrough_layers,
@@ -193,13 +197,19 @@ class AutoEncoder(keras_tuner.HyperModel):
                                       regularizer=self.regularizer,
                                       name='feedthrough_block')
 
+        output_layer_AE_only = ConvBlock(1, num_channels,
+                                         self.kernel_size,
+                                         activation="sigmoid",
+                                         regularizer=self.regularizer,
+                                         name='output_layer_AE_only')
+        
         output_layer = ConvBlock(1, num_channels,
                                  self.kernel_size,
                                  activation="sigmoid",
                                  regularizer=self.regularizer,
                                  name='output_layer')
 
-        output_AE_only = output_layer(decoded_AE_only)
+        output_AE_only = output_layer_AE_only(decoded_AE_only)
 
         if self.feedthrough_only:
             output = feedthrough_block(ft_inputs[0])

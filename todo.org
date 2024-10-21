@@ -1,18 +1,33 @@
 * Implement lookback and a recurrent cell
 
-** TODO Change tensor dimensions inside the model from 4D to 5D
+** DONE Change tensor dimensions inside the model from 4D to 5D
    Dimension should be:
    sample x lookback x lats x lons x channels
-   - [ ] Achieve this using generators
+   - [X] Achieve this using generators
    - [X] Start by replacing current setup with generators and test
      sanity and performance
 
 ** TODO RNN
    Can be
-   - SimpleRNN
-   - ESN
-   - LSTM
-   - GRU
+   - [X] SimpleRNN
+   - [ ] ESN
+   - [X] ConvLSTM
+   - [ ] GRU
+
+** TODO Create multiple outputs
+   Such that the loss functions will compare several different types
+   of predictions to several outputs. This can be used to separate the
+   models I think.
+
+*** TODO Factorize the decoder
+    - [ ] Dynamically choose number of blocks in decoder based on
+      number of downsamplings
+*** TODO Create autoencoder-only pathway
+    Should be doable
+*** TODO Create RNN-only pathway
+    Maybe need add_loss here
+*** TODO Create feedthrough-only pathway
+    Already exists?
 
 ** TODO take another look at the scaling
    Scaling the feedthrough fields with the same scaler as the HR

@@ -114,8 +114,7 @@ class AE_Experiment():
             'batch_size' : 4,
             'learning_rate' : 0.002,
             'num_filters' : 32,
-            'num_filters_exp' : 32,
-            'num_filters_red' : 8,
+            'num_filters_last' : 8,
         }
 
         ## maybe read from ini or xml instead?
@@ -134,9 +133,9 @@ class AE_Experiment():
                               'low'  : 1,
                               'high' : 6},
                     'search_space' : [4] },
-                'num_filters_red' : {
+                'num_filters_last' : {
                     'type' : 'int',
-                    'args' : {'name' : 'num_filters_red',
+                    'args' : {'name' : 'num_filters_last',
                               'low'  : 1,
                               'high' : 100},
                     'search_space' : [8] },
@@ -145,7 +144,7 @@ class AE_Experiment():
                     'args' : {'name' : 'lookback',
                               'low'  : 0,
                               'high' : 9},
-                    'search_space' : [7] },
+                    'search_space' : [2] },
                 'batch_size' : {
                     'type' : 'int',
                     'args' : {'name':'batch_size',
@@ -374,8 +373,7 @@ class AE_Experiment():
                 'dropout_rate':self.hyper_params['dropout_rate'],
                 'noise_stddev':self.hyper_params['noise_stddev'],
                 'num_filters':self.hyper_params['num_filters'],
-                'num_filters_red':self.hyper_params['num_filters_red'],
-                'num_filters_exp':self.hyper_params['num_filters_exp'],
+                'num_filters_last':self.hyper_params['num_filters_last'],
             }
 
             autoencoder, encoder, decoder =  ae.build_model(**model_pars)
@@ -692,7 +690,7 @@ class AE_Experiment():
 
 if __name__=="__main__":
 
-    exp = AE_Experiment(exp_name='lookback_test',
+    exp = AE_Experiment(exp_name='better_loss',
                         tuning_config='default',
                         detide=False,
                         compute_data=False,
@@ -701,6 +699,6 @@ if __name__=="__main__":
                         sigma=[1,1.5,1.5],
                         feedthrough_type='hybrid')
 
-    exp.hyper_params['history']=5000
+    # exp.hyper_params['history']=1000
     exp.run_optuna_study()
     exp.create_movie()

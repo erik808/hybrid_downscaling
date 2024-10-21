@@ -122,8 +122,7 @@ class AutoEncoder(keras_tuner.HyperModel):
 
         # apply encoder separately
         encoded_outputs = [ encoding_layers(inpt) for inpt in state_inputs]
-        encoded_outputs_0 = encoded_ouputs[0]
-
+        encoded_outputs_0 = encoded_outputs[0]
 
         # apply encoder to feedthrough
         # if use_encoded_feedthrough:
@@ -168,7 +167,7 @@ class AutoEncoder(keras_tuner.HyperModel):
         RNN_output = RNNBlock(model='RNN',
                               activation=self.activation_encoder,
                               reduction_factor=self.num_filters_last)\
-                              (encoded_outputs_0)
+                              (encoded_outputs)
 
         # use_encoded_feedthrough = True
         # if use_encoded_feedthrough:
@@ -312,7 +311,7 @@ class Encoder():
                  num_filters_last=8,
                  conv_layers_per_block=2,
                  kernel_size=(3,3),
-                 activation='relu'
+                 activation='relu',
                  regularizer=regularizers.L2(1e-5)
                  ):
 
@@ -324,7 +323,7 @@ class Encoder():
                 else num_filters_last
 
             cb = ConvBlock(conv_layers_per_block=conv_layers_per_block,
-                           num_filters=nf
+                           num_filters=nf,
                            kernel_size=kernel_size,
                            activation=activation,
                            downsample_stride=(2,2),
@@ -355,7 +354,7 @@ class Decoder():
                  num_filters_last=8,
                  conv_layers_per_block=2,
                  kernel_size=(3,3),
-                 activation='relu'
+                 activation='relu',
                  regularizer=regularizers.L2(1e-5)
                  ):
 
@@ -367,7 +366,7 @@ class Decoder():
                 else num_filters_last
 
             cb = ConvBlock(conv_layers_per_block=conv_layers_per_block,
-                           num_filters=nf
+                           num_filters=nf,
                            kernel_size=kernel_size,
                            activation=activation,
                            regularizer=regularizer,
@@ -474,7 +473,6 @@ class RNNBlock():
         return lstm_output
 
     def RNN(self, inputs):
-
         Nlb, Nj, Ni, Nc = inputs.shape[1:]
         N_feats = Nj * Ni * Nc
         RNN_rdim = N_feats // self.reduction_factor
@@ -621,9 +619,9 @@ class CustomValidation(keras.callbacks.Callback):
             if self.pars['feedthrough_only']:
                 xk = self.model.predict([Pxk], verbose=0)
             elif self.pars['use_feedthrough']:
-                xk = self.model.predict([xk_lb, Pxk], verbose=0)
+                xk = self.model.predict([xk_lb, Pxk], verbose=0)[0]
             else:
-                xk = self.model.predict([xk_lb], verbose=0)
+                xk = self.model.predict([xk_lb], verbose=0)[0]
 
             self.predictions[i,] = xk
 

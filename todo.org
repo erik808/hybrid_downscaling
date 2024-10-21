@@ -14,7 +14,7 @@
    - [X] ConvLSTM
    - [ ] GRU
 
-** TODO Create multiple outputs
+** DONE Create multiple outputs
    Such that the loss functions will compare several different types
    of predictions to several outputs. This can be used to separate the
    models I think.
@@ -22,12 +22,12 @@
 *** DONE Factorize the decoder
     - [X] Dynamically choose number of blocks in decoder based on
       number of downsamplings. No, just use same variable used in Encoder.
-*** TODO Create autoencoder-only pathway
+*** DONE Create autoencoder-only pathway
     Should be doable
 *** TODO Create RNN-only pathway
     Maybe need add_loss here
-*** TODO Create feedthrough-only pathway
-    Already exists?
+*** DONE Create feedthrough-only pathway
+    Already exists and defeats the purpose
 
 ** TODO take another look at the scaling
    Scaling the feedthrough fields with the same scaler as the HR

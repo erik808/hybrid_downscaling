@@ -342,7 +342,6 @@ class AE_Experiment():
         esn_params = esn_interface.hyperparams
 
 
-
         postfix, timestamp = self.create_postfix()
 
         if self.load_existing_model:

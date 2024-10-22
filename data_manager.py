@@ -572,20 +572,22 @@ class DataManager():
 
 class DataGenerator(keras.utils.PyDataset):
 
-    def __init__(self, x, y,
+    def __init__(self, x, y, 
                  ft_type = 'hybrid',
-                 separate_AE_output = False,
+                 multihead_output = False,
                  batch_size = 4,
                  shuffle = False,
                  lookback = 0,
+                 encoder = None,
                  **kwargs):
 
         super().__init__(**kwargs)
         self.batch_size = batch_size
         self.ft_type = ft_type
-        self.separate_AE_output = separate_AE_output
+        self.multihead_output = multihead_output
         self.shuffle = shuffle
         self.lookback = lookback
+        self.encoder = encoder
         self.__setup_data(x, y)
 
 
@@ -603,7 +605,7 @@ class DataGenerator(keras.utils.PyDataset):
         else:
             self.x = [x[0]]
 
-        if (self.separate_AE_output and
+        if (self.multihead_output and
             not self.ft_type == 'only'):
             self.y = [y[0], x[0]]
         else:

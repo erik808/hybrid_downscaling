@@ -56,7 +56,7 @@ class AutoEncoder(keras_tuner.HyperModel):
                     use_feedthrough=True,
                     feedthrough_only=False,
                     feedthrough_type='multiply',
-                    separate_AE_output=False,
+                    multihead_output=False,
                     noise_stddev=0.0,
                     dropout_rate=0.0,
                     num_conv_blocks=3,
@@ -75,7 +75,7 @@ class AutoEncoder(keras_tuner.HyperModel):
         self.feedthrough_only = feedthrough_only
         self.feedthrough_type = feedthrough_type
         if self.feedthrough_only: self.use_feedthrough = True
-        self.separate_AE_output = separate_AE_output
+        self.multihead_output = multihead_output
         self.noise_stddev = noise_stddev
         self.dropout_rate = dropout_rate
         self.num_conv_blocks = num_conv_blocks
@@ -198,19 +198,13 @@ class AutoEncoder(keras_tuner.HyperModel):
                                       regularizer=self.regularizer,
                                       name='feedthrough_block')
 
-        output_layer_AE_only = ConvBlock(1, num_channels,
-                                         self.kernel_size,
-                                         activation="sigmoid",
-                                         regularizer=self.regularizer,
-                                         name='output_layer_AE_only')
-
         output_layer = ConvBlock(1, num_channels,
                                  self.kernel_size,
                                  activation="sigmoid",
                                  regularizer=self.regularizer,
                                  name='output_layer')
 
-        output_AE_only = output_layer_AE_only(decoded_AE_only)
+
 
         if self.feedthrough_only:
             output = feedthrough_block(ft_inputs[0])
@@ -220,17 +214,12 @@ class AutoEncoder(keras_tuner.HyperModel):
             inputs_autoencoder=[feedthrough]
 
         elif self.use_feedthrough:
-            z = feedthrough_block(ft_inputs[0])
 
-            if feedthrough_type == 'concatenate':
-                output = layers.Concatenate()([decoded_RNN, z])
-            elif feedthrough_type == 'multiply':
-                output = layers.Multiply()([decoded_RNN, z])
-            elif feedthrough_type == 'ignore':
-                output = decoded_RNN
-            else:
-                raise Exception('specify feedthrough_type when'
-                                ' using feedthrough')
+            output = self.combine_feedthrough(decoded_RNN,
+                                              ft_inputs[0],
+                                              feedthrough_type,
+                                              feedthrough_block)
+
             output = output_layer(output)
             inputs_decoder=[RNN_output, feedthrough]
             inputs_autoencoder=[state_input, feedthrough]
@@ -241,11 +230,22 @@ class AutoEncoder(keras_tuner.HyperModel):
             inputs_autoencoder=[state_input]
 
 
-        if (self.separate_AE_output and
+        # multiheaded output
+        if (self.multihead_output and
             not self.feedthrough_only ):
+
+            output_AE_only = self.combine_feedthrough(decoded_AE_only,
+                                                      ft_inputs[0],
+                                                      feedthrough_type,
+                                                      feedthrough_block)
+            output_AE_only = output_layer(output_AE_only)
             outputs = [masking_layer(output), masking_layer(output_AE_only)]
-        else:
+            # outputs = [masking_layer(output), masking_layer(output_AE_only), RNN_output]
+            loss_weights = [0.5, 0.5]
+        else: # normal output
+
             outputs = [masking_layer(output)]
+            loss_weights = None
 
 
         # Construct models
@@ -266,7 +266,14 @@ class AutoEncoder(keras_tuner.HyperModel):
         elif optimizer == 'sgd':
             optim = keras.optimizers.SGD(learning_rate=learning_rate)
 
-        self.autoencoder.compile(optimizer=optim, loss=loss)
+        @keras.saving.register_keras_serializable(name="custom_loss")
+        def custom_loss(y_true, y_pred):
+            # simple MSE loss
+            loss = ops.mean(ops.square(y_true-y_pred))
+            return loss
+
+        self.autoencoder.compile(optimizer=optim, loss=custom_loss,
+                                 loss_weights=loss_weights)
 
         self.log_model()
         self.log_model(self.autoencoder, 'a')
@@ -276,6 +283,24 @@ class AutoEncoder(keras_tuner.HyperModel):
         self.needs_building = False
 
         return self.autoencoder, self.encoder, self.decoder
+
+    def combine_feedthrough(self, inputs, feedthrough,
+                            feedthrough_type='multiply',
+                            feedthrough_block=None):
+
+        z = feedthrough_block(feedthrough)
+
+        if feedthrough_type == 'concatenate':
+            outputs = layers.Concatenate()([inputs, z])
+        elif feedthrough_type == 'multiply':
+            outputs = layers.Multiply()([inputs, z])
+        elif feedthrough_type == 'ignore':
+            outputs = inputs
+        else:
+            raise Exception('specify feedthrough_type when'
+                            ' using feedthrough')
+        return outputs
+
 
     # build model for hyperparameter tuning
     def build(self, hp):
@@ -635,7 +660,7 @@ class CustomValidation(keras.callbacks.Callback):
             else:
                 xk = self.model.predict([xk_lb], verbose=0)
 
-            if ( self.pars['separate_AE_output'] and
+            if ( self.pars['multihead_output'] and
                  not self.pars['feedthrough_only'] ): xk = xk[0]
 
             self.predictions[i,] = xk

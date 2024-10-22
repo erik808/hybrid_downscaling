@@ -22,16 +22,16 @@
 *** DONE Factorize the decoder
     - [X] Dynamically choose number of blocks in decoder based on
       number of downsamplings. No, just use same variable used in Encoder.
+
 *** DONE Create autoencoder-only pathway
     Should be doable
+
 *** TODO Create RNN-only pathway
     - [ ] Test passing encoding_layers to DataGenerator
-    - [ ] Maybe need add_loss here
     - [ ] Try to create custom loss inside ae_model
-    - [ ] Of gebruik layers van het model in de DataGenerator
 
 *** DONE Create feedthrough-only pathway
-    Already exists and defeats the purpose
+    Already exists and defeats the purpose?
 
 ** TODO take another look at the scaling
    Scaling the feedthrough fields with the same scaler as the HR
@@ -40,7 +40,7 @@
 ** TODO Test different feedthrough
    let FT go through full AE, then combine with decoded RNN output
 
-** TODO Compare against old loss formulation using simple setup   
+** TODO Compare against old loss formulation using simple setup
 
 * Housekeeping
 
@@ -50,7 +50,7 @@
 
 ** TODO rename main tuning script
    from autoencoder_original to something that makes sense
-   
+
 ** DONE get rid of residual mode in everything
    I don't think it will work. And at a later stage it might be easier
    to implement again if the code is cleaner.
@@ -63,4 +63,3 @@
 
 ** TODO implement tests
    - [ ] single epoch, short history
-   

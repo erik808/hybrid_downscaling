@@ -298,6 +298,8 @@ class AE_Experiment():
         use_embedded_ESN = False
         if feedthrough_only: use_embedded_ESN = False
 
+        separate_AE_output = True
+
         # DATA CONFIG
         self.history = self.hyper_params['history']
         self.future = self.hyper_params['future']
@@ -365,6 +367,7 @@ class AE_Experiment():
                 'use_feedthrough':use_feedthrough,
                 'feedthrough_only':feedthrough_only,
                 'feedthrough_type':'multiply',
+                'separate_AE_output':separate_AE_output,
                 'learning_rate':self.hyper_params['learning_rate'],
                 'conv_layers_per_block':\
                 self.hyper_params['conv_layers_per_block'],
@@ -395,20 +398,22 @@ class AE_Experiment():
         print('--------------------------------------------------------- ')
 
         tic = time.time()
-        lookback = self.hyper_params['lookback']
+        dgen_pars = { 'ft_type' : self.feedthrough_type,
+                      'separate_AE_output' : separate_AE_output,
+                      'batch_size' : batch_size,
+                      'shuffle' : shuffle,
+                      'lookback' : self.hyper_params['lookback']
+                     }
+
         datagen_train = DataGenerator(
             x = [train_data_inp, train_data_ft],
             y = [train_data_otp],
-            ft_type = self.feedthrough_type,
-            batch_size=batch_size,
-            shuffle=shuffle,
-            lookback=lookback
+            **dgen_pars
         )
 
         esn_callback = TriggerESN(esn,
                                   train_in_epochs=esn_train_in_epochs,
                                   num_samples=self.params['train_range'].stop)
-
 
         plotmachine = PlotMachine(results_dir=self.dirs['results'],
                                   trial_id=self.trial_id)
@@ -419,9 +424,10 @@ class AE_Experiment():
                              plotmachine=plotmachine,
                              pars = {'feedthrough_only': feedthrough_only,
                                      'use_feedthrough': use_feedthrough,
+                                     'separate_AE_output' : separate_AE_output,
                                      'predict_only' : predict_only,
                                      'evaluate' : evaluate,
-                                     'lookback' : lookback})
+                                     'lookback' : self.hyper_params['lookback']})
 
         cdir = self.dirs['checkpoints']
         model_checkpoint_file = f'{cdir}/autoencoder{postfix}.checkpoint.keras'
@@ -699,6 +705,6 @@ if __name__=="__main__":
                         sigma=[1,1.5,1.5],
                         feedthrough_type='hybrid')
 
-    # exp.hyper_params['history']=1000
+    exp.hyper_params['history']=100
     exp.run_optuna_study()
     exp.create_movie()

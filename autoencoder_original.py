@@ -106,7 +106,7 @@ class AE_Experiment():
             'lookback' : 2,
             'conv_layers_per_block' : 2,
             'future' : 400,
-            'noise_stddev' : 0.04,
+            'noise_stddev' : 0.0,
             'dropout_rate' : 0.0,
             'optimizer' : 'adam',
             'L2_lambda' : 0.0,
@@ -126,13 +126,13 @@ class AE_Experiment():
                     'args' : {'name':'epochs',
                               'low': 1,
                               'high':50},
-                    'search_space' : [20] },
+                    'search_space' : [2] },
                 'layers_per_block' : {
                     'type' : 'int',
                     'args' : {'name' : 'conv_layers_per_block',
                               'low'  : 1,
                               'high' : 6},
-                    'search_space' : [1] },
+                    'search_space' : [4] },
                 'num_filters_last' : {
                     'type' : 'int',
                     'args' : {'name' : 'num_filters_last',
@@ -144,13 +144,13 @@ class AE_Experiment():
                     'args' : {'name' : 'lookback',
                               'low'  : 0,
                               'high' : 9},
-                    'search_space' : [7] },
+                    'search_space' : [3] },
                 'batch_size' : {
                     'type' : 'int',
                     'args' : {'name':'batch_size',
                               'low':1,
                               'high':100},
-                    'search_space' : [4] } },
+                    'search_space' : [10] } },
 
             #-------------------------------------------------------
             'regularization' : {
@@ -298,7 +298,7 @@ class AE_Experiment():
         use_embedded_ESN = False
         if feedthrough_only: use_embedded_ESN = False
 
-        separate_AE_output = True
+        multihead_output = True
 
         # DATA CONFIG
         self.history = self.hyper_params['history']
@@ -367,7 +367,7 @@ class AE_Experiment():
                 'use_feedthrough':use_feedthrough,
                 'feedthrough_only':feedthrough_only,
                 'feedthrough_type':'multiply',
-                'separate_AE_output':separate_AE_output,
+                'multihead_output':multihead_output,
                 'learning_rate':self.hyper_params['learning_rate'],
                 'conv_layers_per_block':\
                 self.hyper_params['conv_layers_per_block'],
@@ -398,17 +398,18 @@ class AE_Experiment():
         print('--------------------------------------------------------- ')
 
         tic = time.time()
-        dgen_pars = { 'ft_type' : self.feedthrough_type,
-                      'separate_AE_output' : separate_AE_output,
+        dgen_args = { 'ft_type' : self.feedthrough_type,
+                      'multihead_output' : multihead_output,
                       'batch_size' : batch_size,
                       'shuffle' : shuffle,
-                      'lookback' : self.hyper_params['lookback']
+                      'lookback' : self.hyper_params['lookback'],
+                      'encoder' : encoder,
                      }
 
         datagen_train = DataGenerator(
             x = [train_data_inp, train_data_ft],
             y = [train_data_otp],
-            **dgen_pars
+            **dgen_args
         )
 
         esn_callback = TriggerESN(esn,
@@ -424,7 +425,7 @@ class AE_Experiment():
                              plotmachine=plotmachine,
                              pars = {'feedthrough_only': feedthrough_only,
                                      'use_feedthrough': use_feedthrough,
-                                     'separate_AE_output' : separate_AE_output,
+                                     'multihead_output' : multihead_output,
                                      'predict_only' : predict_only,
                                      'evaluate' : evaluate,
                                      'lookback' : self.hyper_params['lookback']})
@@ -696,15 +697,25 @@ class AE_Experiment():
 
 if __name__=="__main__":
 
-    exp = AE_Experiment(exp_name='better_loss',
-                        tuning_config='default',
-                        detide=False,
-                        compute_data=False,
-                        coarsening_method='gaussian_filter',
-                        truncation=100,
-                        sigma=[1,1.5,1.5],
-                        feedthrough_type='hybrid')
+    # model = {'folder' : 'experiments/better_loss-default/models/',
+    #          'postfix' : 'trial_32_20241022_105441'}
 
-    exp.hyper_params['history']=100
+    model = {'folder' : 'experiments/multihead_output-default/models/',
+             'postfix' : 'trial_1_20241022_150451'}
+    
+
+    exp = AE_Experiment(
+        existing_model=model,
+        exp_name='restart_multihead_test',
+        tuning_config='default',
+        detide=False,
+        compute_data=False,
+        coarsening_method='gaussian_filter',
+        truncation=100,
+        sigma=[1,1.5,1.5],
+        feedthrough_type='hybrid')
+
+    exp.hyper_params['history']=1000
+    exp.hyper_params['future']=400
     exp.run_optuna_study()
-    exp.create_movie()
+    # exp.create_movie()

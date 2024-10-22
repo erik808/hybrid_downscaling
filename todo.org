@@ -40,7 +40,8 @@
 ** TODO Test different feedthrough
    let FT go through full AE, then combine with decoded RNN output
 
-** TODO Compare against old loss formulation using simple setup
+** DONE Compare against old loss formulation using simple setup
+   Problem was how the blocks are trained with too different tasks. This is now improved.
 
 * Housekeeping
 

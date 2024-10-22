@@ -28,6 +28,7 @@ class AutoEncoder(keras_tuner.HyperModel):
         self.esn_combine_mode = 'replace'
         self.needs_building = True
         self.ct = ComputeTool()
+        self.losses = []
 
         self.log('AutoEncoder\n', 'w')
 
@@ -68,8 +69,8 @@ class AutoEncoder(keras_tuner.HyperModel):
                     L2_lambda=1e-5,
                     ):
 
-        self.activation_encoder = 'relu'
-        self.activation_decoder = 'relu'
+        self.activation_encoder = keras.layers.LeakyReLU()
+        self.activation_decoder = keras.layers.LeakyReLU()
         self.use_feedthrough = use_feedthrough
         self.use_feedthrough_in_esn = use_feedthrough
         self.feedthrough_only = feedthrough_only
@@ -170,7 +171,8 @@ class AutoEncoder(keras_tuner.HyperModel):
         # Run with the RNN
         RNN_output = RNNBlock(model='RNN',
                               activation=self.activation_encoder,
-                              reduction_factor=self.num_filters_last)\
+                              reduction_factor=self.num_filters_last,
+                              filters=self.num_filters_last)\
                               (encoded_outputs)
 
         # use_encoded_feedthrough = True
@@ -234,14 +236,18 @@ class AutoEncoder(keras_tuner.HyperModel):
         if (self.multihead_output and
             not self.feedthrough_only ):
 
-            output_AE_only = self.combine_feedthrough(decoded_AE_only,
-                                                      ft_inputs[0],
-                                                      feedthrough_type,
-                                                      feedthrough_block)
-            output_AE_only = output_layer(output_AE_only)
-            outputs = [masking_layer(output), masking_layer(output_AE_only)]
-            # outputs = [masking_layer(output), masking_layer(output_AE_only), RNN_output]
-            loss_weights = [0.5, 0.5]
+            if self.use_feedthrough:
+                decoded_AE_only = self.combine_feedthrough(decoded_AE_only,
+                                                           ft_inputs[0],
+                                                           feedthrough_type,
+                                                           feedthrough_block)
+            output_AE_only = output_layer(decoded_AE_only)
+            # outputs = [masking_layer(output), masking_layer(output_AE_only)]
+            outputs = [masking_layer(output),
+                       masking_layer(output_AE_only),
+                       RNN_output]
+            
+            loss_weights = [0.0, 1.0, 1.0]
         else: # normal output
 
             outputs = [masking_layer(output)]
@@ -269,11 +275,20 @@ class AutoEncoder(keras_tuner.HyperModel):
         @keras.saving.register_keras_serializable(name="custom_loss")
         def custom_loss(y_true, y_pred):
             # simple MSE loss
-            loss = ops.mean(ops.square(y_true-y_pred))
+            # dim_range = np.arange(1,y_true.dim()).tolist()
+            err = ops.sum(ops.square(y_pred-y_true))
+            nrm = ops.sum(ops.square(y_true))
+            loss = (err/nrm)
+            # self.losses.append(loss)
+            if loss == 0.0:
+                breakpoint()
+            print(f' ::{float(loss):2.4e}:: ', end='')
             return loss
 
         self.autoencoder.compile(optimizer=optim, loss=custom_loss,
                                  loss_weights=loss_weights)
+        
+        # self.autoencoder.add_metric(
 
         self.log_model()
         self.log_model(self.autoencoder, 'a')
@@ -517,7 +532,8 @@ class RNNBlock():
         RNN_input = layers.Dense(RNN_rdim,
                                  activation = self.activation)(RNN_input)
         RNN_input = ops.flip(RNN_input, axis=1)
-        RNN_output = layers.SimpleRNN(RNN_rdim)(RNN_input)
+        RNN_output = layers.SimpleRNN(RNN_rdim,
+                                      recurrent_dropout=0.5)(RNN_input)
         RNN_output = layers.Dense(N_feats,
                                   activation = self.activation)(RNN_output)
         return layers.Reshape((Nj, Ni, Nc))(RNN_output)

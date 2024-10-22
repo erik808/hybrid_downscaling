@@ -584,7 +584,8 @@ class DataGenerator(keras.utils.PyDataset):
         super().__init__(**kwargs)
         self.batch_size = batch_size
         self.ft_type = ft_type
-        self.multihead_output = multihead_output
+        self.multihead_output = (multihead_output and
+                                 not self.ft_type == 'only')
         self.shuffle = shuffle
         self.lookback = lookback
         self.encoder = encoder
@@ -605,13 +606,10 @@ class DataGenerator(keras.utils.PyDataset):
         else:
             self.x = [x[0]]
 
-        if (self.multihead_output and
-            not self.ft_type == 'only'):
+        if self.multihead_output:
             self.y = [y[0], x[0]]
         else:
-            self.y = y
-
-
+            self.y = y            
 
     def __len__(self):
         # number of batches
@@ -624,7 +622,13 @@ class DataGenerator(keras.utils.PyDataset):
         inds = self.indices[low:high]
         batch_x = create_lookback(inds, self.x, self.lookback)
         batch_y = [y[inds,] for y in self.y]
+
+        # add truth for RNN component
+        if self.multihead_output:
+            batch_y.append(self.encoder.predict(self.y[0][inds,], verbose=0))
+        
         return (batch_x, batch_y)
+    
 
     def __do_shuffle(self):
         if self.shuffle:

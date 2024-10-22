@@ -56,6 +56,7 @@ class AutoEncoder(keras_tuner.HyperModel):
                     use_feedthrough=True,
                     feedthrough_only=False,
                     feedthrough_type='multiply',
+                    separate_AE_output=False,
                     noise_stddev=0.0,
                     dropout_rate=0.0,
                     num_conv_blocks=3,
@@ -74,7 +75,7 @@ class AutoEncoder(keras_tuner.HyperModel):
         self.feedthrough_only = feedthrough_only
         self.feedthrough_type = feedthrough_type
         if self.feedthrough_only: self.use_feedthrough = True
-
+        self.separate_AE_output = separate_AE_output
         self.noise_stddev = noise_stddev
         self.dropout_rate = dropout_rate
         self.num_conv_blocks = num_conv_blocks
@@ -187,7 +188,7 @@ class AutoEncoder(keras_tuner.HyperModel):
             regularizer=self.regularizer)
 
         decoded_RNN = self.decoding_layers(RNN_output)
-        decoded_AE_only = self.decoding_layers(encoded_outputs_0)        
+        decoded_AE_only = self.decoding_layers(encoded_outputs_0)
 
         # Should these be residual blocks instead?
         feedthrough_block = ConvBlock(self.num_feedthrough_layers,
@@ -202,7 +203,7 @@ class AutoEncoder(keras_tuner.HyperModel):
                                          activation="sigmoid",
                                          regularizer=self.regularizer,
                                          name='output_layer_AE_only')
-        
+
         output_layer = ConvBlock(1, num_channels,
                                  self.kernel_size,
                                  activation="sigmoid",
@@ -230,7 +231,6 @@ class AutoEncoder(keras_tuner.HyperModel):
             else:
                 raise Exception('specify feedthrough_type when'
                                 ' using feedthrough')
-
             output = output_layer(output)
             inputs_decoder=[RNN_output, feedthrough]
             inputs_autoencoder=[state_input, feedthrough]
@@ -240,10 +240,13 @@ class AutoEncoder(keras_tuner.HyperModel):
             inputs_decoder=[RNN_output]
             inputs_autoencoder=[state_input]
 
-        if self.feedthrough_only:
-            outputs = [masking_layer(output)]
-        else:
+
+        if (self.separate_AE_output and
+            not self.feedthrough_only ):
             outputs = [masking_layer(output), masking_layer(output_AE_only)]
+        else:
+            outputs = [masking_layer(output)]
+
 
         # Construct models
         self.decoder = Model(inputs=inputs_decoder,
@@ -257,7 +260,6 @@ class AutoEncoder(keras_tuner.HyperModel):
         loss = keras.losses.\
             MeanSquaredError(reduction="sum_over_batch_size",
                              name="mean_squared_error")
-
 
         if optimizer == 'adam':
             optim = keras.optimizers.Adam(learning_rate=learning_rate)
@@ -629,9 +631,12 @@ class CustomValidation(keras.callbacks.Callback):
             if self.pars['feedthrough_only']:
                 xk = self.model.predict([Pxk], verbose=0)
             elif self.pars['use_feedthrough']:
-                xk = self.model.predict([xk_lb, Pxk], verbose=0)[0]
+                xk = self.model.predict([xk_lb, Pxk], verbose=0)
             else:
-                xk = self.model.predict([xk_lb], verbose=0)[0]
+                xk = self.model.predict([xk_lb], verbose=0)
+
+            if ( self.pars['separate_AE_output'] and
+                 not self.pars['feedthrough_only'] ): xk = xk[0]
 
             self.predictions[i,] = xk
 

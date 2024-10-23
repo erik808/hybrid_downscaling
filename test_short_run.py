@@ -1,15 +1,15 @@
 import autoencoder_original
 from autoencoder_original import AE_Experiment
 
-exp = AE_Experiment(existing_model=model,
-                    exp_name='test_short_run',
-                    tuning_config='default',
-                    detide=False,
-                    compute_data=False,
-                    coarsening_method='gaussian_filter',
-                    truncation=100,
-                    sigma=[1,1.5,1.5],
-                    feedthrough_type='inactive')
+exp = AE_Experiment(
+    exp_name='test_short_run',
+    tuning_config='default',
+    detide=False,
+    compute_data=False,
+    coarsening_method='gaussian_filter',
+    truncation=100,
+    sigma=[1,1.5,1.5],
+    feedthrough_type='inactive')
 
 # adjust hyperparameters:
 test_pars = {'history' : 1000,

@@ -81,7 +81,7 @@ class AE_Experiment():
             self.load_model_postfix = existing_model['postfix']
 
         if self.load_existing_model:
-            mdir = self.load_model_folder
+            mdir = self.load_model_folder            
             self.load_path_autoencoder = \
                 f'{mdir}/autoencoder_{self.load_model_postfix}.keras'
             self.load_path_encoder     = \
@@ -126,7 +126,7 @@ class AE_Experiment():
                     'args' : {'name':'epochs',
                               'low': 1,
                               'high':50},
-                    'search_space' : [20] },
+                    'search_space' : [1] },
                 'layers_per_block' : {
                     'type' : 'int',
                     'args' : {'name' : 'conv_layers_per_block',
@@ -345,6 +345,7 @@ class AE_Experiment():
         postfix, timestamp = self.create_postfix()
 
         if self.load_existing_model:
+            breakpoint()
             autoencoder = \
                 keras.models.load_model(self.load_path_autoencoder)
 
@@ -461,23 +462,23 @@ class AE_Experiment():
             dill.dump(container, file)
 
         # save models
-        save_path_autoencoder = f'{mdir}/autoencoder{postfix}.keras'
-        save_path_encoder     = f'{mdir}/encoder{postfix}.keras'
-        save_path_decoder     = f'{mdir}/decoder{postfix}.keras'
+        self.save_path_autoencoder = f'{mdir}/autoencoder{postfix}.keras'
+        self.save_path_encoder     = f'{mdir}/encoder{postfix}.keras'
+        self.save_path_decoder     = f'{mdir}/decoder{postfix}.keras'
 
-        print(f'saving autoencoder to {save_path_autoencoder}')
-        print(f'saving encoder to {save_path_encoder}')
-        print(f'saving decoder to {save_path_decoder}')
-        autoencoder.save(save_path_autoencoder)
-        encoder.save(save_path_encoder)
-        decoder.save(save_path_decoder)
-
+        print(f'saving autoencoder to {self.save_path_autoencoder}')
+        print(f'saving encoder to {self.save_path_encoder}')
+        print(f'saving decoder to {self.save_path_decoder}')
+        autoencoder.save(self.save_path_autoencoder)
+        encoder.save(self.save_path_encoder)
+        decoder.save(self.save_path_decoder)
+        
         self.plot_history()
         self.plot_spectra()
 
         print(f'final error: {self.validation_callback.final_error}')
         return self.validation_callback.final_error
-
+    
 
     def setup_ranges(self, params):
 
@@ -704,13 +705,14 @@ if __name__=="__main__":
     #          'postfix' : 'trial_1_20241022_150451'}
 
     # model = {'folder' : 'experiments/restart_multihead_test-default/checkpoints',
-    #          'postfix' : 'trial_1_20241022_152902.checkpoint'}
+    #          'postfix' : 'trial_1_20241022_152902.checkpoint'}   
     
+    model = {'folder' : 'experiments/multihead_test_rnn_normalized-default/models',
+             'postfix' : 'trial_26_20241023_154338'}
     
-
     exp = AE_Experiment(
-        # existing_model=model,
-        exp_name='multihead_test_rnn_normalized',
+        existing_model=model,
+        exp_name='restart_test',
         tuning_config='default',
         detide=False,
         compute_data=False,
@@ -719,7 +721,13 @@ if __name__=="__main__":
         sigma=[1,1.5,1.5],
         feedthrough_type='hybrid')
 
-    # exp.hyper_params['history']=1000
-    # exp.hyper_params['future']=100
+    exp.hyper_params['history']=1000
+    exp.hyper_params['future']=100
     exp.run_optuna_study()
+    
+    modelpath = exp.save_path_autoencoder.split('/autoencoder_')
+    modelfolder = modelpath[0]
+    modelpostfix = modelpath[1].split('.keras')[0]
+    print(modelfolder)
+    print(modelpostfix)
     # exp.create_movie()

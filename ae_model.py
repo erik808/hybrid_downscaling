@@ -7,6 +7,7 @@ from keras import layers
 from keras import ops
 from keras import regularizers
 from keras.models import Model
+from keras.losses import Loss
 
 from compute_tool import ComputeTool
 import data_manager as dm
@@ -69,8 +70,8 @@ class AutoEncoder(keras_tuner.HyperModel):
                     L2_lambda=1e-5,
                     ):
 
-        self.activation_encoder = keras.layers.LeakyReLU()
-        self.activation_decoder = keras.layers.LeakyReLU()
+        self.activation_encoder = keras.layers.LeakyReLU(alpha=0.3)
+        self.activation_decoder = keras.layers.LeakyReLU(alpha=0.3)
         self.use_feedthrough = use_feedthrough
         self.use_feedthrough_in_esn = use_feedthrough
         self.feedthrough_only = feedthrough_only
@@ -207,7 +208,6 @@ class AutoEncoder(keras_tuner.HyperModel):
                                  name='output_layer')
 
 
-
         if self.feedthrough_only:
             output = feedthrough_block(ft_inputs[0])
             output = output_layer(output)
@@ -256,36 +256,25 @@ class AutoEncoder(keras_tuner.HyperModel):
 
         # Construct models
         self.decoder = Model(inputs=inputs_decoder,
-                             outputs=outputs,
+                             outputs=outputs[0],
                              name="decoder")
 
         self.autoencoder = Model(inputs=inputs_autoencoder,
-                            outputs=outputs,
-                            name="autoencoder")
+                                 outputs=outputs,
+                                 name="autoencoder")
 
         loss = keras.losses.\
             MeanSquaredError(reduction="sum_over_batch_size",
                              name="mean_squared_error")
+
+        # loss = CustomLoss()
 
         if optimizer == 'adam':
             optim = keras.optimizers.Adam(learning_rate=learning_rate)
         elif optimizer == 'sgd':
             optim = keras.optimizers.SGD(learning_rate=learning_rate)
 
-        @keras.saving.register_keras_serializable(name="custom_loss")
-        def custom_loss(y_true, y_pred):
-            # simple MSE loss
-            # dim_range = np.arange(1,y_true.dim()).tolist()
-            err = ops.sum(ops.square(y_pred-y_true))
-            nrm = ops.sum(ops.square(y_true))
-            loss = (err/nrm)
-            # self.losses.append(loss)
-            if loss == 0.0:
-                breakpoint()
-            print(f' ::{float(loss):2.4e}:: ', end='')
-            return loss
-
-        self.autoencoder.compile(optimizer=optim, loss=custom_loss,
+        self.autoencoder.compile(optimizer=optim, loss=loss,
                                  loss_weights=loss_weights)
         
         # self.autoencoder.add_metric(
@@ -577,6 +566,24 @@ class Masking(layers.Layer):
     def call(self, inputs):
         return ops.multiply(inputs, self.mask)
 
+@keras.saving.register_keras_serializable(name="custom_loss")
+class CustomLoss(Loss):
+    def __init__(
+            self,
+            reduction="sum_over_batch_size"
+    ):
+        super().__init__(reduction=reduction)
+
+    def call(self, y_true, y_pred):
+        err = ops.sum(ops.square(y_pred-y_true))
+        nrm = ops.sum(ops.square(y_true))
+        loss = (err/nrm)
+        return loss
+    
+    def get_config(self):
+        config = super().get_config()
+        return config
+    
 
 class TriggerESN(keras.callbacks.Callback):
     """Callback to control the ESN during training of the AE

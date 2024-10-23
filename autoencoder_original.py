@@ -126,13 +126,13 @@ class AE_Experiment():
                     'args' : {'name':'epochs',
                               'low': 1,
                               'high':50},
-                    'search_space' : [1] },
+                    'search_space' : [10] },
                 'layers_per_block' : {
                     'type' : 'int',
                     'args' : {'name' : 'conv_layers_per_block',
                               'low'  : 1,
                               'high' : 6},
-                    'search_space' : [1] },
+                    'search_space' : [4] },
                 'num_filters_last' : {
                     'type' : 'int',
                     'args' : {'name' : 'num_filters_last',
@@ -144,7 +144,7 @@ class AE_Experiment():
                     'args' : {'name' : 'lookback',
                               'low'  : 0,
                               'high' : 9},
-                    'search_space' : [5] },
+                    'search_space' : [0,1,2,3,4,5,6,7,8] },
                 'batch_size' : {
                     'type' : 'int',
                     'args' : {'name':'batch_size',
@@ -695,23 +695,11 @@ class AE_Experiment():
 
         return postfix, timestamp
 
+
 if __name__=="__main__":
 
-    # model = {'folder' : 'experiments/better_loss-default/models/',
-    #          'postfix' : 'trial_32_20241022_105441'}
-
-    # model = {'folder' : 'experiments/multihead_output-default/models/',
-    #          'postfix' : 'trial_1_20241022_150451'}
-
-    # model = {'folder' : 'experiments/restart_multihead_test-default/checkpoints',
-    #          'postfix' : 'trial_1_20241022_152902.checkpoint'}
-
-    model = {'folder' : 'experiments/multihead_test_rnn_normalized-default/models',
-             'postfix' : 'trial_26_20241023_154338'}
-
     exp = AE_Experiment(
-        existing_model=model,
-        exp_name='restart_test',
+        exp_name='lookback_gridsearch',
         tuning_config='default',
         detide=False,
         compute_data=False,
@@ -720,13 +708,4 @@ if __name__=="__main__":
         sigma=[1,1.5,1.5],
         feedthrough_type='hybrid')
 
-    exp.hyper_params['history']=1000
-    exp.hyper_params['future']=100
     exp.run_optuna_study()
-
-    modelpath = exp.save_path_autoencoder.split('/autoencoder_')
-    modelfolder = modelpath[0]
-    modelpostfix = modelpath[1].split('.keras')[0]
-    print(modelfolder)
-    print(modelpostfix)
-    # exp.create_movie()

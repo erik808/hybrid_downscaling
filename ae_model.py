@@ -70,8 +70,8 @@ class AutoEncoder(keras_tuner.HyperModel):
                     L2_lambda=1e-5,
                     ):
 
-        self.activation_encoder = keras.layers.LeakyReLU(alpha=0.3)
-        self.activation_decoder = keras.layers.LeakyReLU(alpha=0.3)
+        self.activation_encoder = 'leaky_relu'
+        self.activation_decoder = 'leaky_relu'
         self.use_feedthrough = use_feedthrough
         self.use_feedthrough_in_esn = use_feedthrough
         self.feedthrough_only = feedthrough_only
@@ -246,7 +246,7 @@ class AutoEncoder(keras_tuner.HyperModel):
             outputs = [masking_layer(output),
                        masking_layer(output_AE_only),
                        RNN_output]
-            
+
             loss_weights = [0.0, 1.0, 1.0]
         else: # normal output
 
@@ -267,7 +267,7 @@ class AutoEncoder(keras_tuner.HyperModel):
             MeanSquaredError(reduction="sum_over_batch_size",
                              name="mean_squared_error")
 
-        # loss = CustomLoss()
+        loss = CustomLoss()
 
         if optimizer == 'adam':
             optim = keras.optimizers.Adam(learning_rate=learning_rate)
@@ -276,7 +276,7 @@ class AutoEncoder(keras_tuner.HyperModel):
 
         self.autoencoder.compile(optimizer=optim, loss=loss,
                                  loss_weights=loss_weights)
-        
+
         # self.autoencoder.add_metric(
 
         self.log_model()
@@ -570,20 +570,22 @@ class Masking(layers.Layer):
 class CustomLoss(Loss):
     def __init__(
             self,
+            name='',
             reduction="sum_over_batch_size"
     ):
-        super().__init__(reduction=reduction)
+        super().__init__(name=name,
+                         reduction=reduction)
 
     def call(self, y_true, y_pred):
         err = ops.sum(ops.square(y_pred-y_true))
         nrm = ops.sum(ops.square(y_true))
         loss = (err/nrm)
         return loss
-    
+
     def get_config(self):
         config = super().get_config()
         return config
-    
+
 
 class TriggerESN(keras.callbacks.Callback):
     """Callback to control the ESN during training of the AE

@@ -81,7 +81,7 @@ class AE_Experiment():
             self.load_model_postfix = existing_model['postfix']
 
         if self.load_existing_model:
-            mdir = self.load_model_folder            
+            mdir = self.load_model_folder
             self.load_path_autoencoder = \
                 f'{mdir}/autoencoder_{self.load_model_postfix}.keras'
             self.load_path_encoder     = \
@@ -345,7 +345,6 @@ class AE_Experiment():
         postfix, timestamp = self.create_postfix()
 
         if self.load_existing_model:
-            breakpoint()
             autoencoder = \
                 keras.models.load_model(self.load_path_autoencoder)
 
@@ -472,13 +471,13 @@ class AE_Experiment():
         autoencoder.save(self.save_path_autoencoder)
         encoder.save(self.save_path_encoder)
         decoder.save(self.save_path_decoder)
-        
+
         self.plot_history()
         self.plot_spectra()
 
         print(f'final error: {self.validation_callback.final_error}')
         return self.validation_callback.final_error
-    
+
 
     def setup_ranges(self, params):
 
@@ -705,11 +704,11 @@ if __name__=="__main__":
     #          'postfix' : 'trial_1_20241022_150451'}
 
     # model = {'folder' : 'experiments/restart_multihead_test-default/checkpoints',
-    #          'postfix' : 'trial_1_20241022_152902.checkpoint'}   
-    
+    #          'postfix' : 'trial_1_20241022_152902.checkpoint'}
+
     model = {'folder' : 'experiments/multihead_test_rnn_normalized-default/models',
              'postfix' : 'trial_26_20241023_154338'}
-    
+
     exp = AE_Experiment(
         existing_model=model,
         exp_name='restart_test',
@@ -724,7 +723,7 @@ if __name__=="__main__":
     exp.hyper_params['history']=1000
     exp.hyper_params['future']=100
     exp.run_optuna_study()
-    
+
     modelpath = exp.save_path_autoencoder.split('/autoencoder_')
     modelfolder = modelpath[0]
     modelpostfix = modelpath[1].split('.keras')[0]

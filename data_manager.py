@@ -16,7 +16,12 @@ from multiprocess import Pool
 
 class DataManager():
 
-    def __init__(self):
+    def __init__(
+            self,
+            testing_mode=False
+    ):
+        self.testing_mode = testing_mode
+        self.test_restrict = 3000
 
         self.data_dir      = 'data'
         self.transect_dir  = f'{self.data_dir}/transects'
@@ -155,8 +160,17 @@ class DataManager():
                      truncation=20):
 
         bt_HR = xr.open_dataset(self.HR_bathy_file)
-        ds_HR = xr.open_mfdataset(self.HR_data_files, parallel=True)
+        ds_HR = xr.open_mfdataset(self.HR_data_files,
+                                  parallel=True)
         ds_LR = xr.open_dataset(self.LR_data_file)
+
+        if self.testing_mode:
+            # restrict data to first X samples
+            time_restrict = slice(ds_HR.time[0],
+                                  ds_HR.time[self.test_restrict-1])
+            ds_HR = ds_HR.sel(time=time_restrict)
+            ds_LR = ds_LR.sel(time=time_restrict)
+            
 
         mask = bt_HR.mask[0,:,:]
         grid_HR = self.build_grid(ds_HR, mask)
@@ -365,7 +379,6 @@ class DataManager():
         return da_HR, da_LR, mask
 
 
-
     def load_training_data(self,
                            split_factor=4/5,
                            scaling_range=(0,1),
@@ -453,7 +466,7 @@ class DataManager():
                              truncation=20):
 
         postfix =  ''
-        postfix =  '_detided' if detide else ''
+        postfix += '_detided' if detide else ''
         postfix += '_diff' if differences else ''
 
         if (coarsening_method == 'gaussian_filter' and
@@ -462,8 +475,8 @@ class DataManager():
             postfix += f'_blur_{sigma_str}'
         elif (coarsening_method == 'reduced_basis'):
             postfix += f'_reduced_basis_tr{truncation}'
-        else:
-            postfix += ''
+            
+        postfix += '_testing' if self.testing_mode else ''
 
         dill_file     = f'{self.data_dir}/ae_esn_training_data{postfix}.dill'
         dill_file_enc = f'{self.data_dir}/ae_esn_training_data{postfix}_encoded.dill'
@@ -572,7 +585,7 @@ class DataManager():
 
 class DataGenerator(keras.utils.PyDataset):
 
-    def __init__(self, x, y, 
+    def __init__(self, x, y,
                  ft_type = 'hybrid',
                  multihead_output = False,
                  batch_size = 4,
@@ -609,7 +622,7 @@ class DataGenerator(keras.utils.PyDataset):
         if self.multihead_output:
             self.y = [y[0], x[0]]
         else:
-            self.y = y            
+            self.y = y
 
     def __len__(self):
         # number of batches
@@ -626,9 +639,9 @@ class DataGenerator(keras.utils.PyDataset):
         # add truth for RNN component
         if self.multihead_output:
             batch_y.append(self.encoder.predict(self.y[0][inds,], verbose=0))
-        
+
         return (batch_x, batch_y)
-    
+
 
     def __do_shuffle(self):
         if self.shuffle:

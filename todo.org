@@ -62,5 +62,7 @@
 ** TODO get rid of old code
    put it somewhere for reference
 
-** TODO implement tests
-   - [ ] single epoch, short history
+** TESTS
+*** DONE save and load
+*** DONE single epoch, short history
+*** TODO create alternative short training data for integrity testing

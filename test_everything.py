@@ -49,7 +49,7 @@ def test_save_load():
     exp.hyper_params.update(test_pars)
 
     err = exp.build_and_run_model()
-    assert err < pytest.approx(30)
+    assert err < 30
 
     modelpath = exp.save_path_autoencoder.split('/autoencoder_')
     modelfolder = modelpath[0]
@@ -79,7 +79,7 @@ def test_save_load():
 
     exp.hyper_params.update(test_pars)
     err = exp.build_and_run_model()
-    assert err < pytest.approx(30)
+    assert err < 30
 
 if __name__=="__main__":
     test_short_run()

@@ -17,7 +17,6 @@ from keras.src.losses.loss import squeeze_or_expand_to_same_rank
 import optuna
 import data_manager
 reload(data_manager)
-
 from data_manager import DataManager
 from data_manager import DataGenerator
 
@@ -54,7 +53,8 @@ class AE_Experiment():
                  coarsening_method='gaussian_filter',
                  truncation=1000,
                  sigma=[1,1,1],
-                 feedthrough_type='hybrid'):
+                 feedthrough_type='hybrid',
+                 testing_mode=False):
 
         self.init_timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
         self.exp_name = exp_name
@@ -69,7 +69,7 @@ class AE_Experiment():
             if self.tuning_config == None else f'-{self.tuning_config}'
 
         # setup new or existing directories
-        self.dm = DataManager()
+        self.dm = DataManager(testing_mode=testing_mode)
         self.dirs, self.files = \
             self.dm.setup_directories(self.folder_id, self.folder_postfix)
 

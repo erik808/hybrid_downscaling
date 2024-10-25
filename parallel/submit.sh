@@ -16,5 +16,7 @@ export OPENBLAS_NUM_THREADS=4
 # mamba activate freja_stable
 origdir=$PWD
 cd ../
-python autoencoder_original.py
+
+runscript=$1
+python $runscript
 cd $origdir

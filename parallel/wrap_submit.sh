@@ -1,7 +1,7 @@
 #/bin/bash
 
 function run_sbatch {
-    sbcommand=`sbatch $1`
+    sbcommand=`sbatch $1 $2`
     if [[ "$sbcommand" =~ Submitted\ batch\ job\ ([0-9]+) ]]; then
         jobid=${BASH_REMATCH[1]}
         echo "$jobid"

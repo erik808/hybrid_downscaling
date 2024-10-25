@@ -10,7 +10,15 @@ function run_sbatch {
     fi
 }
 
-jobid=`run_sbatch submit.sh`
+if [ "$#" -eq 0 ]; then
+    runscript=autoencoder_original.py
+    echo "no arguments given, running $runscript"
+else
+    runscript=$1
+    echo "running $runscript"
+fi
+
+jobid=`run_sbatch submit.sh $runscript`
 slurmfile=slurm-$jobid.out
 
 while true; do

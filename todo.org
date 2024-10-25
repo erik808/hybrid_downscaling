@@ -27,8 +27,10 @@
     Should be doable
 
 *** TODO Create RNN-only pathway
-    - [ ] Test passing encoding_layers to DataGenerator
-    - [ ] Try to create custom loss inside ae_model
+    - [X] Test passing encoding_layers to DataGenerator
+    - [X] Try to create custom loss inside ae_model
+    - [X] Multiple outputs with different loss weights
+    - [ ] Adjust loss weights during training
 
 *** DONE Create feedthrough-only pathway
     Already exists and defeats the purpose?

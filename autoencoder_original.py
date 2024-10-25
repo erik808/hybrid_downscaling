@@ -104,7 +104,7 @@ class AE_Experiment():
         self.hyper_params = {
             'history' : 'all',
             'lookback' : 2,
-            'conv_layers_per_block' : 2,
+            'conv_layers_per_block' : 1,
             'future' : 400,
             'noise_stddev' : 0.0,
             'dropout_rate' : 0.0,
@@ -132,7 +132,7 @@ class AE_Experiment():
                     'args' : {'name' : 'conv_layers_per_block',
                               'low'  : 1,
                               'high' : 6},
-                    'search_space' : [4] },
+                    'search_space' : [1] },
                 'num_filters_last' : {
                     'type' : 'int',
                     'args' : {'name' : 'num_filters_last',
@@ -144,7 +144,7 @@ class AE_Experiment():
                     'args' : {'name' : 'lookback',
                               'low'  : 0,
                               'high' : 9},
-                    'search_space' : [0,1,2,3,4,5,6,7,8] },
+                    'search_space' : [3] },
                 'batch_size' : {
                     'type' : 'int',
                     'args' : {'name':'batch_size',
@@ -160,6 +160,7 @@ class AE_Experiment():
                               'low'  : 0,
                               'high' : 1e2},
                     'search_space' : [0, 1e-8, 1e-7, 1e-6, 1e-5] } },
+            
             #-------------------------------------------------------
             'training_pars' : {
                 'L2_lambda' : {
@@ -180,6 +181,7 @@ class AE_Experiment():
                               'low':1,
                               'high':100},
                     'search_space' : [1,2,4,8] } },
+            
             #-------------------------------------------------------
             'filters' : {}, #TODO
             'dropout' : {}, #TODO
@@ -699,7 +701,7 @@ class AE_Experiment():
 if __name__=="__main__":
 
     exp = AE_Experiment(
-        exp_name='lookback_gridsearch',
+        exp_name='test_GRU',
         tuning_config='default',
         detide=False,
         compute_data=False,

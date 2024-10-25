@@ -170,7 +170,7 @@ class AutoEncoder(keras_tuner.HyperModel):
                 layers.Dropout(self.dropout_rate)(encoded_outputs)
 
         # Run with the RNN
-        RNN_output = RNNBlock(model='RNN',
+        RNN_output = RNNBlock(model='GRU',
                               activation=self.activation_encoder,
                               reduction_factor=self.num_filters_last,
                               filters=self.num_filters_last)\
@@ -247,7 +247,7 @@ class AutoEncoder(keras_tuner.HyperModel):
                        masking_layer(output_AE_only),
                        RNN_output]
 
-            loss_weights = [0.0, 1.0, 1.0]
+            loss_weights = [1.0, 1.0, 1.0]
         else: # normal output
 
             outputs = [masking_layer(output)]
@@ -501,6 +501,10 @@ class RNNBlock():
             return self.RNN_res(inputs)
         elif self.model == 'ConvLSTM':
             return self.ConvLSTM(inputs)
+        elif self.model == 'GRU':
+            return self.GRU(inputs)
+        elif self.model == 'LSTM':
+            return self.LSTM(inputs)
         else:
             return self.most_recent(inputs)
 
@@ -513,19 +517,37 @@ class RNNBlock():
                               (lstm_input)
         return lstm_output
 
+
+    def RNN_downsample(self, inputs):
+        self.Nlb, self.Nj, self.Ni, self.Nc = inputs.shape[1:]
+        self.N_feats = self.Nj * self.Ni * self.Nc
+        self.rdim = self.N_feats // self.reduction_factor
+        input_downs = layers.Reshape((self.Nlb, self.N_feats))(inputs)
+        input_downs = layers.Dense(self.rdim,
+                                   activation = self.activation)(input_downs)
+        return ops.flip(input_downs, axis=1)
+
+    def RNN_upsample(self, inputs):
+        output_ups = layers.Dense(self.N_feats,
+                                  activation = self.activation)(inputs)
+        return layers.Reshape((self.Nj,
+                               self.Ni,
+                               self.Nc))(output_ups)
+
     def RNN(self, inputs):
-        Nlb, Nj, Ni, Nc = inputs.shape[1:]
-        N_feats = Nj * Ni * Nc
-        RNN_rdim = N_feats // self.reduction_factor
-        RNN_input = layers.Reshape((Nlb, N_feats))(inputs)
-        RNN_input = layers.Dense(RNN_rdim,
-                                 activation = self.activation)(RNN_input)
-        RNN_input = ops.flip(RNN_input, axis=1)
-        RNN_output = layers.SimpleRNN(RNN_rdim,
-                                      recurrent_dropout=0.5)(RNN_input)
-        RNN_output = layers.Dense(N_feats,
-                                  activation = self.activation)(RNN_output)
-        return layers.Reshape((Nj, Ni, Nc))(RNN_output)
+        RNN_input = self.RNN_downsample(inputs)
+        RNN_output = layers.SimpleRNN(self.rdim)(RNN_input)
+        return self.RNN_upsample(RNN_output)
+    
+    def GRU(self, inputs):
+        RNN_input = self.RNN_downsample(inputs)
+        RNN_output = layers.GRU(self.rdim)(RNN_input)
+        return self.RNN_upsample(RNN_output)
+    
+    def LSTM(self, inputs):
+        RNN_input = self.RNN_downsample(inputs)
+        RNN_output = layers.LSTM(self.rdim)(RNN_input)
+        return self.RNN_upsample(RNN_output)
 
     def RNN_res(self, inputs):
         x = self.most_recent(inputs)
@@ -580,6 +602,7 @@ class CustomLoss(Loss):
         err = ops.sum(ops.square(y_pred-y_true))
         nrm = ops.sum(ops.square(y_true))
         loss = (err/nrm)
+        print(f' {loss:1.2e} ', end="")
         return loss
 
     def get_config(self):

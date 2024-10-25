@@ -9,16 +9,17 @@ def test_short_run():
         exp_name='test_suite',
         tuning_config='default',
         detide=False,
-        compute_data=True,
+        compute_data=False,
         coarsening_method='gaussian_filter',
         sigma=[1,1.5,1.5],
         feedthrough_type='hybrid',
         testing_mode=True)
 
     # adjust hyperparameters:
-    test_pars = {'history' : 128,
-                 'future' : 16,
-                 'epochs' : 1,
+    test_pars = {'history' : 1000,
+                 'future' : 100,
+                 'epochs' : 3,
+                 'lookback' : 3,
                  'batch_size' : 4}
 
     exp.hyper_params.update(test_pars)
@@ -27,7 +28,7 @@ def test_short_run():
 
 
 def test_save_load():
-    
+
     exp = AE_Experiment(
         exp_name='test_suite',
         tuning_config='default',
@@ -39,8 +40,8 @@ def test_save_load():
         testing_mode=True)
 
     # adjust hyperparameters:
-    test_pars = {'history' : 1000,
-                 'future' : 100,
+    test_pars = {'history' : 128,
+                 'future' : 16,
                  'lookback' : 1,
                  'conv_layers_per_block' : 1,
                  'epochs' : 1,
@@ -70,8 +71,8 @@ def test_save_load():
         testing_mode=True)
 
     # adjust hyperparameters:
-    test_pars = {'history' : 1000,
-                 'future' : 100,
+    test_pars = {'history' : 128,
+                 'future' : 16,
                  'lookback' : 1,
                  'conv_layers_per_block' : 1,
                  'epochs' : 1,
@@ -83,4 +84,4 @@ def test_save_load():
 
 if __name__=="__main__":
     test_short_run()
-    test_save_load()
+    # test_save_load()

@@ -132,7 +132,7 @@ class AE_Experiment():
                     'args' : {'name' : 'conv_layers_per_block',
                               'low'  : 1,
                               'high' : 6},
-                    'search_space' : [1] },
+                    'search_space' : [3] },
                 'num_filters_last' : {
                     'type' : 'int',
                     'args' : {'name' : 'num_filters_last',
@@ -701,7 +701,7 @@ class AE_Experiment():
 if __name__=="__main__":
 
     exp = AE_Experiment(
-        exp_name='test_GRU',
+        exp_name='test_RNN',
         tuning_config='default',
         detide=False,
         compute_data=False,

@@ -131,8 +131,9 @@ class AutoEncoder(keras_tuner.HyperModel):
         encoded_outputs_0 = encoded_outputs[0]
 
         # apply encoder to feedthrough
-        # if use_encoded_feedthrough:
-        #    encoded_ft = self.encoding_layers(ft_inputs[0])
+        use_encoded_feedthrough = False
+        if use_encoded_feedthrough:
+           encoded_ft = self.encoding_layers(ft_inputs[0])
 
         # join encoded outputs
         encoded_outputs = ops.stack(encoded_outputs, axis=1)
@@ -170,15 +171,14 @@ class AutoEncoder(keras_tuner.HyperModel):
                 layers.Dropout(self.dropout_rate)(encoded_outputs)
 
         # Run with the RNN
-        RNN_output = RNNBlock(model='GRU',
+        RNN_output = RNNBlock(model='RNN',
                               activation=self.activation_encoder,
                               reduction_factor=self.num_filters_last,
                               filters=self.num_filters_last)\
                               (encoded_outputs)
 
-        # use_encoded_feedthrough = True
-        # if use_encoded_feedthrough:
-        #     RNN_output = layers.Multiply()([RNN_output, encoded_ft])
+        if use_encoded_feedthrough:
+            RNN_output = layers.Multiply()([RNN_output, encoded_ft])
 
         # Decoder blocks
         self.decoding_layers = Decoder(
@@ -505,8 +505,10 @@ class RNNBlock():
             return self.GRU(inputs)
         elif self.model == 'LSTM':
             return self.LSTM(inputs)
-        else:
+        elif self.model == 'disabled':
             return self.most_recent(inputs)
+        else:
+            raise Exception('Provide a model')
 
     def ConvLSTM(self, inputs):
         lstm_input = ops.flip(inputs, axis=1)
@@ -538,12 +540,12 @@ class RNNBlock():
         RNN_input = self.RNN_downsample(inputs)
         RNN_output = layers.SimpleRNN(self.rdim)(RNN_input)
         return self.RNN_upsample(RNN_output)
-    
+
     def GRU(self, inputs):
         RNN_input = self.RNN_downsample(inputs)
         RNN_output = layers.GRU(self.rdim)(RNN_input)
         return self.RNN_upsample(RNN_output)
-    
+
     def LSTM(self, inputs):
         RNN_input = self.RNN_downsample(inputs)
         RNN_output = layers.LSTM(self.rdim)(RNN_input)
@@ -602,7 +604,7 @@ class CustomLoss(Loss):
         err = ops.sum(ops.square(y_pred-y_true))
         nrm = ops.sum(ops.square(y_true))
         loss = (err/nrm)
-        print(f' {loss:1.2e} ', end="")
+        print(f' :{loss:1.2e}: ', end="")
         return loss
 
     def get_config(self):

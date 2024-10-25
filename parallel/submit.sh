@@ -18,5 +18,8 @@ origdir=$PWD
 cd ../
 
 runscript=$1
-python $runscript
+echo "running" $runscript
+time python $runscript
 cd $origdir
+
+echo "done"

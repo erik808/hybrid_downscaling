@@ -71,8 +71,8 @@ class AutoEncoder(keras_tuner.HyperModel):
                     RNN_reduction_factor=1,
                     ):
 
-        self.activation_encoder = 'relu'#'leaky_relu'
-        self.activation_decoder = 'relu'#'leaky_relu'
+        self.activation_encoder = 'leaky_relu'
+        self.activation_decoder = 'leaky_relu'
         self.use_feedthrough = use_feedthrough
         self.use_feedthrough_in_esn = use_feedthrough
         self.feedthrough_only = feedthrough_only
@@ -104,7 +104,7 @@ class AutoEncoder(keras_tuner.HyperModel):
         state_input = layers.Input(shape=(N_lb, Nlat, Nlon,
                                           num_channels),
                                    name="full_state_input")
-        
+
         if self.use_feedthrough:
             feedthrough = layers.Input(shape=(N_lb, Nlat, Nlon, num_channels),
                                        name="feedthrough_input")
@@ -130,6 +130,9 @@ class AutoEncoder(keras_tuner.HyperModel):
                         for t in ops.split(state_input, N_lb, axis=1)]
 
         # apply encoder separately
+        ### TODO set trainable to False except for one call?? No use
+        ### something like no grad on all tensors except the first
+        ### one.
         encoded_outputs = [ self.encoding_layers(inpt) for inpt in state_inputs]
         encoded_outputs_0 = encoded_outputs[0]
 
@@ -215,6 +218,12 @@ class AutoEncoder(keras_tuner.HyperModel):
                                  regularizer=self.regularizer,
                                  name='output_layer')
 
+        output_layer_AE_only = ConvBlock(1, num_channels,
+                                         self.kernel_size,
+                                         activation="sigmoid",
+                                         regularizer=self.regularizer,
+                                         name='output_layer_AE_only')
+
 
         if self.feedthrough_only:
             output = feedthrough_block(ft_inputs[0])
@@ -241,21 +250,25 @@ class AutoEncoder(keras_tuner.HyperModel):
 
 
         # multiheaded output
-        if (self.multihead_output and
-            not self.feedthrough_only ):
+        if ( self.multihead_output and
+             not self.feedthrough_only ):
 
             if self.use_feedthrough:
-                decoded_AE_only = self.combine_feedthrough(decoded_AE_only,
-                                                           ft_inputs[0],
-                                                           feedthrough_type,
-                                                           feedthrough_block)
+                decoded_AE_only = self.combine_feedthrough( decoded_AE_only,
+                                                            ft_inputs[0],
+                                                            feedthrough_type,
+                                                            feedthrough_block )
+
+            #share output layer
             output_AE_only = output_layer(decoded_AE_only)
-            # outputs = [masking_layer(output), masking_layer(output_AE_only)]
+
+            # different output layer
+            # output_AE_only = output_layer_AE_only(decoded_AE_only)
             outputs = [masking_layer(output),
                        masking_layer(output_AE_only),
                        RNN_output]
 
-            loss_weights = [1.0, 0.0, 1.0]
+            loss_weights = [1.0, 0.0, 0.0]
         else: # normal output
 
             outputs = [masking_layer(output)]
@@ -293,7 +306,7 @@ class AutoEncoder(keras_tuner.HyperModel):
         self.needs_building = False
 
         return self.autoencoder, self.encoder, self.decoder
-    
+
 
     def combine_feedthrough(self, inputs, feedthrough,
                             feedthrough_type='multiply',

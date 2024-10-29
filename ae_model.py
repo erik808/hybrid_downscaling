@@ -182,7 +182,7 @@ class AutoEncoder(keras_tuner.HyperModel):
 
         # Run with the RNN
         RNN_output = RNNBlock(
-            model='RNN',
+            model='RNN_res',
             activation=self.activation_encoder,
             reduction_factor=self.RNN_reduction_factor,
             filters=self.num_filters_last)\
@@ -255,7 +255,7 @@ class AutoEncoder(keras_tuner.HyperModel):
                        masking_layer(output_AE_only),
                        RNN_output]
 
-            loss_weights = [0.0, 0.5, 0.5]
+            loss_weights = [1.0, 0.0, 1.0]
         else: # normal output
 
             outputs = [masking_layer(output)]
@@ -271,9 +271,9 @@ class AutoEncoder(keras_tuner.HyperModel):
                                  outputs=outputs,
                                  name="autoencoder")
 
-        # loss = keras.losses.\
-        #     MeanSquaredError(reduction="sum_over_batch_size",
-        #                      name="mean_squared_error")
+        loss = keras.losses.\
+            MeanSquaredError(reduction="sum_over_batch_size",
+                             name="mean_squared_error")
 
         loss = CustomLoss(losstype='MSE')
 
@@ -285,8 +285,6 @@ class AutoEncoder(keras_tuner.HyperModel):
         self.autoencoder.compile(optimizer=optim, loss=loss,
                                  loss_weights=loss_weights)
 
-        # self.autoencoder.add_metric(
-
         self.log_model()
         self.log_model(self.autoencoder, 'a')
         self.log_model(self.esn, 'a')
@@ -295,6 +293,7 @@ class AutoEncoder(keras_tuner.HyperModel):
         self.needs_building = False
 
         return self.autoencoder, self.encoder, self.decoder
+    
 
     def combine_feedthrough(self, inputs, feedthrough,
                             feedthrough_type='multiply',

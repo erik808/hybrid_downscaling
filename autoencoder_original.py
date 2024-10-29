@@ -110,6 +110,7 @@ class AE_Experiment():
             'dropout_rate' : 0.0,
             'optimizer' : 'adam',
             'L2_lambda' : 0.0,
+            'RNN_reduction_factor' : 1,
             'epochs' : 4,
             'batch_size' : 4,
             'learning_rate' : 0.002,
@@ -126,31 +127,49 @@ class AE_Experiment():
                     'args' : {'name':'epochs',
                               'low': 1,
                               'high':50},
-                    'search_space' : [10] },
+                    'search_space' : [20] },
+                
+                'learning_rate' : {
+                    'type' : 'float',
+                    'args' : {'name':'learning_rate',
+                              'low':1e-4,
+                              'high':1e-2},
+                    'search_space' : [5e-3] },
+                
                 'layers_per_block' : {
                     'type' : 'int',
                     'args' : {'name' : 'conv_layers_per_block',
                               'low'  : 1,
                               'high' : 6},
                     'search_space' : [3] },
+                
                 'num_filters_last' : {
                     'type' : 'int',
                     'args' : {'name' : 'num_filters_last',
                               'low'  : 1,
                               'high' : 100},
                     'search_space' : [8] },
+                
                 'lookback' : {
                     'type' : 'int',
                     'args' : {'name' : 'lookback',
                               'low'  : 0,
                               'high' : 9},
                     'search_space' : [3] },
+                
                 'batch_size' : {
                     'type' : 'int',
                     'args' : {'name':'batch_size',
                               'low':1,
                               'high':100},
-                    'search_space' : [4] } },
+                    'search_space' : [4] },
+                
+                'RNN_reduction_factor' : {
+                    'type' : 'int',
+                    'args' : {'name':'RNN_reduction_factor',
+                              'low':1,
+                              'high':32},
+                    'search_space' : [8] } },
 
             #-------------------------------------------------------
             'regularization' : {
@@ -375,6 +394,7 @@ class AE_Experiment():
                 self.hyper_params['conv_layers_per_block'],
                 'optimizer':self.hyper_params['optimizer'],
                 'L2_lambda':self.hyper_params['L2_lambda'],
+                'RNN_reduction_factor':self.hyper_params['RNN_reduction_factor'],
                 'dropout_rate':self.hyper_params['dropout_rate'],
                 'noise_stddev':self.hyper_params['noise_stddev'],
                 'num_filters':self.hyper_params['num_filters'],

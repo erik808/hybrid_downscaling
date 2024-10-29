@@ -1,8 +1,13 @@
 from importlib import reload
+
 import autoencoder_original
 import pytest
 reload(autoencoder_original)
 from autoencoder_original import AE_Experiment
+
+# set a seed
+import keras
+keras.utils.set_random_seed(123)
 
 def test_short_run():
     exp = AE_Experiment(
@@ -20,7 +25,10 @@ def test_short_run():
                  'future' : 100,
                  'epochs' : 3,
                  'lookback' : 3,
-                 'batch_size' : 4}
+                 'noise_stddev' : 0.0,
+                 'conv_layers_per_block' : 2,
+                 'batch_size' : 4,
+                 'RNN_reduction_factor' : 128}
 
     exp.hyper_params.update(test_pars)
     err = exp.build_and_run_model()
@@ -45,7 +53,8 @@ def test_save_load():
                  'lookback' : 1,
                  'conv_layers_per_block' : 1,
                  'epochs' : 1,
-                 'batch_size' : 4}
+                 'batch_size' : 4,
+                 'RNN_reduction_factor' : 8}
 
     exp.hyper_params.update(test_pars)
 
@@ -76,7 +85,8 @@ def test_save_load():
                  'lookback' : 1,
                  'conv_layers_per_block' : 1,
                  'epochs' : 1,
-                 'batch_size' : 4}
+                 'batch_size' : 4,
+                 'RNN_reduction_factor' : 8}
 
     exp.hyper_params.update(test_pars)
     err = exp.build_and_run_model()

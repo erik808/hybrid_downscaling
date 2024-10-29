@@ -68,10 +68,11 @@ class AutoEncoder(keras_tuner.HyperModel):
                     num_filters=32,
                     num_filters_last=8,
                     L2_lambda=1e-5,
+                    RNN_reduction_factor=1,
                     ):
 
-        self.activation_encoder = 'leaky_relu'
-        self.activation_decoder = 'leaky_relu'
+        self.activation_encoder = 'relu'#'leaky_relu'
+        self.activation_decoder = 'relu'#'leaky_relu'
         self.use_feedthrough = use_feedthrough
         self.use_feedthrough_in_esn = use_feedthrough
         self.feedthrough_only = feedthrough_only
@@ -89,6 +90,8 @@ class AutoEncoder(keras_tuner.HyperModel):
         self.regularizer = regularizers.L2(L2_lambda) \
             if L2_lambda > 0 else None
 
+        self.RNN_reduction_factor = RNN_reduction_factor
+
         use_dropout = True if self.dropout_rate > 0 else False
 
         # infer dimensions
@@ -101,7 +104,7 @@ class AutoEncoder(keras_tuner.HyperModel):
         state_input = layers.Input(shape=(N_lb, Nlat, Nlon,
                                           num_channels),
                                    name="full_state_input")
-
+        
         if self.use_feedthrough:
             feedthrough = layers.Input(shape=(N_lb, Nlat, Nlon, num_channels),
                                        name="feedthrough_input")
@@ -133,13 +136,16 @@ class AutoEncoder(keras_tuner.HyperModel):
         # apply encoder to feedthrough
         use_encoded_feedthrough = False
         if use_encoded_feedthrough:
-           encoded_ft = self.encoding_layers(ft_inputs[0])
+            encoded_fts = [ self.encoding_layers(ft) for ft in ft_inputs]
+            # encoded_ft = self.encoding_layers(ft_inputs[0])
+            encoded_fts = ops.stack(encoded_fts, axis=1)
 
         # join encoded outputs
         encoded_outputs = ops.stack(encoded_outputs, axis=1)
 
         self.encoder = \
             Model(state_inputs[0], encoded_outputs_0, name="encoder")
+
 
         # !!! THIS WAY OF CALLING THE ESN LAYER IS DEPRECATED !!!
         # Call ESN layer in the latent space
@@ -170,15 +176,17 @@ class AutoEncoder(keras_tuner.HyperModel):
             encoded_outputs = \
                 layers.Dropout(self.dropout_rate)(encoded_outputs)
 
-        # Run with the RNN
-        RNN_output = RNNBlock(model='RNN',
-                              activation=self.activation_encoder,
-                              reduction_factor=self.num_filters_last,
-                              filters=self.num_filters_last)\
-                              (encoded_outputs)
-
         if use_encoded_feedthrough:
-            RNN_output = layers.Multiply()([RNN_output, encoded_ft])
+            encoded_outputs = layers.Concatenate(axis=-1)([encoded_outputs,
+                                                           encoded_fts])
+
+        # Run with the RNN
+        RNN_output = RNNBlock(
+            model='RNN',
+            activation=self.activation_encoder,
+            reduction_factor=self.RNN_reduction_factor,
+            filters=self.num_filters_last)\
+            (encoded_outputs)
 
         # Decoder blocks
         self.decoding_layers = Decoder(
@@ -247,7 +255,7 @@ class AutoEncoder(keras_tuner.HyperModel):
                        masking_layer(output_AE_only),
                        RNN_output]
 
-            loss_weights = [1.0, 1.0, 1.0]
+            loss_weights = [0.0, 0.5, 0.5]
         else: # normal output
 
             outputs = [masking_layer(output)]
@@ -263,11 +271,11 @@ class AutoEncoder(keras_tuner.HyperModel):
                                  outputs=outputs,
                                  name="autoencoder")
 
-        loss = keras.losses.\
-            MeanSquaredError(reduction="sum_over_batch_size",
-                             name="mean_squared_error")
+        # loss = keras.losses.\
+        #     MeanSquaredError(reduction="sum_over_batch_size",
+        #                      name="mean_squared_error")
 
-        loss = CustomLoss()
+        loss = CustomLoss(losstype='MSE')
 
         if optimizer == 'adam':
             optim = keras.optimizers.Adam(learning_rate=learning_rate)
@@ -520,36 +528,37 @@ class RNNBlock():
         return lstm_output
 
 
-    def RNN_downsample(self, inputs):
+    def dense_downsample(self, inputs):
         self.Nlb, self.Nj, self.Ni, self.Nc = inputs.shape[1:]
-        self.N_feats = self.Nj * self.Ni * self.Nc
-        self.rdim = self.N_feats // self.reduction_factor
-        input_downs = layers.Reshape((self.Nlb, self.N_feats))(inputs)
+        self.N_feats_in = self.Nj * self.Ni * self.Nc
+        self.N_feats_out = self.Nj * self.Ni * self.filters
+        self.rdim = self.N_feats_out // self.reduction_factor
+        input_downs = layers.Reshape((self.Nlb, self.N_feats_in))(inputs)
         input_downs = layers.Dense(self.rdim,
                                    activation = self.activation)(input_downs)
         return ops.flip(input_downs, axis=1)
 
-    def RNN_upsample(self, inputs):
-        output_ups = layers.Dense(self.N_feats,
+    def dense_upsample(self, inputs):
+        output_ups = layers.Dense(self.N_feats_out,
                                   activation = self.activation)(inputs)
         return layers.Reshape((self.Nj,
                                self.Ni,
-                               self.Nc))(output_ups)
+                               self.filters))(output_ups)
 
     def RNN(self, inputs):
-        RNN_input = self.RNN_downsample(inputs)
+        RNN_input = self.dense_downsample(inputs)
         RNN_output = layers.SimpleRNN(self.rdim)(RNN_input)
-        return self.RNN_upsample(RNN_output)
+        return self.dense_upsample(RNN_output)
 
     def GRU(self, inputs):
-        RNN_input = self.RNN_downsample(inputs)
-        RNN_output = layers.GRU(self.rdim)(RNN_input)
-        return self.RNN_upsample(RNN_output)
+        GRU_input = self.dense_downsample(inputs)
+        GRU_output = layers.GRU(self.rdim)(GRU_input)
+        return self.dense_upsample(GRU_output)
 
     def LSTM(self, inputs):
-        RNN_input = self.RNN_downsample(inputs)
-        RNN_output = layers.LSTM(self.rdim)(RNN_input)
-        return self.RNN_upsample(RNN_output)
+        LSTM_input = self.dense_downsample(inputs)
+        LSTM_output = layers.LSTM(self.rdim)(LSTM_input)
+        return self.dense_upsample(LSTM_output)
 
     def RNN_res(self, inputs):
         x = self.most_recent(inputs)
@@ -595,17 +604,32 @@ class CustomLoss(Loss):
     def __init__(
             self,
             name='',
-            reduction="sum_over_batch_size"
+            reduction="sum_over_batch_size",
+            losstype='NSE'
     ):
         super().__init__(name=name,
                          reduction=reduction)
+        self.losstype = losstype
 
     def call(self, y_true, y_pred):
-        err = ops.sum(ops.square(y_pred-y_true))
-        nrm = ops.sum(ops.square(y_true))
-        loss = (err/nrm)
+
+        if self.losstype == 'NSE':
+            loss = self.normalized_SE(y_true, y_pred)
+        elif self.losstype == 'MSE':
+            loss = self.mean_SE(y_true, y_pred)
+
         print(f' :{loss:1.2e}: ', end="")
         return loss
+
+    def normalized_SE(self, y_true, y_pred):
+        err = ops.sum(ops.square(y_pred-y_true))
+        nrm = ops.sum(ops.square(y_true))
+        return (err/nrm)
+
+    def mean_SE(self, y_true, y_pred):
+        loss = ops.mean(ops.square(y_pred-y_true))
+        return loss
+
 
     def get_config(self):
         config = super().get_config()

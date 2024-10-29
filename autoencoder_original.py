@@ -105,6 +105,7 @@ class AE_Experiment():
             'history' : 'all',
             'lookback' : 2,
             'conv_layers_per_block' : 1,
+            'num_feedthrough_layers' : 1,
             'future' : 400,
             'noise_stddev' : 0.0,
             'dropout_rate' : 0.0,
@@ -134,14 +135,14 @@ class AE_Experiment():
                     'args' : {'name':'learning_rate',
                               'low':1e-4,
                               'high':1e-2},
-                    'search_space' : [5e-3] },
+                    'search_space' : [2e-3] },
                 
                 'layers_per_block' : {
                     'type' : 'int',
                     'args' : {'name' : 'conv_layers_per_block',
                               'low'  : 1,
                               'high' : 6},
-                    'search_space' : [3] },
+                    'search_space' : [2] },
                 
                 'num_filters_last' : {
                     'type' : 'int',
@@ -169,7 +170,7 @@ class AE_Experiment():
                     'args' : {'name':'RNN_reduction_factor',
                               'low':1,
                               'high':32},
-                    'search_space' : [8] } },
+                    'search_space' : [1] } },
 
             #-------------------------------------------------------
             'regularization' : {
@@ -392,6 +393,8 @@ class AE_Experiment():
                 'learning_rate':self.hyper_params['learning_rate'],
                 'conv_layers_per_block':\
                 self.hyper_params['conv_layers_per_block'],
+                'num_feedthrough_layers':\
+                self.hyper_params['num_feedthrough_layers'],
                 'optimizer':self.hyper_params['optimizer'],
                 'L2_lambda':self.hyper_params['L2_lambda'],
                 'RNN_reduction_factor':self.hyper_params['RNN_reduction_factor'],

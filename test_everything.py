@@ -32,7 +32,9 @@ def test_short_run():
                  'num_filters_last' : 32,
                  'batch_size' : 4,
                  'RNN_reduction_factor' : 256,
-                 'num_feedthrough_layers' : 2}
+                 'num_feedthrough_layers' : 2,
+                 'L2_lambda' : 0.0,
+                 'learning_rate' : 0.002,}
 
     exp.hyper_params.update(test_pars)
     err = exp.build_and_run_model()

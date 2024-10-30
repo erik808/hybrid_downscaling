@@ -256,7 +256,6 @@ class AutoEncoder(keras_tuner.HyperModel):
             outputs_decoder=[decoded_RNN]
             inputs_full_model=[state_input]
 
-
         # multiheaded output
         if ( self.multihead_output and
              not self.feedthrough_only ):
@@ -335,23 +334,6 @@ class AutoEncoder(keras_tuner.HyperModel):
             raise Exception('specify feedthrough_type when'
                             ' using feedthrough')
         return outputs
-
-
-    # build model for hyperparameter tuning
-    def build(self, hp):
-        learning_rate = hp.Float("learning_rate",
-                                 min_value=1e-4,
-                                 max_value=5e-2,
-                                 sampling="log")
-        hypermodel, _, _ = self.build_model(learning_rate=learning_rate)
-        return hypermodel
-
-    def fit(self, hp, model, *args, **kwargs):
-        batch_sizes = hp.Int("batch_size",
-                             min_value=2,
-                             max_value=32)
-        return model.fit(*args, batch_size=batch_sizes,
-                         **kwargs)
 
     def log(self, msg, mode='a'):
         original = sys.stdout

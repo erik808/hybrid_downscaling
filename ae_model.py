@@ -129,16 +129,24 @@ class AutoEncoder(keras_tuner.HyperModel):
         state_inputs = [ops.squeeze(t,axis=1) \
                         for t in ops.split(state_input, N_lb, axis=1)]
 
-        # apply encoder separately
-        ### TODO set trainable to False except for one call?? No use
-        ### something like no grad on all tensors except the first
-        ### one.
-        encoded_outputs = [ self.encoding_layers(inpt) for inpt in state_inputs]
-        encoded_outputs_0 = encoded_outputs[0]
+        # apply encoder in training and inference mode separately
+        # separate first entry:
+        encoded_outputs_0 = \
+            self.encoding_layers(state_inputs[0], training=True)
+
+        encoded_outputs_lb = \
+            [ self.encoding_layers(inpt, training=False)\
+              for inpt in state_inputs[1:] ]
+
+        encoded_outputs = [encoded_outputs_0] + encoded_outputs_lb
+
+        # encoded_outputs = [ self.encoding_layers(inpt) for inpt in state_inputs]
+        # encoded_outputs_0 = encoded_outputs[0]
 
         # apply encoder to feedthrough
         use_encoded_feedthrough = False
         if use_encoded_feedthrough:
+            raise Exception('deprecated implementation, check with training flag')
             encoded_fts = [ self.encoding_layers(ft) for ft in ft_inputs]
             # encoded_ft = self.encoding_layers(ft_inputs[0])
             encoded_fts = ops.stack(encoded_fts, axis=1)
@@ -185,10 +193,10 @@ class AutoEncoder(keras_tuner.HyperModel):
 
         # Run with the RNN
         RNN_output = RNNBlock(
-            model='RNN_res',
+            model='ConvLSTM',
             activation=self.activation_encoder,
             reduction_factor=self.RNN_reduction_factor,
-            filters=self.num_filters_last)\
+            filters=encoded_outputs.shape[-1])\
             (encoded_outputs)
 
         # Decoder blocks
@@ -206,17 +214,17 @@ class AutoEncoder(keras_tuner.HyperModel):
 
         # Should these be residual blocks instead?
         feedthrough_block = ConvBlock(self.num_feedthrough_layers,
-                                      self.num_filters,
+                                      decoded_RNN.shape[-1],
                                       self.kernel_size,
                                       activation=self.activation_decoder,
                                       regularizer=self.regularizer,
                                       name='feedthrough_block')
 
-        output_layer = ConvBlock(1, num_channels,
+        final_output_layer = ConvBlock(1, num_channels,
                                  self.kernel_size,
                                  activation="sigmoid",
                                  regularizer=self.regularizer,
-                                 name='output_layer')
+                                 name='final_output_layer')
 
         output_layer_AE_only = ConvBlock(1, num_channels,
                                          self.kernel_size,
@@ -227,10 +235,8 @@ class AutoEncoder(keras_tuner.HyperModel):
 
         if self.feedthrough_only:
             output = feedthrough_block(ft_inputs[0])
-            output = output_layer(output)
-
-            inputs_decoder=[feedthrough]
-            inputs_autoencoder=[feedthrough]
+            output = final_output_layer(output)
+            inputs_full_model=[feedthrough]
 
         elif self.use_feedthrough:
 
@@ -239,14 +245,16 @@ class AutoEncoder(keras_tuner.HyperModel):
                                               feedthrough_type,
                                               feedthrough_block)
 
-            output = output_layer(output)
-            inputs_decoder=[RNN_output, feedthrough]
-            inputs_autoencoder=[state_input, feedthrough]
+            output = final_output_layer(output)
+            inputs_decoder=[RNN_output]
+            outputs_decoder=[decoded_RNN]
+            inputs_full_model=[state_input, feedthrough]
 
         else:
-            output = output_layer(decoded_RNN)
+            output = final_output_layer(decoded_RNN)
             inputs_decoder=[RNN_output]
-            inputs_autoencoder=[state_input]
+            outputs_decoder=[decoded_RNN]
+            inputs_full_model=[state_input]
 
 
         # multiheaded output
@@ -257,10 +265,10 @@ class AutoEncoder(keras_tuner.HyperModel):
                 decoded_AE_only = self.combine_feedthrough( decoded_AE_only,
                                                             ft_inputs[0],
                                                             feedthrough_type,
-                                                            feedthrough_block )
+                                                            feedthrough_block)
 
             #share output layer
-            output_AE_only = output_layer(decoded_AE_only)
+            output_AE_only = final_output_layer(decoded_AE_only)
 
             # different output layer
             # output_AE_only = output_layer_AE_only(decoded_AE_only)
@@ -274,19 +282,23 @@ class AutoEncoder(keras_tuner.HyperModel):
             outputs = [masking_layer(output)]
             loss_weights = None
 
+        print(f'loss_weights: {loss_weights}')
 
         # Construct models
-        self.decoder = Model(inputs=inputs_decoder,
-                             outputs=outputs[0],
-                             name="decoder")
+        if self.feedthrough_only:
+            self.decoder = None
+        else:
+            self.decoder = Model(inputs=inputs_decoder,
+                                 outputs=outputs_decoder,
+                                 name="decoder")
 
-        self.autoencoder = Model(inputs=inputs_autoencoder,
+        self.autoencoder = Model(inputs=inputs_full_model,
                                  outputs=outputs,
                                  name="autoencoder")
 
-        loss = keras.losses.\
-            MeanSquaredError(reduction="sum_over_batch_size",
-                             name="mean_squared_error")
+        # loss = keras.losses.\
+        #     MeanSquaredError(reduction="sum_over_batch_size",
+        #                      name="mean_squared_error")
 
         loss = CustomLoss(losstype='MSE')
 
@@ -311,9 +323,8 @@ class AutoEncoder(keras_tuner.HyperModel):
     def combine_feedthrough(self, inputs, feedthrough,
                             feedthrough_type='multiply',
                             feedthrough_block=None):
-
+        
         z = feedthrough_block(feedthrough)
-
         if feedthrough_type == 'concatenate':
             outputs = layers.Concatenate()([inputs, z])
         elif feedthrough_type == 'multiply':
@@ -359,7 +370,6 @@ class AutoEncoder(keras_tuner.HyperModel):
             model.summary()
             sys.stdout = original
 
-
 class Encoder():
     """Encoder. For now hardcoded to contain three convolutional
     blocks. Hardcoding can be dealt with later.
@@ -393,10 +403,10 @@ class Encoder():
 
             self.block_list.append(cb)
 
-    def __call__(self, inputs):
+    def __call__(self, inputs, **kwargs):
         x = inputs
         for block in self.block_list:
-            x = block(x)
+            x = block(x, **kwargs)
             self.x_skip.append(x)
 
         return x
@@ -439,10 +449,10 @@ class Decoder():
             self.block_list.append(ul)
 
 
-    def __call__(self, inputs):
+    def __call__(self, inputs, **kwargs):
         x = inputs
         for block in self.block_list:
-            x = block(x)
+            x = block(x, **kwargs)
         return x
 
 
@@ -462,6 +472,10 @@ class ConvBlock():
                  name="conv_block"):
 
         self.layer_list = []
+        self.kernel_size = kernel_size
+        self.num_filters = num_filters
+        self.regularizer = regularizer
+        self.activation = activation
         ctr = 0
         for i in range(conv_layers_per_block-1):
             ctr += 1
@@ -486,13 +500,13 @@ class ConvBlock():
                           name=f'{name}_l{ctr}')
         self.layer_list.append(l)
 
-    def __call__(self, inputs, skip=None):
+    def __call__(self, inputs, skip=None, **kwargs):
         if skip == None:
             x = inputs
         else:
             x = layers.Concatenate(axis=-1)([skip, inputs])
         for layer in self.layer_list:
-            x = layer(x)
+            x = layer(x, **kwargs)
         return x
 
 

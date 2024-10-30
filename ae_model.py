@@ -73,6 +73,8 @@ class AutoEncoder(keras_tuner.HyperModel):
 
         self.activation_encoder = 'leaky_relu'
         self.activation_decoder = 'leaky_relu'
+        self.optimizer = optimizer
+        self.learning_rate = learning_rate
         self.use_feedthrough = use_feedthrough
         self.use_feedthrough_in_esn = use_feedthrough
         self.feedthrough_only = feedthrough_only
@@ -274,14 +276,13 @@ class AutoEncoder(keras_tuner.HyperModel):
             outputs = [masking_layer(output),
                        masking_layer(output_AE_only),
                        RNN_output]
-
-            loss_weights = [1.0, 0.0, 0.0]
+            self.loss_weights = [1.0, 0.0, 0.0]
         else: # normal output
 
             outputs = [masking_layer(output)]
-            loss_weights = None
+            self.loss_weights = None
 
-        print(f'loss_weights: {loss_weights}')
+        print(f'loss_weights: {self.loss_weights}')
 
         # Construct models
         if self.feedthrough_only:
@@ -295,19 +296,7 @@ class AutoEncoder(keras_tuner.HyperModel):
                                  outputs=outputs,
                                  name="autoencoder")
 
-        # loss = keras.losses.\
-        #     MeanSquaredError(reduction="sum_over_batch_size",
-        #                      name="mean_squared_error")
-
-        loss = CustomLoss(losstype='MSE')
-
-        if optimizer == 'adam':
-            optim = keras.optimizers.Adam(learning_rate=learning_rate)
-        elif optimizer == 'sgd':
-            optim = keras.optimizers.SGD(learning_rate=learning_rate)
-
-        self.autoencoder.compile(optimizer=optim, loss=loss,
-                                 loss_weights=loss_weights)
+        self.compiler(self.autoencoder)
 
         self.log_model()
         self.log_model(self.autoencoder, 'a')
@@ -322,7 +311,7 @@ class AutoEncoder(keras_tuner.HyperModel):
     def combine_feedthrough(self, inputs, feedthrough,
                             feedthrough_type='multiply',
                             feedthrough_block=None):
-        
+
         z = feedthrough_block(feedthrough)
         if feedthrough_type == 'concatenate':
             outputs = layers.Concatenate()([inputs, z])
@@ -334,6 +323,24 @@ class AutoEncoder(keras_tuner.HyperModel):
             raise Exception('specify feedthrough_type when'
                             ' using feedthrough')
         return outputs
+    
+
+    def compiler(self, model):
+        # loss = keras.losses.\
+        #     MeanSquaredError(reduction="sum_over_batch_size",
+        #                      name="mean_squared_error")
+
+        loss = CustomLoss(losstype='MSE')
+
+        if self.optimizer == 'adam':
+            optim = keras.optimizers.Adam(learning_rate=self.learning_rate)
+        elif self.optimizer == 'sgd':
+            optim = keras.optimizers.SGD(learning_rate=self.learning_rate)
+
+        model.compile(optimizer=optim, loss=loss,
+                      loss_weights=self.loss_weights)
+
+
 
     def log(self, msg, mode='a'):
         original = sys.stdout
@@ -351,6 +358,26 @@ class AutoEncoder(keras_tuner.HyperModel):
             sys.stdout = f
             model.summary()
             sys.stdout = original
+
+
+            
+class Unrolled(keras.Model):
+
+    def __init__(self,
+                 model,
+                 unroll_dim=1):
+
+        super(Unrolled, self).__init__()
+        self.model = model
+        self.unroll_dim = unroll_dim        
+
+    def call(self, inputs):
+        x = inputs
+        for i in range(self.unroll_dim):
+            x = self.model(x)
+        return x
+
+
 
 class Encoder():
     """Encoder. For now hardcoded to contain three convolutional

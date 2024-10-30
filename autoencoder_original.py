@@ -30,6 +30,7 @@ import esn_interface
 reload(esn_interface)
 
 from ae_model import AutoEncoder
+from ae_model import Unrolled
 from ae_model import TriggerESN
 from ae_model import CustomValidation
 from plot_utils import PlotMachine
@@ -488,12 +489,18 @@ class AE_Experiment():
             mode='min',
             save_best_only=True)
 
-        callbacks = [esn_callback, self.validation_callback, model_checkpoint_callback]
+        callbacks = [esn_callback,
+                     self.validation_callback,
+                     model_checkpoint_callback]
 
         # TRAINING --------------------------------------------
-        self.hist = autoencoder.fit(x=datagen_train,
-                                    epochs=epochs,
-                                    callbacks=callbacks)
+        unrolled = Unrolled(autoencoder, unroll_dim=1)
+        ae.compiler(unrolled)
+
+        breakpoint()
+        self.hist = unrolled.fit(x=datagen_train,
+                                 epochs=epochs,
+                                 callbacks=callbacks)
 
         toc = time.time()
         print(f'total training time: {(toc-tic)/60}m')

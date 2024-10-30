@@ -23,12 +23,16 @@ def test_short_run():
     # adjust hyperparameters:
     test_pars = {'history' : 'all',
                  'future' : 100,
-                 'epochs' : 3,
-                 'lookback' : 30,
+                 'epochs' : 1,
+                 'lookback' : 1,
                  'noise_stddev' : 0.0,
-                 'conv_layers_per_block' : 2,
+                 'num_conv_blocks' : 4,
+                 'conv_layers_per_block' : 1,
+                 'num_filters' : 64,
+                 'num_filters_last' : 32,
                  'batch_size' : 4,
-                 'RNN_reduction_factor' : 256}
+                 'RNN_reduction_factor' : 256,
+                 'num_feedthrough_layers' : 2}
 
     exp.hyper_params.update(test_pars)
     err = exp.build_and_run_model()

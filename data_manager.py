@@ -170,7 +170,7 @@ class DataManager():
                                   ds_HR.time[self.test_restrict-1])
             ds_HR = ds_HR.sel(time=time_restrict)
             ds_LR = ds_LR.sel(time=time_restrict)
-            
+
 
         mask = bt_HR.mask[0,:,:]
         grid_HR = self.build_grid(ds_HR, mask)
@@ -475,7 +475,7 @@ class DataManager():
             postfix += f'_blur_{sigma_str}'
         elif (coarsening_method == 'reduced_basis'):
             postfix += f'_reduced_basis_tr{truncation}'
-            
+
         postfix += '_testing' if self.testing_mode else ''
 
         dill_file     = f'{self.data_dir}/ae_esn_training_data{postfix}.dill'
@@ -638,7 +638,11 @@ class DataGenerator(keras.utils.PyDataset):
 
         # add truth for RNN component
         if self.multihead_output:
-            batch_y.append(self.encoder.predict(self.y[0][inds,], verbose=0))
+            encoded_truth = self.encoder(self.y[0][inds,], training=False)
+            batch_y.append(encoded_truth.detach().numpy())
+            # print(self.encoder.layers[2].weights[0][0][0][0])
+            # batch_y.append(self.encoder.predict(self.y[0][inds,], verbose=0))
+            # self.encoder.trainable=True
 
         return (batch_x, batch_y)
 

@@ -104,7 +104,8 @@ class AE_Experiment():
         self.hyper_params = {
             'history' : 'all',
             'lookback' : 2,
-            'conv_layers_per_block' : 1,
+            'num_conv_blocks' : 2,
+            'conv_layers_per_block' : 2,
             'num_feedthrough_layers' : 1,
             'future' : 400,
             'noise_stddev' : 0.0,
@@ -137,26 +138,47 @@ class AE_Experiment():
                               'high':1e-2},
                     'search_space' : [2e-3] },
                 
-                'layers_per_block' : {
+                'num_conv_blocks' : {
+                    'type' : 'int',
+                    'args' : {'name' : 'num_conv_blocks',
+                              'low'  : 1,
+                              'high' : 6},
+                    'search_space' : [4] },
+                
+                'conv_layers_per_block' : {
                     'type' : 'int',
                     'args' : {'name' : 'conv_layers_per_block',
                               'low'  : 1,
                               'high' : 6},
-                    'search_space' : [2] },
+                    'search_space' : [1] },
+                
+                'num_filters' : {
+                    'type' : 'int',
+                    'args' : {'name' : 'num_filters',
+                              'low'  : 1,
+                              'high' : 100},
+                    'search_space' : [64] },
                 
                 'num_filters_last' : {
                     'type' : 'int',
                     'args' : {'name' : 'num_filters_last',
                               'low'  : 1,
                               'high' : 100},
-                    'search_space' : [8] },
+                    'search_space' : [32] },
+                
+                'num_feedthrough_layers' : {
+                    'type' : 'int',
+                    'args' : {'name' : 'num_feedthrough_layers',
+                              'low'  : 1,
+                              'high' : 100},
+                    'search_space' : [2] },
                 
                 'lookback' : {
                     'type' : 'int',
                     'args' : {'name' : 'lookback',
                               'low'  : 0,
                               'high' : 9},
-                    'search_space' : [3] },
+                    'search_space' : [1] },
                 
                 'batch_size' : {
                     'type' : 'int',
@@ -170,7 +192,7 @@ class AE_Experiment():
                     'args' : {'name':'RNN_reduction_factor',
                               'low':1,
                               'high':32},
-                    'search_space' : [1] } },
+                    'search_space' : [256] } },
 
             #-------------------------------------------------------
             'regularization' : {
@@ -391,6 +413,8 @@ class AE_Experiment():
                 'feedthrough_type':'multiply',
                 'multihead_output':multihead_output,
                 'learning_rate':self.hyper_params['learning_rate'],
+                'num_conv_blocks':\
+                self.hyper_params['num_conv_blocks'],
                 'conv_layers_per_block':\
                 self.hyper_params['conv_layers_per_block'],
                 'num_feedthrough_layers':\
@@ -406,7 +430,8 @@ class AE_Experiment():
 
             autoencoder, encoder, decoder =  ae.build_model(**model_pars)
 
-
+        # encoder.trainable=False
+        # decoder.trainable=False
         # print a summary
         autoencoder.summary()
         # save dot and png

@@ -29,11 +29,11 @@ def test_short_run():
                  'noise_stddev' : 0.0,
                  'num_conv_blocks' : 2,
                  'conv_layers_per_block' : 1,
-                 'num_filters' : 64,
+                 'num_filters' : 112,
                  'num_filters_last' : 16,
                  'batch_size' : 4,
                  'RNN_model' : 'RNN',
-                 'RNN_dim' : 64,
+                 'RNN_dim' : 2,
                  'num_feedthrough_layers' : 2,
                  'L2_lambda' : 0.0,
                  'learning_rate' : 0.002,}

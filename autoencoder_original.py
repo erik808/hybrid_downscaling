@@ -104,6 +104,7 @@ class AE_Experiment():
         self.hyper_params = {
             'history' : 'all',
             'lookback' : 2,
+            'unroll_dim' : 1,
             'num_conv_blocks' : 2,
             'conv_layers_per_block' : 2,
             'num_feedthrough_layers' : 1,
@@ -112,7 +113,8 @@ class AE_Experiment():
             'dropout_rate' : 0.0,
             'optimizer' : 'adam',
             'L2_lambda' : 0.0,
-            'RNN_reduction_factor' : 1,
+            'RNN_model' : 'RNN',
+            'RNN_dim' : 32,
             'epochs' : 4,
             'batch_size' : 4,
             'learning_rate' : 0.002,
@@ -143,7 +145,7 @@ class AE_Experiment():
                     'args' : {'name' : 'num_conv_blocks',
                               'low'  : 1,
                               'high' : 6},
-                    'search_space' : [4] },
+                    'search_space' : [2] },
                 
                 'conv_layers_per_block' : {
                     'type' : 'int',
@@ -164,7 +166,7 @@ class AE_Experiment():
                     'args' : {'name' : 'num_filters_last',
                               'low'  : 1,
                               'high' : 100},
-                    'search_space' : [32] },
+                    'search_space' : [16] },
                 
                 'num_feedthrough_layers' : {
                     'type' : 'int',
@@ -178,7 +180,14 @@ class AE_Experiment():
                     'args' : {'name' : 'lookback',
                               'low'  : 0,
                               'high' : 9},
-                    'search_space' : [1] },
+                    'search_space' : [5] },
+
+                'unroll_dim' : {
+                    'type' : 'int',
+                    'args' : {'name' : 'unroll_dim',
+                              'low'  : 0,
+                              'high' : 9},
+                    'search_space' : [0] },
                 
                 'batch_size' : {
                     'type' : 'int',
@@ -186,13 +195,23 @@ class AE_Experiment():
                               'low':1,
                               'high':100},
                     'search_space' : [4] },
+
+                'RNN_model' : {
+                    'type' : 'categorical',
+                    'args' : {'name':'RNN_model',
+                              'choices' : ['RNN',
+                                           'RNN_res',
+                                           'LSTM',
+                                           'GRU',
+                                           'ConvLSTM']},
+                    'search_space' : ['RNN'] },
                 
-                'RNN_reduction_factor' : {
+                'RNN_dim' : {
                     'type' : 'int',
-                    'args' : {'name':'RNN_reduction_factor',
+                    'args' : {'name':'RNN_dim',
                               'low':1,
-                              'high':32},
-                    'search_space' : [256] } },
+                              'high':10000},
+                    'search_space' : [64] } },
 
             #-------------------------------------------------------
             'regularization' : {
@@ -253,11 +272,13 @@ class AE_Experiment():
             sampler = optuna.samplers.TPESampler()
 
         self.study = \
-            optuna.create_study(sampler=sampler,
-                                direction="minimize",
-                                storage=storage,
-                                study_name=f'{self.exp_name}_{self.tuning_config}',
-                                load_if_exists=reload_tuning)
+            optuna.create_study(
+                sampler=sampler,
+                direction="minimize",
+                storage=storage,
+                study_name=f'{self.exp_name}_{self.tuning_config}',
+                load_if_exists=reload_tuning
+            )
 
         self.study.optimize(self.objective,
                             n_trials=n_trials,
@@ -342,7 +363,7 @@ class AE_Experiment():
         use_embedded_ESN = False
         if feedthrough_only: use_embedded_ESN = False
 
-        unroll_dim = 0
+        self.unroll_dim = self.hyper_params['unroll_dim']
 
         # DATA CONFIG
         self.history = self.hyper_params['history']
@@ -420,7 +441,8 @@ class AE_Experiment():
                 self.hyper_params['num_feedthrough_layers'],
                 'optimizer':self.hyper_params['optimizer'],
                 'L2_lambda':self.hyper_params['L2_lambda'],
-                'RNN_reduction_factor':self.hyper_params['RNN_reduction_factor'],
+                'RNN_model':self.hyper_params['RNN_model'],
+                'RNN_dim':self.hyper_params['RNN_dim'],
                 'dropout_rate':self.hyper_params['dropout_rate'],
                 'noise_stddev':self.hyper_params['noise_stddev'],
                 'num_filters':self.hyper_params['num_filters'],
@@ -436,6 +458,7 @@ class AE_Experiment():
         # save dot and png
         mdir = self.dirs['models']
         model_png_file = f'{mdir}/autoencoder{postfix}.png'
+        print(f'see {model_png_file}')
         keras.utils.plot_model(autoencoder, to_file=model_png_file,
                                show_shapes=True, rankdir='TB',
                                dpi=200, show_layer_activations=False,
@@ -451,7 +474,7 @@ class AE_Experiment():
                       'batch_size' : batch_size,
                       'shuffle' : shuffle,
                       'lookback' : self.hyper_params['lookback'],
-                      'unroll_dim' : unroll_dim,
+                      'unroll_dim' : self.unroll_dim,
                       'encoder' : encoder,
                      }
 
@@ -475,6 +498,7 @@ class AE_Experiment():
                              pars = {'feedthrough_only': feedthrough_only,
                                      'use_feedthrough': use_feedthrough,
                                      'multihead_output' : False,
+                                     'unroll_dim' : self.unroll_dim,
                                      'predict_only' : predict_only,
                                      'evaluate' : evaluate,
                                      'lookback' : self.hyper_params['lookback']})
@@ -492,8 +516,19 @@ class AE_Experiment():
                      model_checkpoint_callback]
 
         # TRAINING --------------------------------------------
-        unrolled_model = ae.create_unrolled_model(autoencoder, unroll_dim)
+        unrolled_model = ae.create_unrolled_model(autoencoder,
+                                                  self.unroll_dim)
         unrolled_model.summary()
+
+        mdir = self.dirs['models']
+        model_png_file = f'{mdir}/unrolled_model{postfix}.png'
+        print(f'see {model_png_file}')
+        keras.utils.plot_model(unrolled_model, to_file=model_png_file,
+                               show_shapes=True, rankdir='TB',
+                               dpi=200, show_layer_activations=False,
+                               show_layer_names=True)
+
+        
         ae.compiler(unrolled_model)
         self.hist = unrolled_model.fit(x=datagen_train,
                                        epochs=epochs,

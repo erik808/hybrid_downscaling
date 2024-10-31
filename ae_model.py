@@ -68,7 +68,8 @@ class AutoEncoder(keras_tuner.HyperModel):
                     num_filters=32,
                     num_filters_last=8,
                     L2_lambda=1e-5,
-                    RNN_reduction_factor=1,
+                    RNN_model='RNN',
+                    RNN_dim=32,
                     ):
 
         self.activation_encoder = 'leaky_relu'
@@ -92,7 +93,7 @@ class AutoEncoder(keras_tuner.HyperModel):
         self.regularizer = regularizers.L2(L2_lambda) \
             if L2_lambda > 0 else None
 
-        self.RNN_reduction_factor = RNN_reduction_factor
+        self.RNN_dim = RNN_dim
 
         use_dropout = True if self.dropout_rate > 0 else False
 
@@ -196,9 +197,9 @@ class AutoEncoder(keras_tuner.HyperModel):
 
         # Run with the RNN
         RNN_output = RNNBlock(
-            model='ConvLSTM',
+            model=RNN_model,
             activation=self.activation_encoder,
-            reduction_factor=self.RNN_reduction_factor,
+            RNN_dim=self.RNN_dim,
             filters=encoded_outputs.shape[-1])\
             (encoded_outputs)
 
@@ -235,28 +236,23 @@ class AutoEncoder(keras_tuner.HyperModel):
                                          regularizer=self.regularizer,
                                          name='output_layer_AE_only')
 
-
+        
         if self.feedthrough_only:
             output = feedthrough_block(ft_inputs[0])
             output = final_output_layer(output)
             inputs_full_model=[feedthrough]
 
         elif self.use_feedthrough:
-
             output = self.combine_feedthrough(decoded_RNN,
                                               ft_inputs[0],
                                               feedthrough_type,
                                               feedthrough_block)
 
-            output = final_output_layer(output)
-            inputs_decoder=[RNN_output]
-            outputs_decoder=[decoded_RNN]
+            output = final_output_layer(output)            
             inputs_full_model=[state_input, feedthrough]
 
         else:
             output = final_output_layer(decoded_RNN)
-            inputs_decoder=[RNN_output]
-            outputs_decoder=[decoded_RNN]
             inputs_full_model=[state_input]
 
         # multiheaded output
@@ -281,18 +277,16 @@ class AutoEncoder(keras_tuner.HyperModel):
         else: # normal output
 
             outputs = [masking_layer(output)]
-            self.loss_weights = None
-
-        print(f'loss_weights: {self.loss_weights}')
+            self.loss_weights = None       
 
         # Construct models
-        if self.feedthrough_only:
-            self.decoder = None
-        else:
-            self.decoder = Model(inputs=inputs_decoder,
-                                 outputs=outputs_decoder,
-                                 name="decoder")
+        inputs_decoder=[RNN_output]
+        outputs_decoder=[decoded_RNN]
 
+        self.decoder = Model(inputs=inputs_decoder,
+                             outputs=outputs_decoder,
+                             name="decoder")
+        
         self.autoencoder = Model(inputs=inputs_full_model,
                                  outputs=outputs,
                                  name="autoencoder")
@@ -325,17 +319,18 @@ class AutoEncoder(keras_tuner.HyperModel):
 
 
     def compiler(self, model):
-        loss = keras.losses.\
-            MeanSquaredError(reduction="sum_over_batch_size",
-                             name="mean_squared_error")
+        # loss = keras.losses.\
+        #     MeanSquaredError(reduction="sum_over_batch_size",
+        #                      name="mean_squared_error")
 
-        # loss = CustomLoss(losstype='MSE')
+        loss = CustomLoss(losstype='MSE')
 
         if self.optimizer == 'adam':
             optim = keras.optimizers.Adam(learning_rate=self.learning_rate)
         elif self.optimizer == 'sgd':
             optim = keras.optimizers.SGD(learning_rate=self.learning_rate)
 
+        print(f'loss_weights: {self.loss_weights}')
         model.compile(optimizer=optim, loss=loss,
                       loss_weights=self.loss_weights)
 
@@ -358,33 +353,69 @@ class AutoEncoder(keras_tuner.HyperModel):
             model.summary()
             sys.stdout = original
 
-    def create_unrolled_model(self, model, unroll_dim=0):
+    def create_unrolled_model(
+            self,
+            model,
+            unroll_dim=0,
+            use_clones=False
+    ):
 
-        state_input = layers.Input(
-            shape=(self.N_lb,
-                   self.N_lat,
-                   self.N_lon,
-                   self.N_chan),
-            name="unrolled_state_input")
+        if use_clones:
+            cloned_models = [keras.models.clone_model(model)
+                             for i in range(unroll_dim)]
+            
+            models = [model] + cloned_models
+            for i, model in enumerate(models):
+                model.name = model.name + f'_{i}'
+
+        if self.feedthrough_only:
+            state_input = []
+        else:
+            state_input = layers.Input(
+                shape=(self.N_lb,
+                       self.N_lat,
+                       self.N_lon,
+                       self.N_chan),
+                name="unrolled_state_input")
 
         if self.use_feedthrough:
-
             feedthrough = [layers.Input(
                 shape=(self.N_lb, self.N_lat, self.N_lon, self.N_chan),
                 name=f'unrolled_feedthrough_input_{i}')
                            for i in range(unroll_dim+1) ]
+        else:
+            feedthrough = []
 
+        xk_lb = state_input
+        x_out = []
         for i in range(unroll_dim+1):
-            x_out = model([state_input, feedthrough[i]])
+            model = model if not use_clones else models[i]
 
+            if self.feedthrough_only:
+                xk = model(feedthrough[i])
+            else:
+                xk = model([xk_lb, feedthrough[i]])
+                
+            x_out += [xk[0]]
+
+            if unroll_dim > 0:
+                # (re)construct lookback array
+                xk = ops.expand_dims(xk[0], axis=1)
+                xk_lb = ops.concatenate([xk, xk_lb], axis=1)\
+                    [:,:self.N_lb,]
 
         self.unrolled_model = \
             Model(inputs=[state_input]+feedthrough,
                   outputs=x_out,
                   name="unrolled_model")
-
+        
         self.log_model(self.unrolled_model, 'a')
 
+        self.loss_weights = np.ones(unroll_dim+1) # / np.arange(1,1+unroll_dim+1)        
+        self.loss_weights = self.loss_weights.tolist()
+        self.loss_weights = self.loss_weights[0] \
+            if len(self.loss_weights) == 1 else self.loss_weights
+        
         return self.unrolled_model
 
 
@@ -535,14 +566,14 @@ class RNNBlock():
     def __init__(self,
                  model='RNN',
                  activation='relu',
-                 reduction_factor=1,
+                 RNN_dim=32,
                  unroll=False,
                  filters=32,
                  kernel_size=(3,3)):
 
         self.model = model
         self.activation = activation
-        self.reduction_factor = reduction_factor
+        self.RNN_dim = RNN_dim
         self.filters = filters
         self.kernel_size = kernel_size
         self.unroll = unroll
@@ -576,33 +607,36 @@ class RNNBlock():
     def dense_downsample(self, inputs):
         self.Nlb, self.Nj, self.Ni, self.Nc = inputs.shape[1:]
         self.N_feats_in = self.Nj * self.Ni * self.Nc
-        self.N_feats_out = self.Nj * self.Ni * self.filters
-        self.rdim = self.N_feats_out // self.reduction_factor
+        self.N_feats_out = self.Nj * self.Ni * self.filters        
         input_downs = layers.Reshape((self.Nlb, self.N_feats_in))(inputs)
-        input_downs = layers.Dense(self.rdim,
-                                   activation = self.activation)(input_downs)
+        input_downs = layers.Dense(self.RNN_dim,
+                                   activation = self.activation)\
+                                   (input_downs)
+            
         return ops.flip(input_downs, axis=1)
 
     def dense_upsample(self, inputs):
         output_ups = layers.Dense(self.N_feats_out,
-                                  activation = self.activation)(inputs)
+                                  activation = self.activation)\
+                                  (inputs)
+        
         return layers.Reshape((self.Nj,
                                self.Ni,
                                self.filters))(output_ups)
 
     def RNN(self, inputs):
         RNN_input = self.dense_downsample(inputs)
-        RNN_output = layers.SimpleRNN(self.rdim)(RNN_input)
+        RNN_output = layers.SimpleRNN(self.RNN_dim)(RNN_input)
         return self.dense_upsample(RNN_output)
 
     def GRU(self, inputs):
         GRU_input = self.dense_downsample(inputs)
-        GRU_output = layers.GRU(self.rdim)(GRU_input)
+        GRU_output = layers.GRU(self.RNN_dim)(GRU_input)
         return self.dense_upsample(GRU_output)
 
     def LSTM(self, inputs):
         LSTM_input = self.dense_downsample(inputs)
-        LSTM_output = layers.LSTM(self.rdim)(LSTM_input)
+        LSTM_output = layers.LSTM(self.RNN_dim)(LSTM_input)
         return self.dense_upsample(LSTM_output)
 
     def RNN_res(self, inputs):
@@ -728,13 +762,22 @@ class CustomValidation(keras.callbacks.Callback):
 
         super().__init__()
 
+        self.pars = pars
+        self.unroll_dim = self.pars['unroll_dim']
         self.data = data
         self.test_inds = test_inds
+
+        # account for unrolling
+        max_inds = self.data['HR'].shape[0]
+        unr_inds = np.arange(test_inds[-1]+1,
+                             np.min([test_inds[-1]+self.unroll_dim+1,
+                                     max_inds]))        
+        self.test_inds = np.concatenate([self.test_inds, unr_inds])
+        
         self.test_data = self.data['HR'][test_inds,]
         self.test_data_ft = self.data['LR'][test_inds,]
         self.N_steps = self.test_data.shape[0]
         self.plotmachine = plotmachine
-        self.pars = pars
         self.predictions = []
         self.final_error = []
         self.final_base = []
@@ -748,7 +791,6 @@ class CustomValidation(keras.callbacks.Callback):
     def on_epoch_end(self, epoch, logs=None):
         if not self.pars['predict_only']:
             self.predict(epoch, logs)
-
 
     def predict(self, epoch, logs=None):
 
@@ -765,30 +807,39 @@ class CustomValidation(keras.callbacks.Callback):
                                    interval=0.5)
         error, base = (0,0)
 
-        for i in range(self.N_steps):
+        
 
-            xk_LR = np.expand_dims(
-                dm.create_lookback(self.test_inds[i], [self.data['LR']],
+        for i in range(self.N_steps-self.unroll_dim):
+
+
+            xk_LR = [ np.expand_dims(
+                dm.create_lookback(self.test_inds[i+unroll], [self.data['LR']],
                                    self.lookback, axis=0)[0], axis=0)
+                      for unroll in range(self.unroll_dim+1) ]
+
             Pxk = xk_LR
 
             if self.pars['feedthrough_only']:
-                xk = self.model.predict([Pxk], verbose=0)
+                xk = self.model.predict([Pxk[0]], verbose=0)
             elif self.pars['use_feedthrough']:
-                xk = self.model.predict([xk_lb, Pxk], verbose=0)
+                xk = self.model.predict([xk_lb]+Pxk, verbose=0)
             else:
                 xk = self.model.predict([xk_lb], verbose=0)
 
-            if ( self.pars['multihead_output'] and
-                 not self.pars['feedthrough_only'] ): xk = xk[0]
+            # if ( self.pars['multihead_output'] and
+            #      not self.pars['feedthrough_only'] ): xk = xk[0]
+
+            if isinstance(xk, list):
+                xk = xk[0]
 
             self.predictions[i,] = xk
 
             if self.pars['evaluate']:
 
+
                 xk_true = np.expand_dims(self.test_data[i,], axis=0)
                 error += (np.sum(np.square(xk - xk_true)))
-                base += (np.sum(np.square(xk_LR[:,0,] - xk_true)))
+                base += (np.sum(np.square(xk_LR[0][:,0,] - xk_true)))
                 values = [('error', np.sqrt(error/(i+1))),
                           ('base', np.sqrt(base/(i+1)))]
 

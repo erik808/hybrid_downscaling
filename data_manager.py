@@ -604,22 +604,23 @@ class DataGenerator(keras.utils.PyDataset):
         self.lookback = lookback
         self.encoder = encoder
         self.unroll_dim = unroll_dim
-        
+
         self.unroll_y = (self.unroll_dim > 0 and
-                         not self.multihead_output)
-        self.unroll_x = (self.unroll_y and
+                         not self.multihead_output and
                          self.ft_type == 'hybrid')
-                            
+        
+        self.unroll_x = self.unroll_y
+
         self.__setup_data(x, y)
 
 
     def __setup_data(self, x, y):
         assert len(x) == 2
         assert len(y) == 1
-        
+
         self.indices = np.arange(self.lookback,
                                  x[0].shape[0] - self.unroll_dim)
-        
+
         self.n = len(self.indices)
         self.__do_shuffle()
 
@@ -635,7 +636,18 @@ class DataGenerator(keras.utils.PyDataset):
         else:
             self.y = y
 
-        
+
+        if self.unroll_x:
+            # set of shifted feedthrough inputs. self.indices is
+            # truncated with unroll_dim to make sure this does not
+            # lead to problems.
+            ft_set = [ x[1][i:,] for i in range(self.unroll_dim+1) ]
+            # append feedthroughs to state input
+            self.x =[x[0]] + ft_set
+
+        if self.unroll_y:
+            self.y = [ y[0][i:,] for i in range(self.unroll_dim+1) ]
+
 
     def __len__(self):
         # number of batches

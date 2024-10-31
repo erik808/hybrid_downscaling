@@ -23,15 +23,17 @@ def test_short_run():
     # adjust hyperparameters:
     test_pars = {'history' : 'all',
                  'future' : 100,
-                 'epochs' : 1,
-                 'lookback' : 1,
+                 'epochs' : 2,
+                 'unroll_dim' : 0,
+                 'lookback' : 5,
                  'noise_stddev' : 0.0,
-                 'num_conv_blocks' : 4,
+                 'num_conv_blocks' : 2,
                  'conv_layers_per_block' : 1,
                  'num_filters' : 64,
-                 'num_filters_last' : 32,
+                 'num_filters_last' : 16,
                  'batch_size' : 4,
-                 'RNN_reduction_factor' : 256,
+                 'RNN_model' : 'RNN',
+                 'RNN_dim' : 64,
                  'num_feedthrough_layers' : 2,
                  'L2_lambda' : 0.0,
                  'learning_rate' : 0.002,}
@@ -39,7 +41,6 @@ def test_short_run():
     exp.hyper_params.update(test_pars)
     err = exp.build_and_run_model()
     assert err < 30
-
 
 def test_save_load():
 

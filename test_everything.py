@@ -35,7 +35,7 @@ def test_short_run():
                  'batch_size' : 4,
                  'RNN_model' : 'RNN',
                  'RNN_dim' : 64,
-                 'num_feedthrough_filters' : None,
+                 'num_feedthrough_filters' : 128,
                  'num_feedthrough_layers' : 2,
                  'L2_lambda' : 0.0,
                  'learning_rate' : 0.002,}

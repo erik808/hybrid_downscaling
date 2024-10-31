@@ -158,8 +158,8 @@ class AE_Experiment():
                     'type' : 'int',
                     'args' : {'name' : 'num_filters',
                               'low'  : 1,
-                              'high' : 100},
-                    'search_space' : [128] },
+                              'high' : 200},
+                    'search_space' : [112] },
                 
                 'num_filters_last' : {
                     'type' : 'int',

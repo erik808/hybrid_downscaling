@@ -64,6 +64,7 @@ class AutoEncoder(keras_tuner.HyperModel):
                     num_conv_blocks=3,
                     conv_layers_per_block=1,
                     num_feedthrough_layers=2,
+                    num_feedthrough_filters=None,
                     kernel_size=(3,3),
                     num_filters=32,
                     num_filters_last=8,
@@ -87,6 +88,7 @@ class AutoEncoder(keras_tuner.HyperModel):
         self.num_conv_blocks = num_conv_blocks
         self.conv_layers_per_block = conv_layers_per_block
         self.num_feedthrough_layers = num_feedthrough_layers
+        self.num_feedthrough_filters = num_feedthrough_filters
         self.num_filters = num_filters
         self.kernel_size = kernel_size
         self.num_filters_last = num_filters_last
@@ -116,10 +118,6 @@ class AutoEncoder(keras_tuner.HyperModel):
                          for t in ops.split(feedthrough, self.N_lb, axis=1)]
 
         # Encoder ------------------------------------------------------
-        if use_dropout:
-            dropout_layer_1 = layers.Dropout(self.dropout_rate,
-                                             name="dropout_1")
-
         self.encoding_layers = Encoder(
             num_conv_blocks=self.num_conv_blocks,
             conv_layers_per_block=self.conv_layers_per_block,
@@ -150,9 +148,8 @@ class AutoEncoder(keras_tuner.HyperModel):
         # apply encoder to feedthrough
         use_encoded_feedthrough = False
         if use_encoded_feedthrough:
-            raise Exception('deprecated implementation, check with training flag')
-            encoded_fts = [ self.encoding_layers(ft) for ft in ft_inputs]
-            # encoded_ft = self.encoding_layers(ft_inputs[0])
+            encoded_fts = [ self.encoding_layers(ft, training=False)
+                            for ft in ft_inputs]            
             encoded_fts = ops.stack(encoded_fts, axis=1)
 
         # join encoded outputs
@@ -200,7 +197,7 @@ class AutoEncoder(keras_tuner.HyperModel):
             model=RNN_model,
             activation=self.activation_encoder,
             RNN_dim=self.RNN_dim,
-            filters=encoded_outputs.shape[-1])\
+            filters=self.num_filters_last)\
             (encoded_outputs)
 
         # Decoder blocks
@@ -217,12 +214,15 @@ class AutoEncoder(keras_tuner.HyperModel):
         decoded_AE_only = self.decoding_layers(encoded_outputs_0)
 
         # Should these be residual blocks instead?
-        feedthrough_block = ConvBlock(self.num_feedthrough_layers,
-                                      decoded_RNN.shape[-1],
-                                      self.kernel_size,
-                                      activation=self.activation_decoder,
-                                      regularizer=self.regularizer,
-                                      name='feedthrough_block')
+        feedthrough_block = ConvBlock(
+            self.num_feedthrough_layers,
+            self.num_feedthrough_filters,
+            self.kernel_size,
+            activation=self.activation_decoder,
+            downsample_filters=self.num_filters,
+            regularizer=self.regularizer,
+            name='feedthrough_block'
+        )
 
         final_output_layer = ConvBlock(1, self.N_chan,
                                  self.kernel_size,
@@ -518,6 +518,7 @@ class ConvBlock():
                  kernel_size=(3,3),
                  activation='relu',
                  downsample_stride=(1,1),
+                 downsample_filters=None,
                  regularizer=regularizers.L2(1e-5),
                  name="conv_block"):
 
@@ -526,6 +527,11 @@ class ConvBlock():
         self.num_filters = num_filters
         self.regularizer = regularizer
         self.activation = activation
+        if downsample_filters == None:
+            self.downsample_filters = num_filters
+        else:
+            self.downsample_filters = downsample_filters
+        
         ctr = 0
         for i in range(conv_layers_per_block-1):
             ctr += 1
@@ -541,7 +547,7 @@ class ConvBlock():
 
         # final downsampling convolution
         ctr += 1
-        l = layers.Conv2D(num_filters,
+        l = layers.Conv2D(self.downsample_filters,
                           kernel_size,
                           strides = downsample_stride,
                           activation=activation,

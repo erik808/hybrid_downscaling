@@ -108,6 +108,7 @@ class AE_Experiment():
             'num_conv_blocks' : 2,
             'conv_layers_per_block' : 2,
             'num_feedthrough_layers' : 1,
+            'num_feedthrough_filters' : None,
             'future' : 400,
             'noise_stddev' : 0.0,
             'dropout_rate' : 0.0,
@@ -173,7 +174,7 @@ class AE_Experiment():
                     'args' : {'name' : 'num_feedthrough_layers',
                               'low'  : 1,
                               'high' : 100},
-                    'search_space' : [2] },
+                    'search_space' : [4] },
                 
                 'lookback' : {
                     'type' : 'int',
@@ -439,6 +440,8 @@ class AE_Experiment():
                 self.hyper_params['conv_layers_per_block'],
                 'num_feedthrough_layers':\
                 self.hyper_params['num_feedthrough_layers'],
+                'num_feedthrough_filters':\
+                self.hyper_params['num_feedthrough_filters'],
                 'optimizer':self.hyper_params['optimizer'],
                 'L2_lambda':self.hyper_params['L2_lambda'],
                 'RNN_model':self.hyper_params['RNN_model'],

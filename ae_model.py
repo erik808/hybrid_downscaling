@@ -97,21 +97,22 @@ class AutoEncoder(keras_tuner.HyperModel):
         use_dropout = True if self.dropout_rate > 0 else False
 
         # infer dimensions
-        Nlat, Nlon, num_channels = self.test_vec.shape
-        N_lb = self.lookback + 1 # lookback dimension
+        self.N_lat, self.N_lon, self.N_chan = self.test_vec.shape
+        self.N_lb = self.lookback + 1 # lookback dimension
 
         masking_layer = Masking(self.mask, name="masking_layer")
         masking_layer_ft = Masking(self.mask, name="masking_layer_ft")
 
-        state_input = layers.Input(shape=(N_lb, Nlat, Nlon,
-                                          num_channels),
+        state_input = layers.Input(shape=(self.N_lb, self.N_lat, self.N_lon,
+                                          self.N_chan),
                                    name="full_state_input")
 
         if self.use_feedthrough:
-            feedthrough = layers.Input(shape=(N_lb, Nlat, Nlon, num_channels),
-                                       name="feedthrough_input")
+            feedthrough = layers.Input(
+                shape=(self.N_lb, self.N_lat, self.N_lon, self.N_chan),
+                name="feedthrough_input")
             ft_inputs = [ops.squeeze(t,axis=1) \
-                         for t in ops.split(feedthrough, N_lb, axis=1)]
+                         for t in ops.split(feedthrough, self.N_lb, axis=1)]
 
         # Encoder ------------------------------------------------------
         if use_dropout:
@@ -129,7 +130,7 @@ class AutoEncoder(keras_tuner.HyperModel):
 
         # split inputs
         state_inputs = [ops.squeeze(t,axis=1) \
-                        for t in ops.split(state_input, N_lb, axis=1)]
+                        for t in ops.split(state_input, self.N_lb, axis=1)]
 
         # apply encoder in training and inference mode separately
         # separate first entry:
@@ -222,13 +223,13 @@ class AutoEncoder(keras_tuner.HyperModel):
                                       regularizer=self.regularizer,
                                       name='feedthrough_block')
 
-        final_output_layer = ConvBlock(1, num_channels,
+        final_output_layer = ConvBlock(1, self.N_chan,
                                  self.kernel_size,
                                  activation="sigmoid",
                                  regularizer=self.regularizer,
                                  name='final_output_layer')
 
-        output_layer_AE_only = ConvBlock(1, num_channels,
+        output_layer_AE_only = ConvBlock(1, self.N_chan,
                                          self.kernel_size,
                                          activation="sigmoid",
                                          regularizer=self.regularizer,
@@ -296,8 +297,6 @@ class AutoEncoder(keras_tuner.HyperModel):
                                  outputs=outputs,
                                  name="autoencoder")
 
-        self.compiler(self.autoencoder)
-
         self.log_model()
         self.log_model(self.autoencoder, 'a')
         self.log_model(self.esn, 'a')
@@ -323,14 +322,14 @@ class AutoEncoder(keras_tuner.HyperModel):
             raise Exception('specify feedthrough_type when'
                             ' using feedthrough')
         return outputs
-    
+
 
     def compiler(self, model):
-        # loss = keras.losses.\
-        #     MeanSquaredError(reduction="sum_over_batch_size",
-        #                      name="mean_squared_error")
+        loss = keras.losses.\
+            MeanSquaredError(reduction="sum_over_batch_size",
+                             name="mean_squared_error")
 
-        loss = CustomLoss(losstype='MSE')
+        # loss = CustomLoss(losstype='MSE')
 
         if self.optimizer == 'adam':
             optim = keras.optimizers.Adam(learning_rate=self.learning_rate)
@@ -359,23 +358,34 @@ class AutoEncoder(keras_tuner.HyperModel):
             model.summary()
             sys.stdout = original
 
+    def create_unrolled_model(self, model, unroll_dim=0):
 
-            
-class Unrolled(keras.Model):
+        state_input = layers.Input(
+            shape=(self.N_lb,
+                   self.N_lat,
+                   self.N_lon,
+                   self.N_chan),
+            name="unrolled_state_input")
 
-    def __init__(self,
-                 model,
-                 unroll_dim=1):
+        if self.use_feedthrough:
 
-        super(Unrolled, self).__init__()
-        self.model = model
-        self.unroll_dim = unroll_dim        
+            feedthrough = [layers.Input(
+                shape=(self.N_lb, self.N_lat, self.N_lon, self.N_chan),
+                name=f'unrolled_feedthrough_input_{i}')
+                           for i in range(unroll_dim+1) ]
 
-    def call(self, inputs):
-        x = inputs
-        for i in range(self.unroll_dim):
-            x = self.model(x)
-        return x
+        for i in range(unroll_dim+1):
+            x_out = model([state_input, feedthrough[i]])
+
+
+        self.unrolled_model = \
+            Model(inputs=[state_input]+feedthrough,
+                  outputs=x_out,
+                  name="unrolled_model")
+
+        self.log_model(self.unrolled_model, 'a')
+
+        return self.unrolled_model
 
 
 
@@ -602,10 +612,10 @@ class RNNBlock():
 
     def most_recent(self, inputs):
         # assume 5D tensor, time dim ordered from recent to past
-        N_lb = inputs.shape[1]
+        self.N_lb = inputs.shape[1]
         inputs_splitted = \
             [ops.squeeze(t,axis=1) \
-             for t in ops.split(inputs, N_lb, axis=1)]
+             for t in ops.split(inputs, self.N_lb, axis=1)]
 
         # return most recent time
         return inputs_splitted[0]

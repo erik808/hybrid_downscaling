@@ -30,7 +30,6 @@ import esn_interface
 reload(esn_interface)
 
 from ae_model import AutoEncoder
-from ae_model import Unrolled
 from ae_model import TriggerESN
 from ae_model import CustomValidation
 from plot_utils import PlotMachine
@@ -343,7 +342,7 @@ class AE_Experiment():
         use_embedded_ESN = False
         if feedthrough_only: use_embedded_ESN = False
 
-        multihead_output = True
+        unroll_dim = 0
 
         # DATA CONFIG
         self.history = self.hyper_params['history']
@@ -412,7 +411,6 @@ class AE_Experiment():
                 'use_feedthrough':use_feedthrough,
                 'feedthrough_only':feedthrough_only,
                 'feedthrough_type':'multiply',
-                'multihead_output':multihead_output,
                 'learning_rate':self.hyper_params['learning_rate'],
                 'num_conv_blocks':\
                 self.hyper_params['num_conv_blocks'],
@@ -450,10 +448,10 @@ class AE_Experiment():
 
         tic = time.time()
         dgen_args = { 'ft_type' : self.feedthrough_type,
-                      'multihead_output' : multihead_output,
                       'batch_size' : batch_size,
                       'shuffle' : shuffle,
                       'lookback' : self.hyper_params['lookback'],
+                      'unroll_dim' : unroll_dim,
                       'encoder' : encoder,
                      }
 
@@ -476,7 +474,7 @@ class AE_Experiment():
                              plotmachine=plotmachine,
                              pars = {'feedthrough_only': feedthrough_only,
                                      'use_feedthrough': use_feedthrough,
-                                     'multihead_output' : multihead_output,
+                                     'multihead_output' : False,
                                      'predict_only' : predict_only,
                                      'evaluate' : evaluate,
                                      'lookback' : self.hyper_params['lookback']})
@@ -494,13 +492,12 @@ class AE_Experiment():
                      model_checkpoint_callback]
 
         # TRAINING --------------------------------------------
-        unrolled = Unrolled(autoencoder, unroll_dim=1)
-        ae.compiler(unrolled)
-
-        breakpoint()
-        self.hist = unrolled.fit(x=datagen_train,
-                                 epochs=epochs,
-                                 callbacks=callbacks)
+        unrolled_model = ae.create_unrolled_model(autoencoder, unroll_dim)
+        unrolled_model.summary()
+        ae.compiler(unrolled_model)
+        self.hist = unrolled_model.fit(x=datagen_train,
+                                       epochs=epochs,
+                                       callbacks=callbacks)
 
         toc = time.time()
         print(f'total training time: {(toc-tic)/60}m')

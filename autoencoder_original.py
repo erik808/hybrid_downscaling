@@ -104,16 +104,18 @@ class AE_Experiment():
         self.hyper_params = {
             'history' : 'all',
             'lookback' : 2,
-            'unroll_dim' : 1,
+            'unroll_dim' : 0,
             'num_conv_blocks' : 2,
             'conv_layers_per_block' : 2,
             'num_feedthrough_layers' : 1,
             'num_feedthrough_filters' : None,
+            'num_output_layers' : 2,
             'future' : 400,
             'noise_stddev' : 0.0,
             'dropout_rate' : 0.0,
             'optimizer' : 'adam',
             'L2_lambda' : 0.0,
+            'kernel_size' : (3,3),
             'RNN_model' : 'RNN',
             'RNN_dim' : 32,
             'epochs' : 4,
@@ -121,6 +123,7 @@ class AE_Experiment():
             'learning_rate' : 0.002,
             'num_filters' : 32,
             'num_filters_last' : 8,
+            'downsample_stride' : (2,2),
         }
 
         ## maybe read from ini or xml instead?
@@ -146,7 +149,7 @@ class AE_Experiment():
                     'args' : {'name' : 'num_conv_blocks',
                               'low'  : 1,
                               'high' : 6},
-                    'search_space' : [2] },
+                    'search_space' : [1] },
                 
                 'conv_layers_per_block' : {
                     'type' : 'int',
@@ -160,28 +163,42 @@ class AE_Experiment():
                     'args' : {'name' : 'num_filters',
                               'low'  : 1,
                               'high' : 200},
-                    'search_space' : [112] },
+                    'search_space' : [64] },
                 
                 'num_filters_last' : {
                     'type' : 'int',
                     'args' : {'name' : 'num_filters_last',
                               'low'  : 1,
                               'high' : 100},
-                    'search_space' : [16] },
+                    'search_space' : [112] },
                 
                 'num_feedthrough_layers' : {
                     'type' : 'int',
                     'args' : {'name' : 'num_feedthrough_layers',
                               'low'  : 1,
                               'high' : 100},
-                    'search_space' : [4] },
+                    'search_space' : [2] },
+                
+                'num_feedthrough_filters' : {
+                    'type' : 'int',
+                    'args' : {'name' : 'num_feedthrough_filters',
+                              'low'  : 1,
+                              'high' : 1000},
+                    'search_space' : [112] },
+                
+                'num_output_layers' : {
+                    'type' : 'int',
+                    'args' : {'name' : 'num_output_layers',
+                              'low'  : 1,
+                              'high' : 5},
+                    'search_space' : [2] },
                 
                 'lookback' : {
                     'type' : 'int',
                     'args' : {'name' : 'lookback',
                               'low'  : 0,
                               'high' : 9},
-                    'search_space' : [5] },
+                    'search_space' : [10] },
 
                 'unroll_dim' : {
                     'type' : 'int',
@@ -212,7 +229,7 @@ class AE_Experiment():
                     'args' : {'name':'RNN_dim',
                               'low':1,
                               'high':10000},
-                    'search_space' : [64] } },
+                    'search_space' : [8] } },
 
             #-------------------------------------------------------
             'regularization' : {
@@ -410,6 +427,43 @@ class AE_Experiment():
 
         postfix, timestamp = self.create_postfix()
 
+        esn_params['external']['bypass_mode'] = not use_embedded_ESN
+        esn = ESN_embedded(esn_params=esn_params)
+
+        model_pars = {
+            'use_feedthrough':use_feedthrough,
+            'feedthrough_only':feedthrough_only,
+            'feedthrough_type':'multiply',
+            'learning_rate':self.hyper_params['learning_rate'],
+            'num_conv_blocks':\
+            self.hyper_params['num_conv_blocks'],
+            'conv_layers_per_block':\
+            self.hyper_params['conv_layers_per_block'],
+            'num_feedthrough_layers':\
+            self.hyper_params['num_feedthrough_layers'],
+            'num_feedthrough_filters':\
+            self.hyper_params['num_feedthrough_filters'],
+            'num_output_layers':\
+            self.hyper_params['num_output_layers'],
+            'optimizer':self.hyper_params['optimizer'],
+            'L2_lambda':self.hyper_params['L2_lambda'],
+            'kernel_size':self.hyper_params['kernel_size'],
+            'RNN_model':self.hyper_params['RNN_model'],
+            'RNN_dim':self.hyper_params['RNN_dim'],
+            'dropout_rate':self.hyper_params['dropout_rate'],
+            'noise_stddev':self.hyper_params['noise_stddev'],
+            'num_filters':self.hyper_params['num_filters'],
+            'num_filters_last':self.hyper_params['num_filters_last'],
+            'downsample_stride':self.hyper_params['downsample_stride'],
+        }
+        
+        ae = AutoEncoder(test_vec = self.data['HR'][0,:,:,:],
+                         mask = self.params['mask'],
+                         log_file = self.files['log'] + f'{postfix}',
+                         esn = esn,
+                         lookback = self.hyper_params['lookback'],
+                         **model_pars)
+            
         if self.load_existing_model:
             autoencoder = \
                 keras.models.load_model(self.load_path_autoencoder)
@@ -417,42 +471,9 @@ class AE_Experiment():
             encoder = keras.models.load_model(self.load_path_encoder)
             decoder = keras.models.load_model(self.load_path_decoder)
 
-            esn_params['external']['bypass_mode'] = not use_embedded_ESN
-            esn = ESN_embedded(esn_params=esn_params)
         else:
 
-            esn_params['external']['bypass_mode'] = not use_embedded_ESN
-            esn = ESN_embedded(esn_params=esn_params)
-            ae = AutoEncoder(test_vec = self.data['HR'][0,:,:,:],
-                             mask = self.params['mask'],
-                             log_file = self.files['log'] + f'{postfix}',
-                             esn = esn,
-                             lookback = self.hyper_params['lookback'])
-
-            model_pars = {
-                'use_feedthrough':use_feedthrough,
-                'feedthrough_only':feedthrough_only,
-                'feedthrough_type':'multiply',
-                'learning_rate':self.hyper_params['learning_rate'],
-                'num_conv_blocks':\
-                self.hyper_params['num_conv_blocks'],
-                'conv_layers_per_block':\
-                self.hyper_params['conv_layers_per_block'],
-                'num_feedthrough_layers':\
-                self.hyper_params['num_feedthrough_layers'],
-                'num_feedthrough_filters':\
-                self.hyper_params['num_feedthrough_filters'],
-                'optimizer':self.hyper_params['optimizer'],
-                'L2_lambda':self.hyper_params['L2_lambda'],
-                'RNN_model':self.hyper_params['RNN_model'],
-                'RNN_dim':self.hyper_params['RNN_dim'],
-                'dropout_rate':self.hyper_params['dropout_rate'],
-                'noise_stddev':self.hyper_params['noise_stddev'],
-                'num_filters':self.hyper_params['num_filters'],
-                'num_filters_last':self.hyper_params['num_filters_last'],
-            }
-
-            autoencoder, encoder, decoder =  ae.build_model(**model_pars)
+            autoencoder, encoder, decoder =  ae.build_model()
 
         # encoder.trainable=False
         # decoder.trainable=False
@@ -518,7 +539,7 @@ class AE_Experiment():
                      self.validation_callback,
                      model_checkpoint_callback]
 
-        # TRAINING --------------------------------------------
+        # TRAINING --------------------------------------------        
         unrolled_model = ae.create_unrolled_model(autoencoder,
                                                   self.unroll_dim)
         unrolled_model.summary()

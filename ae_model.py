@@ -14,9 +14,36 @@ import data_manager as dm
 
 class AutoEncoder(keras_tuner.HyperModel):
 
-    def __init__(self, test_vec,
-                 mask, log_file,
-                 esn=None, lookback=0):
+    def __init__(
+            self,
+            test_vec,
+            mask,
+            log_file,
+            esn=None,
+            lookback=0,
+            conv_arch='default',
+            learning_rate=0.002,
+            optimizer='adam',
+            verbosity=20,
+            use_feedthrough=True,
+            feedthrough_only=False,
+            feedthrough_type='multiply',
+            multihead_output=False,
+            noise_stddev=0.0,
+            dropout_rate=0.0,
+            num_conv_blocks=3,
+            conv_layers_per_block=1,
+            num_feedthrough_layers=2,
+            num_feedthrough_filters=None,
+            num_output_layers=None,
+            kernel_size=(3,3),
+            num_filters=32,
+            num_filters_last=8,
+            downsample_stride=(2,2),
+            L2_lambda=1e-5,
+            RNN_model='RNN',
+            RNN_dim=32
+    ):
 
         super(AutoEncoder, self).__init__()
 
@@ -30,6 +57,39 @@ class AutoEncoder(keras_tuner.HyperModel):
         self.needs_building = True
         self.ct = ComputeTool()
         self.losses = []
+
+        self.activation_encoder = 'leaky_relu'
+        self.activation_decoder = 'leaky_relu'
+        self.optimizer = optimizer
+        self.learning_rate = learning_rate
+        self.use_feedthrough = use_feedthrough
+        self.use_feedthrough_in_esn = use_feedthrough
+        self.feedthrough_only = feedthrough_only
+        self.feedthrough_type = feedthrough_type
+        if self.feedthrough_only: self.use_feedthrough = True
+        self.multihead_output = multihead_output
+        self.noise_stddev = noise_stddev
+        self.dropout_rate = dropout_rate
+        self.num_conv_blocks = num_conv_blocks
+        self.conv_layers_per_block = conv_layers_per_block
+        self.num_feedthrough_layers = num_feedthrough_layers
+        self.num_feedthrough_filters = num_feedthrough_filters
+        self.num_output_layers = num_output_layers
+        self.num_filters = num_filters
+        self.kernel_size = kernel_size
+        self.num_filters_last = num_filters_last
+        self.downsample_stride = downsample_stride
+        self.regularizer = regularizers.L2(L2_lambda) \
+            if L2_lambda > 0 else None
+        self.RNN_model = RNN_model
+        self.RNN_dim = RNN_dim
+
+        self.use_dropout = True if self.dropout_rate > 0 else False
+
+        # infer dimensions
+        self.N_lat, self.N_lon, self.N_chan = self.test_vec.shape
+        self.N_lb = self.lookback + 1 # lookback dimension
+
 
         self.log('AutoEncoder\n', 'w')
 
@@ -50,58 +110,8 @@ class AutoEncoder(keras_tuner.HyperModel):
         print(f'esn_combine_mode: {self.esn_combine_mode}')
 
 
-    def build_model(self,
-                    conv_arch='default',
-                    learning_rate=0.002,
-                    optimizer='adam',
-                    verbosity=20,
-                    use_feedthrough=True,
-                    feedthrough_only=False,
-                    feedthrough_type='multiply',
-                    multihead_output=False,
-                    noise_stddev=0.0,
-                    dropout_rate=0.0,
-                    num_conv_blocks=3,
-                    conv_layers_per_block=1,
-                    num_feedthrough_layers=2,
-                    num_feedthrough_filters=None,
-                    kernel_size=(3,3),
-                    num_filters=32,
-                    num_filters_last=8,
-                    L2_lambda=1e-5,
-                    RNN_model='RNN',
-                    RNN_dim=32,
-                    ):
+    def build_model(self):
 
-        self.activation_encoder = 'leaky_relu'
-        self.activation_decoder = 'leaky_relu'
-        self.optimizer = optimizer
-        self.learning_rate = learning_rate
-        self.use_feedthrough = use_feedthrough
-        self.use_feedthrough_in_esn = use_feedthrough
-        self.feedthrough_only = feedthrough_only
-        self.feedthrough_type = feedthrough_type
-        if self.feedthrough_only: self.use_feedthrough = True
-        self.multihead_output = multihead_output
-        self.noise_stddev = noise_stddev
-        self.dropout_rate = dropout_rate
-        self.num_conv_blocks = num_conv_blocks
-        self.conv_layers_per_block = conv_layers_per_block
-        self.num_feedthrough_layers = num_feedthrough_layers
-        self.num_feedthrough_filters = num_feedthrough_filters
-        self.num_filters = num_filters
-        self.kernel_size = kernel_size
-        self.num_filters_last = num_filters_last
-        self.regularizer = regularizers.L2(L2_lambda) \
-            if L2_lambda > 0 else None
-
-        self.RNN_dim = RNN_dim
-
-        use_dropout = True if self.dropout_rate > 0 else False
-
-        # infer dimensions
-        self.N_lat, self.N_lon, self.N_chan = self.test_vec.shape
-        self.N_lb = self.lookback + 1 # lookback dimension
 
         masking_layer = Masking(self.mask, name="masking_layer")
         masking_layer_ft = Masking(self.mask, name="masking_layer_ft")
@@ -125,7 +135,8 @@ class AutoEncoder(keras_tuner.HyperModel):
             num_filters_last=self.num_filters_last,
             kernel_size=self.kernel_size,
             activation=self.activation_encoder,
-            regularizer=self.regularizer)
+            regularizer=self.regularizer,
+            downsample_stride=self.downsample_stride)
 
         # split inputs
         state_inputs = [ops.squeeze(t,axis=1) \
@@ -149,7 +160,7 @@ class AutoEncoder(keras_tuner.HyperModel):
         use_encoded_feedthrough = False
         if use_encoded_feedthrough:
             encoded_fts = [ self.encoding_layers(ft, training=False)
-                            for ft in ft_inputs]            
+                            for ft in ft_inputs]
             encoded_fts = ops.stack(encoded_fts, axis=1)
 
         # join encoded outputs
@@ -184,7 +195,7 @@ class AutoEncoder(keras_tuner.HyperModel):
                 layers.GaussianNoise(self.noise_stddev)(encoded_outputs)
 
         # Apply dropout
-        if use_dropout:
+        if self.use_dropout:
             encoded_outputs = \
                 layers.Dropout(self.dropout_rate)(encoded_outputs)
 
@@ -194,7 +205,7 @@ class AutoEncoder(keras_tuner.HyperModel):
 
         # Run with the RNN
         RNN_output = RNNBlock(
-            model=RNN_model,
+            model=self.RNN_model,
             activation=self.activation_encoder,
             RNN_dim=self.RNN_dim,
             filters=self.num_filters_last)\
@@ -208,27 +219,33 @@ class AutoEncoder(keras_tuner.HyperModel):
             num_filters_last=self.num_filters_last,
             kernel_size=self.kernel_size,
             activation=self.activation_encoder,
-            regularizer=self.regularizer)
+            regularizer=self.regularizer,
+            upsampling_size=self.downsample_stride)
 
         decoded_RNN = self.decoding_layers(RNN_output)
         decoded_AE_only = self.decoding_layers(encoded_outputs_0)
 
-        # Should these be residual blocks instead?
+        ds_filters = self.num_feedthrough_filters\
+            if self.feedthrough_only else decoded_RNN.shape[-1]
         feedthrough_block = ConvBlock(
             self.num_feedthrough_layers,
             self.num_feedthrough_filters,
             self.kernel_size,
             activation=self.activation_decoder,
-            downsample_filters=self.num_filters,
+            downsample_filters = ds_filters,
             regularizer=self.regularizer,
             name='feedthrough_block'
         )
 
-        final_output_layer = ConvBlock(1, self.N_chan,
-                                 self.kernel_size,
-                                 activation="sigmoid",
-                                 regularizer=self.regularizer,
-                                 name='final_output_layer')
+        output_block = ConvBlock(
+            self.num_output_layers,
+            self.num_feedthrough_filters,
+            self.kernel_size,
+            activation=self.activation_decoder,
+            downsample_activation="sigmoid",
+            downsample_filters=self.N_chan,
+            regularizer=self.regularizer,
+            name='output_block')
 
         output_layer_AE_only = ConvBlock(1, self.N_chan,
                                          self.kernel_size,
@@ -236,23 +253,24 @@ class AutoEncoder(keras_tuner.HyperModel):
                                          regularizer=self.regularizer,
                                          name='output_layer_AE_only')
 
-        
+
         if self.feedthrough_only:
             output = feedthrough_block(ft_inputs[0])
-            output = final_output_layer(output)
+            output = output_block(output)
             inputs_full_model=[feedthrough]
 
         elif self.use_feedthrough:
-            output = self.combine_feedthrough(decoded_RNN,
-                                              ft_inputs[0],
-                                              feedthrough_type,
-                                              feedthrough_block)
+            output = self.combine_feedthrough(
+                decoded_RNN,
+                ft_inputs[0],
+                self.feedthrough_type,
+                feedthrough_block)
 
-            output = final_output_layer(output)            
+            output = output_block(output)
             inputs_full_model=[state_input, feedthrough]
 
         else:
-            output = final_output_layer(decoded_RNN)
+            output = output_block(decoded_RNN)
             inputs_full_model=[state_input]
 
         # multiheaded output
@@ -260,13 +278,14 @@ class AutoEncoder(keras_tuner.HyperModel):
              not self.feedthrough_only ):
 
             if self.use_feedthrough:
-                decoded_AE_only = self.combine_feedthrough( decoded_AE_only,
-                                                            ft_inputs[0],
-                                                            feedthrough_type,
-                                                            feedthrough_block)
+                decoded_AE_only = self.combine_feedthrough(
+                    decoded_AE_only,
+                    ft_inputs[0],
+                    self.feedthrough_type,
+                    feedthrough_block)
 
             #share output layer
-            output_AE_only = final_output_layer(decoded_AE_only)
+            output_AE_only = output_block(decoded_AE_only)
 
             # different output layer
             # output_AE_only = output_layer_AE_only(decoded_AE_only)
@@ -277,7 +296,7 @@ class AutoEncoder(keras_tuner.HyperModel):
         else: # normal output
 
             outputs = [masking_layer(output)]
-            self.loss_weights = None       
+            self.loss_weights = None
 
         # Construct models
         inputs_decoder=[RNN_output]
@@ -286,7 +305,7 @@ class AutoEncoder(keras_tuner.HyperModel):
         self.decoder = Model(inputs=inputs_decoder,
                              outputs=outputs_decoder,
                              name="decoder")
-        
+
         self.autoencoder = Model(inputs=inputs_full_model,
                                  outputs=outputs,
                                  name="autoencoder")
@@ -309,6 +328,8 @@ class AutoEncoder(keras_tuner.HyperModel):
         if feedthrough_type == 'concatenate':
             outputs = layers.Concatenate()([inputs, z])
         elif feedthrough_type == 'multiply':
+            # z = keras.activations.sigmoid(z)
+            # inputs = keras.activations.sigmoid(inputs)
             outputs = layers.Multiply()([inputs, z])
         elif feedthrough_type == 'ignore':
             outputs = inputs
@@ -363,7 +384,7 @@ class AutoEncoder(keras_tuner.HyperModel):
         if use_clones:
             cloned_models = [keras.models.clone_model(model)
                              for i in range(unroll_dim)]
-            
+
             models = [model] + cloned_models
             for i, model in enumerate(models):
                 model.name = model.name + f'_{i}'
@@ -395,7 +416,7 @@ class AutoEncoder(keras_tuner.HyperModel):
                 xk = model(feedthrough[i])
             else:
                 xk = model([xk_lb, feedthrough[i]])
-                
+
             x_out += [xk[0]]
 
             if unroll_dim > 0:
@@ -408,14 +429,14 @@ class AutoEncoder(keras_tuner.HyperModel):
             Model(inputs=[state_input]+feedthrough,
                   outputs=x_out,
                   name="unrolled_model")
-        
+
         self.log_model(self.unrolled_model, 'a')
 
-        self.loss_weights = np.ones(unroll_dim+1) # / np.arange(1,1+unroll_dim+1)        
+        self.loss_weights = np.ones(unroll_dim+1) # / np.arange(1,1+unroll_dim+1)
         self.loss_weights = self.loss_weights.tolist()
         self.loss_weights = self.loss_weights[0] \
             if len(self.loss_weights) == 1 else self.loss_weights
-        
+
         return self.unrolled_model
 
 
@@ -433,7 +454,8 @@ class Encoder():
                  conv_layers_per_block=2,
                  kernel_size=(3,3),
                  activation='relu',
-                 regularizer=regularizers.L2(1e-5)
+                 regularizer=regularizers.L2(1e-5),
+                 downsample_stride=(2,2)
                  ):
 
         self.block_list = []
@@ -447,7 +469,7 @@ class Encoder():
                            num_filters=nf,
                            kernel_size=kernel_size,
                            activation=activation,
-                           downsample_stride=(2,2),
+                           downsample_stride=downsample_stride,
                            regularizer=regularizer,
                            name=f'conv_block_{i+1}')
 
@@ -458,7 +480,6 @@ class Encoder():
         for block in self.block_list:
             x = block(x, **kwargs)
             self.x_skip.append(x)
-
         return x
 
 class Decoder():
@@ -476,7 +497,8 @@ class Decoder():
                  conv_layers_per_block=2,
                  kernel_size=(3,3),
                  activation='relu',
-                 regularizer=regularizers.L2(1e-5)
+                 regularizer=regularizers.L2(1e-5),
+                 upsampling_size=(2,2),
                  ):
 
         self.block_list = []
@@ -494,9 +516,19 @@ class Decoder():
                            name=f'dec_conv_block_{i+1}')
             self.block_list.append(cb)
 
-            ul = layers.UpSampling2D(size=(2, 2),
-                                     interpolation="bilinear")
+            ul = layers.UpSampling2D(
+                size=upsampling_size,
+                interpolation="bilinear"
+            )
             self.block_list.append(ul)
+
+        # final_layer = layers.Conv2D(nf,
+        #                             kernel_size,
+        #                             activation=activation,
+        #                             kernel_regularizer=regularizer,
+        #                             padding="same",
+        #                             name=f'final_dec_conv_layer')
+        # self.block_list.append(final_layer)
 
 
     def __call__(self, inputs, **kwargs):
@@ -519,6 +551,7 @@ class ConvBlock():
                  activation='relu',
                  downsample_stride=(1,1),
                  downsample_filters=None,
+                 downsample_activation=None,
                  regularizer=regularizers.L2(1e-5),
                  name="conv_block"):
 
@@ -531,7 +564,11 @@ class ConvBlock():
             self.downsample_filters = num_filters
         else:
             self.downsample_filters = downsample_filters
-        
+        if downsample_activation == None:
+            self.downsample_activation = activation
+        else:
+            self.downsample_activation = downsample_activation
+
         ctr = 0
         for i in range(conv_layers_per_block-1):
             ctr += 1
@@ -547,14 +584,18 @@ class ConvBlock():
 
         # final downsampling convolution
         ctr += 1
-        l = layers.Conv2D(self.downsample_filters,
-                          kernel_size,
-                          strides = downsample_stride,
-                          activation=activation,
-                          kernel_regularizer=regularizer,
-                          padding="same",
-                          name=f'{name}_l{ctr}')
+        l = layers.Conv2D(
+            self.downsample_filters,
+            kernel_size,
+            strides=downsample_stride,
+            activation=self.downsample_activation,
+            kernel_regularizer=regularizer,
+            padding="same",
+            name=f'{name}_l{ctr}')
+
         self.layer_list.append(l)
+
+
 
     def __call__(self, inputs, skip=None, **kwargs):
         if skip == None:
@@ -600,6 +641,7 @@ class RNNBlock():
         else:
             raise Exception('Provide a model')
 
+
     def ConvLSTM(self, inputs):
         lstm_input = ops.flip(inputs, axis=1)
         lstm_output = \
@@ -611,27 +653,39 @@ class RNNBlock():
 
 
     def dense_downsample(self, inputs):
+        x = inputs
         self.Nlb, self.Nj, self.Ni, self.Nc = inputs.shape[1:]
         self.N_feats_in = self.Nj * self.Ni * self.Nc
-        self.N_feats_out = self.Nj * self.Ni * self.filters        
-        input_downs = layers.Reshape((self.Nlb, self.N_feats_in))(inputs)
-        input_downs = layers.Dense(self.RNN_dim,
-                                   activation = self.activation)\
-                                   (input_downs)
-            
-        return ops.flip(input_downs, axis=1)
+        self.N_feats_out = self.Nj * self.Ni * self.filters
+        x = layers.Reshape((self.Nlb, self.N_feats_in))(x)
+
+        # x = layers.Dense(self.RNN_dim,
+        #                  activation = self.activation)\
+        #                  (x)
+        x = layers.Dense(self.RNN_dim,
+                         activation = self.activation)\
+                         (x)
+        # x = layers.BatchNormalization(axis=-1)(x)
+        x = ops.flip(x, axis=1)
+        return x
 
     def dense_upsample(self, inputs):
-        output_ups = layers.Dense(self.N_feats_out,
-                                  activation = self.activation)\
-                                  (inputs)
-        
+
+        x = inputs
+        # x = layers.Dense(self.RNN_dim,
+        #                  activation = self.activation)\
+        #                  (x)
+
+        x = layers.Dense(self.N_feats_out,
+                         activation = self.activation)\
+                         (x)
+
         return layers.Reshape((self.Nj,
                                self.Ni,
-                               self.filters))(output_ups)
+                               self.filters))(x)
 
-    def RNN(self, inputs):
-        RNN_input = self.dense_downsample(inputs)
+    def RNN(self, inputs):        
+        RNN_input = self.dense_downsample(inputs)        
         RNN_output = layers.SimpleRNN(self.RNN_dim)(RNN_input)
         return self.dense_upsample(RNN_output)
 
@@ -777,9 +831,9 @@ class CustomValidation(keras.callbacks.Callback):
         max_inds = self.data['HR'].shape[0]
         unr_inds = np.arange(test_inds[-1]+1,
                              np.min([test_inds[-1]+self.unroll_dim+1,
-                                     max_inds]))        
+                                     max_inds]))
         self.test_inds = np.concatenate([self.test_inds, unr_inds])
-        
+
         self.test_data = self.data['HR'][test_inds,]
         self.test_data_ft = self.data['LR'][test_inds,]
         self.N_steps = self.test_data.shape[0]
@@ -799,7 +853,6 @@ class CustomValidation(keras.callbacks.Callback):
             self.predict(epoch, logs)
 
     def predict(self, epoch, logs=None):
-
         self.predictions = np.zeros_like(self.test_data)
 
         init_ind = self.test_inds[0]-1
@@ -812,8 +865,6 @@ class CustomValidation(keras.callbacks.Callback):
                                    stateful_metrics=['error', 'base'],
                                    interval=0.5)
         error, base = (0,0)
-
-        
 
         for i in range(self.N_steps-self.unroll_dim):
 
@@ -835,14 +886,15 @@ class CustomValidation(keras.callbacks.Callback):
             # if ( self.pars['multihead_output'] and
             #      not self.pars['feedthrough_only'] ): xk = xk[0]
 
-            if isinstance(xk, list):
+            if ( isinstance(xk, list) and
+                 self.unroll_dim > 0 ):
+                for j in range(self.unroll_dim+1):
+                    self.predictions[i+j,] = xk[j]
                 xk = xk[0]
-
-            self.predictions[i,] = xk
+            else:
+                self.predictions[i,] = xk
 
             if self.pars['evaluate']:
-
-
                 xk_true = np.expand_dims(self.test_data[i,], axis=0)
                 error += (np.sum(np.square(xk - xk_true)))
                 base += (np.sum(np.square(xk_LR[0][:,0,] - xk_true)))

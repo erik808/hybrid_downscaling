@@ -198,7 +198,7 @@ class AE_Experiment():
                     'args' : {'name' : 'lookback',
                               'low'  : 0,
                               'high' : 9},
-                    'search_space' : [10] },
+                    'search_space' : [2] },
 
                 'unroll_dim' : {
                     'type' : 'int',

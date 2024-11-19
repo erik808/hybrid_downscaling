@@ -1,6 +1,7 @@
 # ------------------------------------------------------------------
 # Downscaling AutoEncoder hyper parameters and tuning configurations
 # ------------------------------------------------------------------
+import numpy as np
 
 # default hyper parameters
 hyper_params = {
@@ -32,6 +33,21 @@ hyper_params = {
 
 # dict for use with optuna
 tuning_config_dict = {}
+
+__lookback_study__ = {
+    'lookback' : {
+        'type' : 'int',
+        'args' : {
+            'name' : 'lookback',
+            'low'  : 0,
+            'high' : 9,
+        },
+        'search_space' : np.arange(0,10).tolist(),
+    },
+}
+
+tuning_config_dict['lookback_study'] = __lookback_study__
+
 
 __default__ = {
     'epochs' : {

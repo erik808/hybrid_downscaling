@@ -21,11 +21,11 @@ def test_short_run():
         testing_mode=True)
 
     # adjust hyperparameters:
-    test_pars = {'history' : 'all',
+    test_pars = {'history' : 200,
                  'future' : 100,
-                 'epochs' : 2,
+                 'epochs' : 1,
                  'unroll_dim' : 0,
-                 'lookback' : 2,
+                 'lookback' : 1,
                  'noise_stddev' : 0.0,
                  'dropout_rate' : 0.0,
                  'num_conv_blocks' : 1,
@@ -38,8 +38,8 @@ def test_short_run():
                  'RNN_model' : 'RNN',
                  'RNN_dim' : 8,
                  'num_feedthrough_filters' : 112,
-                 'num_feedthrough_layers' : 2,
-                 'num_output_layers' : 2,
+                 'num_feedthrough_layers' : 1,
+                 'num_output_layers' : 1,
                  'l2_lambda' : 0.0,
                  'learning_rate' : 0.002,}
 
@@ -60,13 +60,27 @@ def test_save_load():
         testing_mode=True)
 
     # adjust hyperparameters:
-    test_pars = {'history' : 128,
-                 'future' : 16,
-                 'lookback' : 1,
-                 'conv_layers_per_block' : 1,
+    test_pars = {'history' : 200,
+                 'future' : 100,
                  'epochs' : 1,
+                 'unroll_dim' : 0,
+                 'lookback' : 1,
+                 'noise_stddev' : 0.0,
+                 'dropout_rate' : 0.0,
+                 'num_conv_blocks' : 1,
+                 'kernel_size' : (3,3),
+                 'downsample_stride' : (2,2),
+                 'conv_layers_per_block' : 1,
+                 'num_filters' : 32,
+                 'num_filters_last' : 112,
                  'batch_size' : 4,
-                 'RNN_reduction_factor' : 8}
+                 'RNN_model' : 'RNN',
+                 'RNN_dim' : 8,
+                 'num_feedthrough_filters' : 112,
+                 'num_feedthrough_layers' : 1,
+                 'num_output_layers' : 1,
+                 'l2_lambda' : 0.0,
+                 'learning_rate' : 0.002,}
 
     exp.hyper_params.update(test_pars)
 

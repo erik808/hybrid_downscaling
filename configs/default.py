@@ -5,12 +5,14 @@
 # default hyper parameters
 hyper_params = {
     'history' : 'all',
+    'epochs' : 5,
+    'batch_size' : 4,
     'lookback' : 2,
     'unroll_dim' : 0,
-    'num_conv_blocks' : 2,
-    'conv_layers_per_block' : 2,
-    'num_feedthrough_layers' : 1,
-    'num_feedthrough_filters' : None,
+    'num_conv_blocks' : 1,
+    'conv_layers_per_block' : 1,
+    'num_feedthrough_layers' : 2,
+    'num_feedthrough_filters' : 112,
     'num_output_layers' : 2,
     'future' : 400,
     'noise_stddev' : 0.0,
@@ -19,14 +21,13 @@ hyper_params = {
     'L2_lambda' : 0.0,
     'kernel_size' : (3,3),
     'RNN_model' : 'RNN',
-    'RNN_dim' : 32,
-    'epochs' : 4,
-    'batch_size' : 4,
+    'latent_space_dim' : 8,
     'learning_rate' : 0.002,
     'num_filters' : 32,
-    'num_filters_last' : 8,
+    'num_filters_last' : 112,
     'downsample_stride' : (2,2),
 }
+
 
 
 # dict for use with optuna
@@ -40,7 +41,7 @@ __default__ = {
             'low' : 1,
             'high': 50,
         },
-        'search_space' : [20],
+        'search_space' : [10],
     },
 
     'learning_rate' : {
@@ -162,10 +163,10 @@ __default__ = {
         'search_space' : ['RNN'],
     },
 
-    'RNN_dim' : {
+    'latent_space_dim' : {
         'type' : 'int',
         'args' : {
-            'name' : 'RNN_dim',
+            'name' : 'latent_space_dim',
             'low'  : 1,
             'high' : 10000,
             },

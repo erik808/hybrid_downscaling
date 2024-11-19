@@ -1,7 +1,5 @@
-import autoencoder_original
-from autoencoder_original import AE_Experiment
-
-
+import ae_experiment
+from ae_experiment import AE_Experiment
 
 model = {'folder' : 'experiments/gaussian_FT_only_2lrs-default/models/',
          'postfix' : 'trial_0_20241005_232914'}

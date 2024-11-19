@@ -36,18 +36,18 @@ class AutoEncoder(keras_tuner.HyperModel):
             'dropout_rate' : 0.0,
             'activation_encoder' : 'leaky_relu',
             'activation_decoder' : 'leaky_relu',
-            'num_conv_blocks' : 3,
+            'num_conv_blocks' : 1,
             'conv_layers_per_block' : 1,
             'num_feedthrough_layers' : 2,
-            'num_feedthrough_filters' : None,
-            'num_output_layers' : None,
+            'num_feedthrough_filters' : 112,
+            'num_output_layers' : 2,
             'kernel_size' : (3,3),
             'num_filters' : 32,
-            'num_filters_last' : 8,
+            'num_filters_last' : 112,
             'downsample_stride' : (2,2),
             'L2_lambda' : 0.0,
             'RNN_model' : 'RNN',
-            'RNN_dim' : 32,
+            'latent_space_dim' : 8,
         }
 
         # set actual class members
@@ -162,7 +162,7 @@ class AutoEncoder(keras_tuner.HyperModel):
         RNN_output = RNNBlock(
             model=self.RNN_model,
             activation=self.activation_encoder,
-            RNN_dim=self.RNN_dim,
+            latent_space_dim=self.latent_space_dim,
             filters=self.num_filters_last)\
             (encoded_outputs)
 
@@ -567,14 +567,14 @@ class RNNBlock():
     def __init__(self,
                  model='RNN',
                  activation='relu',
-                 RNN_dim=32,
+                 latent_space_dim=32,
                  unroll=False,
                  filters=32,
                  kernel_size=(3,3)):
 
         self.model = model
         self.activation = activation
-        self.RNN_dim = RNN_dim
+        self.latent_space_dim = latent_space_dim
         self.filters = filters
         self.kernel_size = kernel_size
         self.unroll = unroll
@@ -613,10 +613,10 @@ class RNNBlock():
         self.N_feats_out = self.Nj * self.Ni * self.filters
         x = layers.Reshape((self.Nlb, self.N_feats_in))(x)
 
-        # x = layers.Dense(self.RNN_dim,
+        # x = layers.Dense(self.latent_space_dim,
         #                  activation = self.activation)\
         #                  (x)
-        x = layers.Dense(self.RNN_dim,
+        x = layers.Dense(self.latent_space_dim,
                          activation = self.activation)\
                          (x)
         # x = layers.BatchNormalization(axis=-1)(x)
@@ -626,7 +626,7 @@ class RNNBlock():
     def dense_upsample(self, inputs):
 
         x = inputs
-        # x = layers.Dense(self.RNN_dim,
+        # x = layers.Dense(self.latent_space_dim,
         #                  activation = self.activation)\
         #                  (x)
 
@@ -640,17 +640,17 @@ class RNNBlock():
 
     def RNN(self, inputs):
         RNN_input = self.dense_downsample(inputs)
-        RNN_output = layers.SimpleRNN(self.RNN_dim)(RNN_input)
+        RNN_output = layers.SimpleRNN(self.latent_space_dim)(RNN_input)
         return self.dense_upsample(RNN_output)
 
     def GRU(self, inputs):
         GRU_input = self.dense_downsample(inputs)
-        GRU_output = layers.GRU(self.RNN_dim)(GRU_input)
+        GRU_output = layers.GRU(self.latent_space_dim)(GRU_input)
         return self.dense_upsample(GRU_output)
 
     def LSTM(self, inputs):
         LSTM_input = self.dense_downsample(inputs)
-        LSTM_output = layers.LSTM(self.RNN_dim)(LSTM_input)
+        LSTM_output = layers.LSTM(self.latent_space_dim)(LSTM_input)
         return self.dense_upsample(LSTM_output)
 
     def RNN_res(self, inputs):

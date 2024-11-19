@@ -11,7 +11,7 @@ function run_sbatch {
 }
 
 if [ "$#" -eq 0 ]; then
-    runscript=autoencoder_original.py
+    runscript=ae_experiment.py
     echo "no arguments given, running $runscript"
 else
     runscript=$1

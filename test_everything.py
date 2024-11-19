@@ -1,12 +1,13 @@
 from importlib import reload
 
 import ae_experiment
-import pytest
 reload(ae_experiment)
 from ae_experiment import AE_Experiment
 
-# set a seed
+import pytest
 import keras
+
+# set a seed
 keras.utils.set_random_seed(123)
 
 def test_short_run():
@@ -43,8 +44,7 @@ def test_short_run():
         'num_output_layers' : 1,
         'l2_lambda' : 0.0,
         'learning_rate' : 0.002,
-    }
-    
+    }    
 
     exp.hyper_params.update(test_pars)
     err = exp.build_and_run_model()

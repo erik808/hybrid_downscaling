@@ -16,80 +16,58 @@ class AutoEncoder(keras_tuner.HyperModel):
 
     def __init__(
             self,
-            test_vec,
-            mask,
-            log_file,
-            esn=None,
-            lookback=0,
-            conv_arch='default',
-            learning_rate=0.002,
-            optimizer='adam',
-            verbosity=20,
-            use_feedthrough=True,
-            feedthrough_only=False,
-            feedthrough_type='multiply',
-            multihead_output=False,
-            noise_stddev=0.0,
-            dropout_rate=0.0,
-            num_conv_blocks=3,
-            conv_layers_per_block=1,
-            num_feedthrough_layers=2,
-            num_feedthrough_filters=None,
-            num_output_layers=None,
-            kernel_size=(3,3),
-            num_filters=32,
-            num_filters_last=8,
-            downsample_stride=(2,2),
-            L2_lambda=1e-5,
-            RNN_model='RNN',
-            RNN_dim=32
+            **kwargs
     ):
-
         super(AutoEncoder, self).__init__()
 
-        self.test_vec = test_vec
-        self.mask = mask
-        self.log_file = log_file
-        self.esn = esn
-        self.lookback = lookback
+        members_dict = {
+            'test_vec' : [],
+            'mask' : [],
+            'log_file' : 'log',
+            'lookback' : 2,
+            'learning_rate' : 0.002,
+            'optimizer' : 'adam',
+            'verbosity' : 20,
+            'use_feedthrough' : True,
+            'feedthrough_only' : False,
+            'feedthrough_type' : 'multiply',
+            'multihead_output' : False,
+            'noise_stddev' : 0.0,
+            'dropout_rate' : 0.0,
+            'activation_encoder' : 'leaky_relu',
+            'activation_decoder' : 'leaky_relu',
+            'num_conv_blocks' : 3,
+            'conv_layers_per_block' : 1,
+            'num_feedthrough_layers' : 2,
+            'num_feedthrough_filters' : None,
+            'num_output_layers' : None,
+            'kernel_size' : (3,3),
+            'num_filters' : 32,
+            'num_filters_last' : 8,
+            'downsample_stride' : (2,2),
+            'L2_lambda' : 0.0,
+            'RNN_model' : 'RNN',
+            'RNN_dim' : 32,
+        }
+
+        # set actual class members
+        members_dict.update(kwargs)
+        for key, value in members_dict.items():
+            setattr(self, key, value)
+
         self.resblock_ctr = 0
-        self.esn_combine_mode = 'replace'
         self.needs_building = True
         self.ct = ComputeTool()
         self.losses = []
 
-        self.activation_encoder = 'leaky_relu'
-        self.activation_decoder = 'leaky_relu'
-        self.optimizer = optimizer
-        self.learning_rate = learning_rate
-        self.use_feedthrough = use_feedthrough
-        self.use_feedthrough_in_esn = use_feedthrough
-        self.feedthrough_only = feedthrough_only
-        self.feedthrough_type = feedthrough_type
+        # derived members:
+        self.regularizer = regularizers.L2(self.L2_lambda) \
+            if self.L2_lambda > 0 else None
         if self.feedthrough_only: self.use_feedthrough = True
-        self.multihead_output = multihead_output
-        self.noise_stddev = noise_stddev
-        self.dropout_rate = dropout_rate
-        self.num_conv_blocks = num_conv_blocks
-        self.conv_layers_per_block = conv_layers_per_block
-        self.num_feedthrough_layers = num_feedthrough_layers
-        self.num_feedthrough_filters = num_feedthrough_filters
-        self.num_output_layers = num_output_layers
-        self.num_filters = num_filters
-        self.kernel_size = kernel_size
-        self.num_filters_last = num_filters_last
-        self.downsample_stride = downsample_stride
-        self.regularizer = regularizers.L2(L2_lambda) \
-            if L2_lambda > 0 else None
-        self.RNN_model = RNN_model
-        self.RNN_dim = RNN_dim
-
         self.use_dropout = True if self.dropout_rate > 0 else False
-
         # infer dimensions
         self.N_lat, self.N_lon, self.N_chan = self.test_vec.shape
         self.N_lb = self.lookback + 1 # lookback dimension
-
 
         self.log('AutoEncoder\n', 'w')
 
@@ -101,17 +79,14 @@ class AutoEncoder(keras_tuner.HyperModel):
 
         print(f'dropout_rate: {self.dropout_rate}')
         print(f'noise_stddev: {self.noise_stddev}')
-        print(f'esn: {vars(self.esn)}')
         print(f'num_filters: {self.num_filters}')
         print(f'num_filters_last: {self.num_filters_last}')
         print(f'kernel_size: {self.kernel_size}')
         print(f'num_resblocks: {self.num_resblocks}')
         print(f'resblock_ctr: {self.resblock_ctr}')
-        print(f'esn_combine_mode: {self.esn_combine_mode}')
 
 
     def build_model(self):
-
 
         masking_layer = Masking(self.mask, name="masking_layer")
         masking_layer_ft = Masking(self.mask, name="masking_layer_ft")
@@ -168,26 +143,6 @@ class AutoEncoder(keras_tuner.HyperModel):
 
         self.encoder = \
             Model(state_inputs[0], encoded_outputs_0, name="encoder")
-
-
-        # !!! THIS WAY OF CALLING THE ESN LAYER IS DEPRECATED !!!
-        # Call ESN layer in the latent space
-        # if (self.esn != None):
-        #     # setup feedthrough control
-        #     if self.use_feedthrough_in_esn:
-        #         control = self.encoding_layers(feedthrough)
-        #     else:
-        #         control = ops.multiply(encoded, 0.0)
-
-            # esn_step = self.esn(encoded, time_input, control)
-
-            # if (self.esn_combine_mode == 'replace' or
-            #     self.esn.bypass_mode):
-            #     encoded = esn_step
-            # elif self.esn_combine_mode == 'multiply':
-            #     encoded = layers.Multiply()([esn_step, encoded])
-            # elif self.esn_combine_mode == 'add':
-            #     encoded = layers.Add()([esn_step, encoded])
 
         # Apply noise
         if self.noise_stddev > 0:
@@ -312,7 +267,6 @@ class AutoEncoder(keras_tuner.HyperModel):
 
         self.log_model()
         self.log_model(self.autoencoder, 'a')
-        self.log_model(self.esn, 'a')
 
         # models are constructed
         self.needs_building = False
@@ -684,8 +638,8 @@ class RNNBlock():
                                self.Ni,
                                self.filters))(x)
 
-    def RNN(self, inputs):        
-        RNN_input = self.dense_downsample(inputs)        
+    def RNN(self, inputs):
+        RNN_input = self.dense_downsample(inputs)
         RNN_output = layers.SimpleRNN(self.RNN_dim)(RNN_input)
         return self.dense_upsample(RNN_output)
 

@@ -1,13 +1,15 @@
 from importlib import reload
-from datetime import datetime
 
 import pytest
 import keras
-import glob
-import os
+import sys
 
 import ae_experiment
 reload(ae_experiment)
+
+import tools
+reload(tools)
+
 from ae_experiment import AE_Experiment
 
 # set a seed
@@ -15,15 +17,7 @@ keras.utils.set_random_seed(123)
 
 exp_name = 'test_everything'
 
-# decorator to make sure functions clean on ending
-def clean_on_end(func):
-    def wrapper(*args, **kwargs):
-        func(*args, **kwargs)
-        cleanup()
-    return wrapper
-
-
-@clean_on_end
+@tools.clean_on_end
 def test_short_run():
     exp = AE_Experiment(
         exp_name=exp_name,
@@ -61,8 +55,9 @@ def test_short_run():
     exp.hyper_params.update(test_pars)
     err = exp.build_and_run_model()
     assert err < 30
+    return exp_name
 
-@clean_on_end
+@tools.clean_on_end
 def test_save_load():
 
     exp = AE_Experiment(
@@ -133,24 +128,8 @@ def test_save_load():
     exp.hyper_params.update(test_pars)
     err = exp.build_and_run_model()
     assert err < 30
+    return exp_name
 
-
-def cleanup():
-    print('cleanup:')
-
-    today = datetime.now().strftime('%Y%m%d')
-
-    files = []
-    for ext in ['.dill', '.keras']:
-        files.extend(
-            glob.glob(os.path.join(f'experiments/{exp_name}', "**", f"*{ext}"),
-                      recursive=True)
-        )
-
-    for dfile in files:
-        if today in dfile:
-            print(f'deleting {dfile}')
-            os.remove(dfile)
 
 if __name__=="__main__":
     test_short_run()

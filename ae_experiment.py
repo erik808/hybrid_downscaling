@@ -24,6 +24,10 @@ from data_manager import DataGenerator
 import plot_utils
 reload(plot_utils)
 
+import tools
+reload(tools)
+from tools import Tee
+
 import ae_model
 reload(ae_model)
 
@@ -40,15 +44,19 @@ from compute_tool import ComputeTool
 
 class AE_Experiment():
 
-    def __init__(self, existing_model=None, exp_name=None,
-                 tuning_config=None,
-                 detide=False,
-                 compute_data=False,
-                 coarsening_method='gaussian_filter',
-                 truncation=1000,
-                 sigma=[1,1,1],
-                 feedthrough_type='hybrid',
-                 testing_mode=False):
+    def __init__(
+            self,
+            existing_model=None,
+            exp_name=None,
+            tuning_config=None,
+            detide=False,
+            compute_data=False,
+            coarsening_method='gaussian_filter',
+            truncation=1000,
+            sigma=[1,1,1],
+            feedthrough_type='hybrid',
+            testing_mode=False
+    ):
 
         self.init_timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
         self.exp_name = exp_name
@@ -68,6 +76,10 @@ class AE_Experiment():
         self.dirs, self.files = \
             self.dm.setup_directories(self.folder_id, self.folder_postfix)
 
+        self.trial_id = None
+        postfix, timestamp = self.create_postfix()
+        sys.stdout = Tee(self.files['log'] + f'{postfix}')
+
         if existing_model == None:
             self.load_existing_model = False
         else:
@@ -79,9 +91,9 @@ class AE_Experiment():
             mdir = self.load_model_folder
             self.load_path_autoencoder = \
                 f'{mdir}/autoencoder_{self.load_model_postfix}.keras'
-            self.load_path_encoder     = \
+            self.load_path_encoder = \
                 f'{mdir}/encoder_{self.load_model_postfix}.keras'
-            self.load_path_decoder     = \
+            self.load_path_decoder = \
                 f'{mdir}/decoder_{self.load_model_postfix}.keras'
 
         # -------------------------------------------------------
@@ -93,8 +105,6 @@ class AE_Experiment():
                                          sigma=sigma,
                                          truncation=truncation)
         # -------------------------------------------------------
-        self.trial_id = None
-
         self.load_config(config_name='default')
         self.ct=ComputeTool()
 

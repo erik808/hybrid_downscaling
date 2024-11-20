@@ -15,6 +15,15 @@ keras.utils.set_random_seed(123)
 
 exp_name = 'test_everything'
 
+# decorator to make sure functions clean on ending
+def clean_on_end(func):
+    def wrapper(*args, **kwargs):
+        func(*args, **kwargs)
+        cleanup()
+    return wrapper
+
+
+@clean_on_end
 def test_short_run():
     exp = AE_Experiment(
         exp_name=exp_name,
@@ -53,8 +62,7 @@ def test_short_run():
     err = exp.build_and_run_model()
     assert err < 30
 
-    cleanup()
-
+@clean_on_end
 def test_save_load():
 
     exp = AE_Experiment(
@@ -126,6 +134,7 @@ def test_save_load():
     err = exp.build_and_run_model()
     assert err < 30
 
+
 def cleanup():
     print('cleanup:')
 
@@ -142,7 +151,6 @@ def cleanup():
         if today in dfile:
             print(f'deleting {dfile}')
             os.remove(dfile)
-
 
 if __name__=="__main__":
     test_short_run()

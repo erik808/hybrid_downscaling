@@ -118,17 +118,15 @@ class AutoEncoder(keras_tuner.HyperModel):
         # encoded_outputs_0 = encoded_outputs[0]
 
         # apply encoder to feedthrough
-        use_encoded_feedthrough = False
-        if use_encoded_feedthrough:
-            encoded_fts = [ self.encoding_layers(ft, training=False)
-                            for ft in ft_inputs]
-            encoded_fts = ops.stack(encoded_fts, axis=1)
+        # use_encoded_feedthrough = False
+        # if use_encoded_feedthrough:
+        #     encoded_fts = [ self.encoding_layers(ft, training=False)
+        #                     for ft in ft_inputs]
+        #     encoded_fts = ops.stack(encoded_fts, axis=1)
 
         # join encoded outputs
         encoded_outputs = ops.stack(encoded_outputs, axis=1)
 
-        self.encoder = \
-            Model(state_inputs[0], encoded_outputs_0, name="encoder")
 
         # Apply noise
         if self.noise_stddev > 0:
@@ -140,19 +138,26 @@ class AutoEncoder(keras_tuner.HyperModel):
             encoded_outputs = \
                 layers.Dropout(self.dropout_rate)(encoded_outputs)
 
-        if use_encoded_feedthrough:
-            encoded_outputs = layers.Concatenate(axis=-1)([encoded_outputs,
-                                                           encoded_fts])
+        # if use_encoded_feedthrough:
+        #     encoded_outputs = layers.Concatenate(axis=-1)([encoded_outputs,
+        #                                                    encoded_fts])
 
-        # Run with the RNN
-        RNN_dict = self.create_param_dict([
+        
+        self.encoder = \
+            Model(state_input, encoded_outputs, name="encoder")
+        
+        # Run with a latent space model
+        lspacemod_dict = self.create_param_dict([
             'RNN_model',
             'activation_encoder',
             'latent_space_dim',
             'num_filters_last'
             ])
 
-        RNN_output = RNNBlock(**RNN_dict)(encoded_outputs)
+
+        lspace_model = LatentSpaceModel(**lspacemod_dict)
+        model_output = lspace_model(encoded_outputs)
+        lspace_vars = lspace_model.get_lspace_vars()
 
         # Decoder blocks
         decoder_dict = self.create_param_dict([
@@ -175,6 +180,7 @@ class AutoEncoder(keras_tuner.HyperModel):
 
         ds_filters = self.num_feedthrough_filters\
             if self.feedthrough_only else decoded_RNN.shape[-1]
+        
         feedthrough_block = ConvBlock(
             self.num_feedthrough_layers,
             self.num_feedthrough_filters,
@@ -200,7 +206,6 @@ class AutoEncoder(keras_tuner.HyperModel):
                                          activation="sigmoid",
                                          regularizer=self.regularizer,
                                          name='output_layer_AE_only')
-
 
         if self.feedthrough_only:
             output = feedthrough_block(ft_inputs[0])
@@ -562,7 +567,7 @@ class ConvBlock():
 
 
 
-class RNNBlock():
+class LatentSpaceModel():
 
     def __init__(self,
                  RNN_model='RNN',
@@ -590,8 +595,6 @@ class RNNBlock():
             return self.GRU(inputs)
         elif self.model == 'LSTM':
             return self.LSTM(inputs)
-        elif self.model == 'RNN_var':
-            return self.RNN_var(inputs)
         elif self.model == 'disabled':
             return self.most_recent(inputs)
         else:
@@ -642,11 +645,12 @@ class RNNBlock():
         RNN_output = layers.SimpleRNN(self.latent_space_dim)(RNN_input)
         return self.dense_upsample(RNN_output)
 
-    def RNN_var(self, inputs):
+    def RNN_var(self, inputs): 
 
         latent_mean = self.dense_downsample(inputs)
         latent_log_var = self.dense_downsample(inputs)
-        sampled = Sampling()(latent_mean, latent_log_var)
+        sampled = Sampling()(latent_mean,
+                             latent_log_var)
 
         # latent_output = layers.SimpleRNN(self.latent_space_dim)(sampled)
         return self.dense_upsample(sampled[:,0,])

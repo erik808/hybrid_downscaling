@@ -1,5 +1,7 @@
+import importlib
 from importlib import reload
 
+import rich
 import os
 import sys
 import dill
@@ -7,34 +9,31 @@ import dill
 from datetime import datetime
 from tabulate import tabulate
 import time
-import xarray as xr
+import optuna
 
+import xarray as xr
 import numpy as np
 import keras
 from keras import ops
-from keras.src.losses.loss import squeeze_or_expand_to_same_rank
 
-import optuna
+import data_manager
+reload(data_manager)
+from data_manager import DataManager
+from data_manager import DataGenerator
 
 import plot_utils
 reload(plot_utils)
 
-import data_manager as dm
-reload(dm)
+import tools
+reload(tools)
+from tools import Tee
 
 import ae_model
 reload(ae_model)
 
-import esn_interface
-reload(esn_interface)
-
 from ae_model import AutoEncoder
-from ae_model import TriggerESN
 from ae_model import CustomValidation
 from plot_utils import PlotMachine
-from esn_interface import ESN_embedded
-
-# from sklearn.preprocessing import MinMaxScaler
 
 import compute_tool
 reload(compute_tool)
@@ -45,14 +44,19 @@ from compute_tool import ComputeTool
 
 class AE_Experiment():
 
-    def __init__(self, existing_model=None, exp_name=None,
-                 tuning_config=None,
-                 detide=False,
-                 compute_data=False,
-                 coarsening_method='gaussian_filter',
-                 truncation=1000,
-                 sigma=[1,1,1],
-                 feedthrough_type='hybrid'):
+    def __init__(
+            self,
+            existing_model=None,
+            exp_name=None,
+            tuning_config=None,
+            detide=False,
+            compute_data=False,
+            coarsening_method='gaussian_filter',
+            truncation=1000,
+            sigma=[1,1,1],
+            feedthrough_type='hybrid',
+            testing_mode=False
+    ):
 
         self.init_timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
         self.exp_name = exp_name
@@ -67,8 +71,10 @@ class AE_Experiment():
             if self.tuning_config == None else f'-{self.tuning_config}'
 
         # setup new or existing directories
+        self.testing_mode = testing_mode
+        self.dm = DataManager(testing_mode=self.testing_mode)
         self.dirs, self.files = \
-            dm.setup_directories(self.folder_id, self.folder_postfix)
+            self.dm.setup_directories(self.folder_id, self.folder_postfix)
 
         if existing_model == None:
             self.load_existing_model = False
@@ -81,101 +87,55 @@ class AE_Experiment():
             mdir = self.load_model_folder
             self.load_path_autoencoder = \
                 f'{mdir}/autoencoder_{self.load_model_postfix}.keras'
-            self.load_path_encoder     = \
+            self.load_path_encoder = \
                 f'{mdir}/encoder_{self.load_model_postfix}.keras'
-            self.load_path_decoder     = \
+            self.load_path_decoder = \
                 f'{mdir}/decoder_{self.load_model_postfix}.keras'
 
         # -------------------------------------------------------
         # Load or compute data
         self.data, self.params, self.scalers, _ = \
-            dm.create_training_data(compute_data=compute_data,
-                                    detide=detide,
-                                    coarsening_method=coarsening_method,
-                                    sigma=sigma,
-                                    truncation=truncation)
+            self.dm.create_training_data(compute_data=compute_data,
+                                         detide=detide,
+                                         coarsening_method=coarsening_method,
+                                         sigma=sigma,
+                                         truncation=truncation)
         # -------------------------------------------------------
+        self.load_config(config_name='default')
+        self.ct=ComputeTool()
         self.trial_id = None
 
-        # default hyperparams
-        self.hyper_params = {
-            'history' : 'all',
-            'use_skip_connections' : False,
-            'conv_layers_per_block' : 2,
-            'future' : 400,
-            'noise_stddev' : 0.04,
-            'dropout_rate' : 0.0,
-            'optimizer' : 'adam',
-            'L2_lambda' : 0.0,
-            'epochs' : 4,
-            'batch_size' : 4,
-            'learning_rate' : 0.002,
-            'num_filters' : 32,
-            'num_filters_exp' : 32,
-            'num_filters_red' : 9,
-            'inner_stride' : 1,
+
+    def load_config(self, config_name):
+        # Load a config that lives in the <configs> dir: config_file =
+        # <configs>/<config_name>.py. Overwrite class members and
+        # create new ones according what is present in
+        # config_file. Exclude "__" members and functions.
+
+        config_file = f'configs.{config_name}'
+        print(f'Load config: {config_file}')
+
+        try:
+            config = importlib.import_module(config_file)
+        except ModuleNotFoundError:
+            raise ModuleNotFoundError(config_file)
+
+        importlib.reload(config)
+
+        module_vars = vars(config)
+
+        # load variables
+        config_vars = {
+            key: value for key, value in module_vars.items()
+            if not key.startswith("__") and not callable(value)
         }
 
-        ## maybe read from ini or xml instead?
-        self.tuning_config_dict = {
-            #-------------------------------------------------------
-            'default' : {
-                'epochs' : {
-                    'type' : 'int',
-                    'args' : {'name':'epochs',
-                              'low': 1,
-                              'high':50},
-                    'search_space' : [24] },
-                'layers_per_block' : {
-                    'type' : 'int',
-                    'args' : {'name' : 'conv_layers_per_block',
-                              'low'  : 1,
-                              'high' : 6},
-                    'search_space' : [4] },
-                'num_filters_red' : {
-                    'type' : 'int',
-                    'args' : {'name' : 'num_filters_red',
-                              'low'  : 1,
-                              'high' : 100},
-                    'search_space' : [8] } },
-            #-------------------------------------------------------
-            'regularization' : {
-                'L2_lambda' : {
-                    'type' : 'float',
-                    'args' : {'name' : 'L2_lambda',
-                              'low'  : 0,
-                              'high' : 1e2},
-                    'search_space' : [0, 1e-8, 1e-7, 1e-6, 1e-5] } },
-            #-------------------------------------------------------
-            'training_pars' : {
-                'L2_lambda' : {
-                    'type' : 'float',
-                    'args' : {'name' : 'L2_lambda',
-                              'low'  : 0,
-                              'high' : 1e2},
-                    'search_space' : [0, 1e-10, 1e-8, 1e-6] },
-                'learning_rate' : {
-                    'type' : 'float',
-                    'args' : {'name':'learning_rate',
-                              'low':1e-4,
-                              'high':1e-2},
-                    'search_space' : [2e-3, 4e-3, 6e-3, 8e-3, 1e-2] },
-                'batch_size' : {
-                    'type' : 'int',
-                    'args' : {'name':'batch_size',
-                              'low':1,
-                              'high':100},
-                    'search_space' : [1,2,4,8] } },
-            #-------------------------------------------------------
-            'filters' : {}, #TODO
-            'dropout' : {}, #TODO
-            'skip_connections' : {}, # TODO
-            'layers_per_block' : {}, # TODO
-            #-------------------------------------------------------
-        }
+        for (key, value) in config_vars.items():
+            setattr(self, key, value)
 
+        rich.print('default hyper params:', self.hyper_params)
+        rich.print('tuning config dict:', self.tuning_config_dict)
 
-        self.ct=ComputeTool()
 
 
     def run_optuna_study(self):
@@ -185,7 +145,6 @@ class AE_Experiment():
         storage = f'sqlite:///{tuning_dir}/storage.db'
         reload_tuning=True
         timeout=60*60*4 # 6h
-        n_trials=1
 
         self.setup_search_space()
 
@@ -195,14 +154,15 @@ class AE_Experiment():
             sampler = optuna.samplers.TPESampler()
 
         self.study = \
-            optuna.create_study(sampler=sampler,
-                                direction="minimize",
-                                storage=storage,
-                                study_name=f'{self.exp_name}_{self.tuning_config}',
-                                load_if_exists=reload_tuning)
+            optuna.create_study(
+                sampler=sampler,
+                direction="minimize",
+                storage=storage,
+                study_name=f'{self.exp_name}_{self.tuning_config}',
+                load_if_exists=reload_tuning
+            )
 
         self.study.optimize(self.objective,
-                            n_trials=n_trials,
                             timeout=timeout)
 
     def objective(self, trial):
@@ -266,8 +226,11 @@ class AE_Experiment():
                                headers='keys',
                                tablefmt='orgtbl'), file=out)
 
-    def build_and_run_model(self, predict_only=False, evaluate=True,
+    def build_and_run_model(self,
+                            predict_only=False,
+                            evaluate=True,
                             alternative_control=None):
+
         # AE-MODEL CONFIG
         use_feedthrough = True if (self.feedthrough_type == 'hybrid' or
                                    self.feedthrough_type == 'only') else False
@@ -277,9 +240,7 @@ class AE_Experiment():
         print(f'  - use_feedthrough: {use_feedthrough}')
         print(f'  - feedthrough_only: {feedthrough_only}')
 
-        # disabled for now
-        use_embedded_ESN = False
-        if feedthrough_only: use_embedded_ESN = False
+        self.unroll_dim = self.hyper_params['unroll_dim']
 
         # DATA CONFIG
         self.history = self.hyper_params['history']
@@ -288,31 +249,27 @@ class AE_Experiment():
         # TRAINING CONFIG
         epochs = self.hyper_params['epochs']
         batch_size = self.hyper_params['batch_size']
-        esn_train_in_epochs = [0,2,4,8]
         shuffle = True
 
-        if self.history == 'all':  # use all data we have
-            self.history = self.data['train']['HR'].shape[0]
-        if self.future == 'all':  # use all data we have
-            self.future = self.data['test']['HR'].shape[0]
+        self.setup_ranges(self.params)
 
         # input data
-        train_data_inp = self.data['train']['HR'][:-1,][-self.history:,]
+        train_data_inp = self.data['HR'][self.train_range_km1,]
         # output data
-        train_data_otp = self.data['train']['HR'][1:,][-self.history:,]
+        train_data_otp = self.data['HR'][self.train_range_k,]
         # control/feedthrough data
-        train_data_ft  = self.data['train']['LR'][1:,][-self.history:,]
-        train_time_ft  = self.data['train']['time'][1:,][-self.history:,]
+        train_data_ft  = self.data['LR'][self.train_range_k,]
+        train_time_ft  = self.data['time'][self.train_range_k,]
 
         # HR test data
-        test_data      = self.data['test']['HR'][:self.future,]
+        test_data      = self.data['HR'][self.test_range,]
         # LR/control/feedthrough test data
-        test_data_ft   = self.data['test']['LR'][:self.future,]
-        test_time      = self.data['test']['time'][:self.future,]
+        test_data_ft   = self.data['LR'][self.test_range,]
+        test_time      = self.data['time'][self.test_range,]
 
         if alternative_control == 'coarse_model':
-            x_train = dm.get_coarse_data(train_time_ft, interpolate=True)
-            x_test = dm.get_coarse_data(test_time, interpolate=True)
+            x_train = self.dm.get_coarse_data(train_time_ft, interpolate=True)
+            x_test = self.dm.get_coarse_data(test_time, interpolate=True)
             train_data_ft = \
                 self.scalers['R']\
                     .fit_transform(x_train.reshape(len(train_time_ft),-1))\
@@ -322,117 +279,46 @@ class AE_Experiment():
                     .transform(x_test.reshape(len(test_time),-1))\
                     .reshape(x_test.shape)
 
-        mask = self.params['mask']
-        Nt   = self.params['Nt']
-        Nlon = self.params['Nlon']
-        Nlat = self.params['Nlat']
-        num_channels = self.params['num_channels']
 
-        esn_params = esn_interface.hyperparams
-
-        mdir = self.dirs['models']
         postfix, timestamp = self.create_postfix()
+        sys.stdout = Tee(self.files['log'] + f'{postfix}')
 
-        def my_loss(y_true, y_pred):
+        ae_model_pars = {
+            'use_feedthrough'  : use_feedthrough,
+            'feedthrough_only' : feedthrough_only,
+            'feedthrough_type' : 'multiply',
+        }
+        ae_model_pars.update(self.hyper_params)
 
-            y_pred = ops.convert_to_tensor(y_pred)
-            y_true = ops.convert_to_tensor(y_true, dtype=y_pred.dtype)
-
-            def compute_2d_energy_spectrum(tensor):
-                im = ops.zeros_like(tensor[...,0])
-                s_u = ops.fft2((tensor[...,0], im))
-                s_v = ops.fft2((tensor[...,1], im))
-                u = ops.square(ops.sqrt(ops.square(s_u[0]) +
-                                        ops.square(s_u[1])))
-                v = ops.square(ops.sqrt(ops.square(s_v[0]) +
-                                        ops.square(s_v[1])))
-                E = (u + v)/2
-                E = E / ops.max(E)
-
-                return E
-
-            # y_pred = self.scalers['HR'].inverse_transform(data.reshape(Nt,-1))\
-            #                            .reshape(Nt, Nlat, Nlon, num_channels)
-            s_true = compute_2d_energy_spectrum(y_true)
-            s_pred = compute_2d_energy_spectrum(y_pred)
-
-            epsilon = 1e-10
-            bias=0.0
-            first_log = ops.log(ops.maximum(s_true, epsilon) + bias)
-            second_log = ops.log(ops.maximum(s_pred, epsilon) + bias)
-            out = ops.mean(ops.square(first_log - second_log), axis=(1,2))
-            return out
+        ae = AutoEncoder(
+            test_vec=self.data['HR'][0,:,:,:],
+            mask=self.params['mask'],
+            **ae_model_pars
+        )
 
         if self.load_existing_model:
-            # autoencoder = \
-            #     keras.models.load_model(self.load_path_autoencoder,
-            #                             compile=False)
-            # autoencoder.compile(loss=my_loss)
             autoencoder = \
                 keras.models.load_model(self.load_path_autoencoder)
 
             encoder = keras.models.load_model(self.load_path_encoder)
             decoder = keras.models.load_model(self.load_path_decoder)
 
-            if use_embedded_ESN:
-                esn = autoencoder.get_layer('esn_embedded')
-                # overwrite parameters
-
-                num_samples = train_data_inp.shape[0]
-                timeids = np.arange(num_samples)
-                timetns = np.expand_dims(timeids, axis=[1,2,3])
-                print('create training data for embedded ESN')
-                esn.setPars(esn_params, num_samples=num_samples)
-                values  = esn.pixel_shuffle(encoder.predict([train_data_inp,
-                                                             timetns]))
-                control = esn.pixel_shuffle(encoder.predict([train_data_ft,
-                                                             timetns]))
-                esn.initialize(values, control)
-                esn.populate_storage(values, timeids, control)
-            else:
-                esn_params['external']['bypass_mode'] = True
-                esn = ESN_embedded(esn_params=esn_params)
         else:
 
-            esn_params['external']['bypass_mode'] = not use_embedded_ESN
-            esn = ESN_embedded(esn_params=esn_params)
+            autoencoder, encoder, decoder =  ae.build_model()
 
-            ae = AutoEncoder(test_vec=train_data_inp[0,:,:,:],
-                             mask=mask,
-                             log_file=self.files['log'] + f'{postfix}',
-                             esn=esn,
-                             scalers=self.scalers)
-
-            autoencoder, encoder, decoder = \
-                ae.build_model(
-                    use_feedthrough=use_feedthrough,
-                    feedthrough_only=feedthrough_only,
-                    feedthrough_type='multiply',
-                    learning_rate=self.hyper_params['learning_rate'],
-                    conv_layers_per_block=\
-                    self.hyper_params['conv_layers_per_block'],
-                    use_skip_connections=\
-                    self.hyper_params['use_skip_connections'],
-                    optimizer=self.hyper_params['optimizer'],
-                    L2_lambda=self.hyper_params['L2_lambda'],
-                    dropout_rate=self.hyper_params['dropout_rate'],
-                    noise_stddev=self.hyper_params['noise_stddev'],
-                    num_filters=self.hyper_params['num_filters'],
-                    num_filters_red=self.hyper_params['num_filters_red'],
-                    num_filters_exp=self.hyper_params['num_filters_exp'],
-                    inner_stride=self.hyper_params['inner_stride'],
-                )
-
+        # encoder.trainable=False
+        # decoder.trainable=False
         # print a summary
         autoencoder.summary()
         # save dot and png
+        mdir = self.dirs['models']
         model_png_file = f'{mdir}/autoencoder{postfix}.png'
+        print(f'see {model_png_file}')
         keras.utils.plot_model(autoencoder, to_file=model_png_file,
                                show_shapes=True, rankdir='TB',
                                dpi=200, show_layer_activations=False,
                                show_layer_names=True)
-
-        # graph = keras.utils.model_to_dot(autoencoder, show_shapes=True)
 
         print('----------------------------------------------------------')
         print(f'experiment: {self.folder_id}{self.folder_postfix},       ')
@@ -440,82 +326,91 @@ class AE_Experiment():
         print('--------------------------------------------------------- ')
 
         tic = time.time()
+        dgen_args = { 'ft_type' : self.feedthrough_type,
+                      'batch_size' : batch_size,
+                      'shuffle' : shuffle,
+                      'lookback' : self.hyper_params['lookback'],
+                      'unroll_dim' : self.unroll_dim,
+                      'encoder' : encoder,
+                     }
 
-        # really necessary to expand to 4 dims?
-        T_train = np.expand_dims(np.arange(train_data_inp.shape[0]),
-                                 axis=[1,2,3])
-        T_test  = np.expand_dims(np.arange(train_data_inp.shape[0],
-                                           train_data_inp.shape[0] +
-                                           test_data.shape[0]),
-                                 axis=[1,2,3])
-
-        if feedthrough_only:
-            X_train = [train_data_ft]
-        elif use_feedthrough:
-            X_train = [train_data_inp, T_train, train_data_ft]
-        else:
-            X_train = [train_data_inp, T_train]
-
-        Y_train = train_data_otp
-
-        esn_callback = TriggerESN(esn,
-                                  train_in_epochs=esn_train_in_epochs,
-                                  num_samples=X_train[0].shape[0])
-
-        # we create a custom validation using a callback at every
-        # epoch end
-        initial_xk   = np.expand_dims(self.data['train']['HR'][-1,:,:,:], axis=0)
-        initial_xkm1 = np.expand_dims(self.data['train']['HR'][-2,:,:,:], axis=0)
+        datagen_train = DataGenerator(
+            x = [train_data_inp, train_data_ft],
+            y = [train_data_otp],
+            **dgen_args
+        )
 
         plotmachine = PlotMachine(results_dir=self.dirs['results'],
                                   trial_id=self.trial_id)
 
         self.validation_callback = \
-            CustomValidation(test_data=(test_data, T_test, test_data_ft),
-                             initial_xk=(initial_xk, initial_xkm1),
+            CustomValidation(data = self.data,
+                             test_inds = self.test_range,
                              plotmachine=plotmachine,
                              pars = {'feedthrough_only': feedthrough_only,
                                      'use_feedthrough': use_feedthrough,
+                                     'multihead_output' : False,
+                                     'unroll_dim' : self.unroll_dim,
                                      'predict_only' : predict_only,
-                                     'evaluate' : evaluate},
-                             scalers = self.scalers)
+                                     'evaluate' : evaluate,
+                                     'lookback' : self.hyper_params['lookback']})
 
-        callbacks = [esn_callback, self.validation_callback]
+        cdir = self.dirs['checkpoints']
+        model_checkpoint_file = f'{cdir}/autoencoder{postfix}.checkpoint.keras'
+        model_checkpoint_callback = keras.callbacks.ModelCheckpoint(
+            filepath=model_checkpoint_file,
+            monitor='error',
+            mode='min',
+            save_best_only=True)
+
+        callbacks = [self.validation_callback,
+                     model_checkpoint_callback]
 
         # TRAINING --------------------------------------------
-        self.hist = autoencoder.fit(x=X_train,
-                                    y=Y_train,
-                                    epochs=epochs,
-                                    batch_size=batch_size,
-                                    shuffle=shuffle,
-                                    callbacks=callbacks
-                                    )
+        unrolled_model = ae.create_unrolled_model(autoencoder,
+                                                  self.unroll_dim)
+        unrolled_model.summary()
+
+        mdir = self.dirs['models']
+        model_png_file = f'{mdir}/unrolled_model{postfix}.png'
+        print(f'see {model_png_file}')
+        keras.utils.plot_model(unrolled_model, to_file=model_png_file,
+                               show_shapes=True, rankdir='TB',
+                               dpi=200, show_layer_activations=False,
+                               show_layer_names=True)
+
+        ae.compiler(unrolled_model)
+        self.hist = unrolled_model.fit(x=datagen_train,
+                                       epochs=epochs,
+                                       callbacks=callbacks)
+
         toc = time.time()
         print(f'total training time: {(toc-tic)/60}m')
 
         # SAVING -----------------------------------------------
         # save model and metadata
         mdata_file = f'{mdir}/mdata{postfix}.dill'
-        container = {'hist' : self.hist,
-                     'epochs' : epochs,
-                     'batch_size' : batch_size,
-                     'shuffle' : shuffle
-                     }
+        container = {
+            'hist' : self.hist,
+            'epochs' : epochs,
+            'batch_size' : batch_size,
+            'shuffle' : shuffle
+        }
 
         with open(mdata_file, 'wb') as file:
             dill.dump(container, file)
 
         # save models
-        save_path_autoencoder = f'{mdir}/autoencoder{postfix}.keras'
-        save_path_encoder     = f'{mdir}/encoder{postfix}.keras'
-        save_path_decoder     = f'{mdir}/decoder{postfix}.keras'
+        self.save_path_autoencoder = f'{mdir}/autoencoder{postfix}.keras'
+        self.save_path_encoder     = f'{mdir}/encoder{postfix}.keras'
+        self.save_path_decoder     = f'{mdir}/decoder{postfix}.keras'
 
-        print(f'saving autoencoder to {save_path_autoencoder}')
-        print(f'saving encoder to {save_path_encoder}')
-        print(f'saving decoder to {save_path_decoder}')
-        autoencoder.save(save_path_autoencoder)
-        encoder.save(save_path_encoder)
-        decoder.save(save_path_decoder)
+        print(f'saving autoencoder to {self.save_path_autoencoder}')
+        print(f'saving encoder to {self.save_path_encoder}')
+        print(f'saving decoder to {self.save_path_decoder}')
+        autoencoder.save(self.save_path_autoencoder)
+        encoder.save(self.save_path_encoder)
+        decoder.save(self.save_path_decoder)
 
         self.plot_history()
         self.plot_spectra()
@@ -524,17 +419,71 @@ class AE_Experiment():
         return self.validation_callback.final_error
 
 
+    def setup_ranges(self, params):
+
+        if self.history == 'all':  # use all data we have
+            self.history = params['train_range'].stop
+        if self.future == 'all':  # use all data we have
+            self.future = params['test_range'].stop
+
+        # setup ranges
+        full_train_range = np.arange(params['train_range'].start,
+                                     params['train_range'].stop)
+
+        self.train_range_km1 = full_train_range[:-1,][-self.history:,]
+        self.train_range_k = full_train_range[1:,][-self.history:,]
+
+        full_test_range = np.arange(params['test_range'].start,
+                                    params['test_range'].stop)
+        self.test_range = full_test_range[:self.future,]
+
+
+    def my_loss(self, y_true, y_pred):
+
+        # usage:
+        # autoencoder = \
+        #     keras.models.load_model(self.load_path_autoencoder,
+        #                             compile=False)
+        # autoencoder.compile(loss=self.my_loss)
+
+        y_pred = ops.convert_to_tensor(y_pred)
+        y_true = ops.convert_to_tensor(y_true, dtype=y_pred.dtype)
+
+        def compute_2d_energy_spectrum(tensor):
+            im = ops.zeros_like(tensor[...,0]) # imaginary part
+            s_u = ops.fft2((tensor[...,0], im))
+            s_v = ops.fft2((tensor[...,1], im))
+            u = ops.square(ops.sqrt(ops.square(s_u[0]) +
+                                    ops.square(s_u[1])))
+            v = ops.square(ops.sqrt(ops.square(s_v[0]) +
+                                    ops.square(s_v[1])))
+            E = (u + v)/2
+            E = E / ops.max(E)
+
+            return E
+
+        s_true = compute_2d_energy_spectrum(y_true)
+        s_pred = compute_2d_energy_spectrum(y_pred)
+
+        epsilon = 1e-10
+        bias=0.0
+        first_log = ops.log(ops.maximum(s_true, epsilon) + bias)
+        second_log = ops.log(ops.maximum(s_pred, epsilon) + bias)
+        out = ops.mean(ops.square(first_log - second_log), axis=(1,2))
+        return out
+
+
     def plot_spectra(self):
         plotmachine = PlotMachine(results_dir=self.dirs['results'],
                                   trial_id=self.trial_id)
 
         data_dict = {
-            'truth'  : self.data['test']['HR'][:self.future,],
-            'lowres' : self.data['test']['LR'][:self.future,],
+            'truth'  : self.data['HR'][self.test_range,],
+            'lowres' : self.data['LR'][self.test_range,],
             'pred'   : self.validation_callback.predictions,
             'scaler_truth' : self.scalers['HR'],
             'scaler_lowres' : self.scalers['LR'],
-            'time'   : self.data['test']['time'][:self.future,]
+            'time'   : self.data['time'][self.test_range,]
         }
 
         self.spec_along = \
@@ -564,12 +513,12 @@ class AE_Experiment():
         Nlat = self.params['Nlat']
         num_channels = self.params['num_channels']
 
-        truth = self.data['test']['HR'][:self.future,]
-        lowres = self.data['test']['LR'][:self.future,]
-        test_time = self.data['test']['time'][:self.future,]
+        truth = self.data['HR'][self.test_range,]
+        lowres = self.data['LR'][self.test_range,]
+        test_time = self.data['time'][self.test_range,]
 
         if alternative_control == 'coarse_model':
-            x = dm.get_coarse_data(test_time, interpolate=True)
+            x = self.dm.get_coarse_data(test_time, interpolate=True)
             lowres = self.scalers['LR']\
                          .transform(x.reshape(len(test_time),-1))\
                          .reshape(x.shape)
@@ -673,12 +622,6 @@ class AE_Experiment():
                                   time_array=test_time,
                                   trial_id=self.trial_id)
 
-
-        import matplotlib.pyplot as plt
-        plt.close('all')
-        # plotmachine.plot_single_frame(50, plot_instructions)
-        # plt.pause(1)
-        # breakpoint()
         plotmachine.create_movie(plot_instructions)
 
     def create_postfix(self):
@@ -692,14 +635,17 @@ class AE_Experiment():
 
         return postfix, timestamp
 
+
 if __name__=="__main__":
-    exp = AE_Experiment(exp_name='gaussian_FT_hybrid_2lrs',
-                        tuning_config='default',
-                        detide=False,
-                        compute_data=False,
-                        coarsening_method='gaussian_filter',
-                        truncation=100,
-                        sigma=[1,1.5,1.5],
-                        feedthrough_type='hybrid')
+
+    exp = AE_Experiment(
+        exp_name='lookback_study',
+        tuning_config='lookback_study',
+        detide=False,
+        compute_data=False,
+        coarsening_method='gaussian_filter',
+        truncation=100,
+        sigma=[1,1.5,1.5],
+        feedthrough_type='hybrid')
+
     exp.run_optuna_study()
-    exp.create_movie()

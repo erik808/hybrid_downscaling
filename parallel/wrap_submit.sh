@@ -1,7 +1,7 @@
 #/bin/bash
 
 function run_sbatch {
-    sbcommand=`sbatch $1`
+    sbcommand=`sbatch $1 $2`
     if [[ "$sbcommand" =~ Submitted\ batch\ job\ ([0-9]+) ]]; then
         jobid=${BASH_REMATCH[1]}
         echo "$jobid"
@@ -10,7 +10,15 @@ function run_sbatch {
     fi
 }
 
-jobid=`run_sbatch submit.sh`
+if [ "$#" -eq 0 ]; then
+    runscript=ae_experiment.py
+    echo "no arguments given, running $runscript"
+else
+    runscript=$1
+    echo "running $runscript"
+fi
+
+jobid=`run_sbatch submit.sh $runscript`
 slurmfile=slurm-$jobid.out
 
 while true; do

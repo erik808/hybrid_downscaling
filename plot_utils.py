@@ -5,7 +5,9 @@ import os
 from multiprocess import Pool
 from importlib import reload
 import dill
-import data_manager as dm
+import data_manager
+reload(data_manager)
+from data_manager import DataManager
 import compute_tool
 reload(compute_tool)
 from compute_tool import ComputeTool
@@ -17,8 +19,7 @@ class PlotMachine():
                  time_array=None,
                  results_dir=None,
                  movie_dir=None,
-                 trial_id=None,
-                 scalers=None):
+                 trial_id=None):
 
         self.figsize=figsize
         self.output_dict=output_dict
@@ -29,6 +30,7 @@ class PlotMachine():
         self.frame_stride=4
         self.pool_size=1
         self.trial_id=trial_id
+        self.dm = DataManager()
 
     def plot_single_frame(self, frame_id, output_dict=None):
         self.output_dict = self.output_dict \
@@ -146,17 +148,10 @@ class PlotMachine():
             plt.tight_layout()
             plt.savefig(fig_name)
 
-    def plot_prediction_error(self, X, Y, Z, add_name='', scalers=None):
+    def plot_prediction_error(self, X, Y, Z, add_name=''):
 
         postfix = self.create_postfix(add_name)
         fig_name = f'{self.results_dir}/errors{postfix}.png'
-
-        # X = scalers['HR'].inverse_transform(X.reshape(X.shape[0],-1))\
-        #                  .reshape(X.shape)
-        # Y = scalers['HR'].inverse_transform(Y.reshape(Y.shape[0],-1))\
-        #                  .reshape(Y.shape)
-        # Z = scalers['LR'].inverse_transform(Z.reshape(Z.shape[0],-1))\
-        #                  .reshape(Z.shape)
 
         RSE_Y = np.sqrt(np.sum(np.square(X-Y),axis=(1,2,3)))
         RSE_Z = np.sqrt(np.sum(np.square(X-Z),axis=(1,2,3)))
@@ -184,13 +179,16 @@ class PlotMachine():
         postfix += f'_{timestamp}'
 
         return postfix
+    
 
-
-    def plot_enstrophy_spectrum(self, transect_name='along_flow', data = {}, add_coarse_data=False):
+    def plot_enstrophy_spectrum(self,
+                                transect_name='along_flow',
+                                data = {},
+                                add_coarse_data=False):
 
         # get coarse data:
         if add_coarse_data:
-            do = dm.get_coarse_data(data['time'])
+            do = self.dm.get_coarse_data(data['time'])
 
         ct = ComputeTool()
         S_truth  = ct.compute_spectrum_along_transect(
@@ -244,10 +242,13 @@ class PlotMachine():
         plt.tight_layout()
         plt.savefig(fig_name)
 
-    def plot_energy_spectrum(self, transect_name='along_flow', data = {}, add_coarse_data=False):
+    def plot_energy_spectrum(self,
+                             transect_name='along_flow',
+                             data = {},
+                             add_coarse_data=False):
 
         if add_coarse_data:
-            do = dm.get_coarse_data(data['time'])
+            do = self.dm.get_coarse_data(data['time'])
 
         ct = ComputeTool()
         S_truth  = ct.compute_spectrum_along_transect(

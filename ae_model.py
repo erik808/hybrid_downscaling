@@ -7,10 +7,656 @@ from keras import layers
 from keras import ops
 from keras import regularizers
 from keras.models import Model
+from keras.losses import Loss
 
 from compute_tool import ComputeTool
+import data_manager as dm
 
-# create custom masking class
+class AutoEncoder(keras_tuner.HyperModel):
+
+    def __init__(
+            self,
+            **kwargs
+    ):
+        super(AutoEncoder, self).__init__()
+
+        members_dict = {
+            'test_vec' : [],
+            'mask' : [],
+            'lookback' : 2,
+            'learning_rate' : 0.002,
+            'optimizer' : 'adam',
+            'verbosity' : 20,
+            'use_feedthrough' : True,
+            'feedthrough_only' : False,
+            'feedthrough_type' : 'multiply',
+            'multihead_output' : False,
+            'noise_stddev' : 0.0,
+            'dropout_rate' : 0.0,
+            'activation_encoder' : 'leaky_relu',
+            'activation_decoder' : 'leaky_relu',
+            'num_conv_blocks' : 1,
+            'conv_layers_per_block' : 1,
+            'num_feedthrough_layers' : 2,
+            'num_feedthrough_filters' : 112,
+            'num_output_layers' : 2,
+            'kernel_size' : (3,3),
+            'num_filters' : 32,
+            'num_filters_last' : 112,
+            'downsample_stride' : (2,2),
+            'L2_lambda' : 0.0,
+            'RNN_model' : 'RNN',
+            'latent_space_dim' : 8,
+        }
+
+        # set actual class members
+        members_dict.update(kwargs)
+        for key, value in members_dict.items():
+            setattr(self, key, value)
+
+        self.resblock_ctr = 0
+        self.needs_building = True
+        self.ct = ComputeTool()
+        self.losses = []
+
+        # derived members:
+        self.regularizer = regularizers.L2(self.L2_lambda) \
+            if self.L2_lambda > 0 else None
+        if self.feedthrough_only: self.use_feedthrough = True
+        self.use_dropout = True if self.dropout_rate > 0 else False
+        # infer dimensions
+        self.N_lat, self.N_lon, self.N_chan = self.test_vec.shape
+        self.N_lb = self.lookback + 1 # lookback dimension
+
+
+    def summary(self):
+
+        if self.needs_building:
+            print('Model needs building, no summary available.')
+            return
+
+        print(f'dropout_rate: {self.dropout_rate}')
+        print(f'noise_stddev: {self.noise_stddev}')
+        print(f'num_filters: {self.num_filters}')
+        print(f'num_filters_last: {self.num_filters_last}')
+        print(f'kernel_size: {self.kernel_size}')
+        print(f'num_resblocks: {self.num_resblocks}')
+        print(f'resblock_ctr: {self.resblock_ctr}')
+
+
+    def build_model(self):
+
+        masking_layer = Masking(self.mask, name="masking_layer")
+        masking_layer_ft = Masking(self.mask, name="masking_layer_ft")
+
+        state_input = layers.Input(shape=(self.N_lb, self.N_lat, self.N_lon,
+                                          self.N_chan),
+                                   name="full_state_input")
+
+        if self.use_feedthrough:
+            feedthrough = layers.Input(
+                shape=(self.N_lb, self.N_lat, self.N_lon, self.N_chan),
+                name="feedthrough_input")
+            ft_inputs = [ops.squeeze(t,axis=1) \
+                         for t in ops.split(feedthrough, self.N_lb, axis=1)]
+
+        # Encoder ------------------------------------------------------
+        self.encoding_layers = Encoder(
+            num_conv_blocks=self.num_conv_blocks,
+            conv_layers_per_block=self.conv_layers_per_block,
+            num_filters=self.num_filters,
+            num_filters_last=self.num_filters_last,
+            kernel_size=self.kernel_size,
+            activation=self.activation_encoder,
+            regularizer=self.regularizer,
+            downsample_stride=self.downsample_stride)
+
+        # split inputs
+        state_inputs = [ops.squeeze(t,axis=1) \
+                        for t in ops.split(state_input, self.N_lb, axis=1)]
+
+        # apply encoder in training and inference mode separately
+        # separate first entry:
+        encoded_outputs_0 = \
+            self.encoding_layers(state_inputs[0], training=True)
+
+        encoded_outputs_lb = \
+            [ self.encoding_layers(inpt, training=False)\
+              for inpt in state_inputs[1:] ]
+
+        encoded_outputs = [encoded_outputs_0] + encoded_outputs_lb
+
+        # encoded_outputs = [ self.encoding_layers(inpt) for inpt in state_inputs]
+        # encoded_outputs_0 = encoded_outputs[0]
+
+        # apply encoder to feedthrough
+        use_encoded_feedthrough = False
+        if use_encoded_feedthrough:
+            encoded_fts = [ self.encoding_layers(ft, training=False)
+                            for ft in ft_inputs]
+            encoded_fts = ops.stack(encoded_fts, axis=1)
+
+        # join encoded outputs
+        encoded_outputs = ops.stack(encoded_outputs, axis=1)
+
+        self.encoder = \
+            Model(state_inputs[0], encoded_outputs_0, name="encoder")
+
+        # Apply noise
+        if self.noise_stddev > 0:
+            encoded_outputs = \
+                layers.GaussianNoise(self.noise_stddev)(encoded_outputs)
+
+        # Apply dropout
+        if self.use_dropout:
+            encoded_outputs = \
+                layers.Dropout(self.dropout_rate)(encoded_outputs)
+
+        if use_encoded_feedthrough:
+            encoded_outputs = layers.Concatenate(axis=-1)([encoded_outputs,
+                                                           encoded_fts])
+
+        # Run with the RNN
+        RNN_output = RNNBlock(
+            model=self.RNN_model,
+            activation=self.activation_encoder,
+            latent_space_dim=self.latent_space_dim,
+            filters=self.num_filters_last)\
+            (encoded_outputs)
+
+        # Decoder blocks
+        self.decoding_layers = Decoder(
+            num_conv_blocks=self.num_conv_blocks,
+            conv_layers_per_block=self.conv_layers_per_block,
+            num_filters=self.num_filters,
+            num_filters_last=self.num_filters_last,
+            kernel_size=self.kernel_size,
+            activation=self.activation_encoder,
+            regularizer=self.regularizer,
+            upsampling_size=self.downsample_stride)
+
+        decoded_RNN = self.decoding_layers(RNN_output)
+        decoded_AE_only = self.decoding_layers(encoded_outputs_0)
+
+        ds_filters = self.num_feedthrough_filters\
+            if self.feedthrough_only else decoded_RNN.shape[-1]
+        feedthrough_block = ConvBlock(
+            self.num_feedthrough_layers,
+            self.num_feedthrough_filters,
+            self.kernel_size,
+            activation=self.activation_decoder,
+            downsample_filters = ds_filters,
+            regularizer=self.regularizer,
+            name='feedthrough_block'
+        )
+
+        output_block = ConvBlock(
+            self.num_output_layers,
+            self.num_feedthrough_filters,
+            self.kernel_size,
+            activation=self.activation_decoder,
+            downsample_activation="sigmoid",
+            downsample_filters=self.N_chan,
+            regularizer=self.regularizer,
+            name='output_block')
+
+        output_layer_AE_only = ConvBlock(1, self.N_chan,
+                                         self.kernel_size,
+                                         activation="sigmoid",
+                                         regularizer=self.regularizer,
+                                         name='output_layer_AE_only')
+
+
+        if self.feedthrough_only:
+            output = feedthrough_block(ft_inputs[0])
+            output = output_block(output)
+            inputs_full_model=[feedthrough]
+
+        elif self.use_feedthrough:
+            output = self.combine_feedthrough(
+                decoded_RNN,
+                ft_inputs[0],
+                self.feedthrough_type,
+                feedthrough_block)
+
+            output = output_block(output)
+            inputs_full_model=[state_input, feedthrough]
+
+        else:
+            output = output_block(decoded_RNN)
+            inputs_full_model=[state_input]
+
+        # multiheaded output
+        if ( self.multihead_output and
+             not self.feedthrough_only ):
+
+            if self.use_feedthrough:
+                decoded_AE_only = self.combine_feedthrough(
+                    decoded_AE_only,
+                    ft_inputs[0],
+                    self.feedthrough_type,
+                    feedthrough_block)
+
+            #share output layer
+            output_AE_only = output_block(decoded_AE_only)
+
+            # different output layer
+            # output_AE_only = output_layer_AE_only(decoded_AE_only)
+            outputs = [masking_layer(output),
+                       masking_layer(output_AE_only),
+                       RNN_output]
+            self.loss_weights = [1.0, 0.0, 0.0]
+        else: # normal output
+
+            outputs = [masking_layer(output)]
+            self.loss_weights = None
+
+        # Construct models
+        inputs_decoder=[RNN_output]
+        outputs_decoder=[decoded_RNN]
+
+        self.decoder = Model(inputs=inputs_decoder,
+                             outputs=outputs_decoder,
+                             name="decoder")
+
+        self.autoencoder = Model(inputs=inputs_full_model,
+                                 outputs=outputs,
+                                 name="autoencoder")
+
+        self.log_model()
+        self.log_model(self.autoencoder, 'a')
+
+        # models are constructed
+        self.needs_building = False
+
+        return self.autoencoder, self.encoder, self.decoder
+
+
+    def combine_feedthrough(self, inputs, feedthrough,
+                            feedthrough_type='multiply',
+                            feedthrough_block=None):
+
+        z = feedthrough_block(feedthrough)
+        if feedthrough_type == 'concatenate':
+            outputs = layers.Concatenate()([inputs, z])
+        elif feedthrough_type == 'multiply':
+            # z = keras.activations.sigmoid(z)
+            # inputs = keras.activations.sigmoid(inputs)
+            outputs = layers.Multiply()([inputs, z])
+        elif feedthrough_type == 'ignore':
+            outputs = inputs
+        else:
+            raise Exception('specify feedthrough_type when'
+                            ' using feedthrough')
+        return outputs
+
+
+    def compiler(self, model):
+        # loss = keras.losses.\
+        #     MeanSquaredError(reduction="sum_over_batch_size",
+        #                      name="mean_squared_error")
+
+        loss = CustomLoss(losstype='MSE')
+
+        if self.optimizer == 'adam':
+            optim = keras.optimizers.Adam(learning_rate=self.learning_rate)
+        elif self.optimizer == 'sgd':
+            optim = keras.optimizers.SGD(learning_rate=self.learning_rate)
+
+        print(f'loss_weights: {self.loss_weights}')
+        model.compile(optimizer=optim, loss=loss,
+                      loss_weights=self.loss_weights)
+
+
+
+    def log_model(self, model=None, mode='a'):
+        if model is None:
+            model = self
+        model.summary()
+
+    def create_unrolled_model(
+            self,
+            model,
+            unroll_dim=0,
+            use_clones=False
+    ):
+
+        if use_clones:
+            cloned_models = [keras.models.clone_model(model)
+                             for i in range(unroll_dim)]
+
+            models = [model] + cloned_models
+            for i, model in enumerate(models):
+                model.name = model.name + f'_{i}'
+
+        if self.feedthrough_only:
+            state_input = []
+        else:
+            state_input = layers.Input(
+                shape=(self.N_lb,
+                       self.N_lat,
+                       self.N_lon,
+                       self.N_chan),
+                name="unrolled_state_input")
+
+        if self.use_feedthrough:
+            feedthrough = [layers.Input(
+                shape=(self.N_lb, self.N_lat, self.N_lon, self.N_chan),
+                name=f'unrolled_feedthrough_input_{i}')
+                           for i in range(unroll_dim+1) ]
+        else:
+            feedthrough = []
+
+        xk_lb = state_input
+        x_out = []
+        for i in range(unroll_dim+1):
+            model = model if not use_clones else models[i]
+
+            if self.feedthrough_only:
+                xk = model(feedthrough[i])
+            else:
+                xk = model([xk_lb, feedthrough[i]])
+
+            x_out += [xk[0]]
+
+            if unroll_dim > 0:
+                # (re)construct lookback array
+                xk = ops.expand_dims(xk[0], axis=1)
+                xk_lb = ops.concatenate([xk, xk_lb], axis=1)\
+                    [:,:self.N_lb,]
+
+        self.unrolled_model = \
+            Model(inputs=[state_input]+feedthrough,
+                  outputs=x_out,
+                  name="unrolled_model")
+
+        self.log_model(self.unrolled_model, 'a')
+
+        self.loss_weights = np.ones(unroll_dim+1) # / np.arange(1,1+unroll_dim+1)
+        self.loss_weights = self.loss_weights.tolist()
+        self.loss_weights = self.loss_weights[0] \
+            if len(self.loss_weights) == 1 else self.loss_weights
+
+        return self.unrolled_model
+
+
+
+class Encoder():
+    """Encoder. For now hardcoded to contain three convolutional
+    blocks. Hardcoding can be dealt with later.
+
+    """
+
+    def __init__(self,
+                 num_conv_blocks=3,
+                 num_filters=32,
+                 num_filters_last=8,
+                 conv_layers_per_block=2,
+                 kernel_size=(3,3),
+                 activation='relu',
+                 regularizer=regularizers.L2(1e-5),
+                 downsample_stride=(2,2)
+                 ):
+
+        self.block_list = []
+        self.x_skip = []
+
+        for i in range(num_conv_blocks):
+            nf = num_filters if i < num_conv_blocks - 1 \
+                else num_filters_last
+
+            cb = ConvBlock(conv_layers_per_block=conv_layers_per_block,
+                           num_filters=nf,
+                           kernel_size=kernel_size,
+                           activation=activation,
+                           downsample_stride=downsample_stride,
+                           regularizer=regularizer,
+                           name=f'conv_block_{i+1}')
+
+            self.block_list.append(cb)
+
+    def __call__(self, inputs, **kwargs):
+        x = inputs
+        for block in self.block_list:
+            x = block(x, **kwargs)
+            self.x_skip.append(x)
+        return x
+
+class Decoder():
+    """Decoder: similar to encoder but with upsample layers
+
+        todo: add skip connections if wanted, ConvBlock already
+    supports it
+
+    """
+
+    def __init__(self,
+                 num_conv_blocks=3,
+                 num_filters=32,
+                 num_filters_last=8,
+                 conv_layers_per_block=2,
+                 kernel_size=(3,3),
+                 activation='relu',
+                 regularizer=regularizers.L2(1e-5),
+                 upsampling_size=(2,2),
+                 ):
+
+        self.block_list = []
+
+        for i in range(num_conv_blocks):
+
+            nf = num_filters if i > 0 \
+                else num_filters_last
+
+            cb = ConvBlock(conv_layers_per_block=conv_layers_per_block,
+                           num_filters=nf,
+                           kernel_size=kernel_size,
+                           activation=activation,
+                           regularizer=regularizer,
+                           name=f'dec_conv_block_{i+1}')
+            self.block_list.append(cb)
+
+            ul = layers.UpSampling2D(
+                size=upsampling_size,
+                interpolation="bilinear"
+            )
+            self.block_list.append(ul)
+
+        # final_layer = layers.Conv2D(nf,
+        #                             kernel_size,
+        #                             activation=activation,
+        #                             kernel_regularizer=regularizer,
+        #                             padding="same",
+        #                             name=f'final_dec_conv_layer')
+        # self.block_list.append(final_layer)
+
+
+    def __call__(self, inputs, **kwargs):
+        x = inputs
+        for block in self.block_list:
+            x = block(x, **kwargs)
+        return x
+
+
+
+class ConvBlock():
+    """Convolutional block with optional downsampling stride in the last
+    layer.
+
+    """
+    def __init__(self,
+                 conv_layers_per_block,
+                 num_filters=32,
+                 kernel_size=(3,3),
+                 activation='relu',
+                 downsample_stride=(1,1),
+                 downsample_filters=None,
+                 downsample_activation=None,
+                 regularizer=regularizers.L2(1e-5),
+                 name="conv_block"):
+
+        self.layer_list = []
+        self.kernel_size = kernel_size
+        self.num_filters = num_filters
+        self.regularizer = regularizer
+        self.activation = activation
+        if downsample_filters == None:
+            self.downsample_filters = num_filters
+        else:
+            self.downsample_filters = downsample_filters
+        if downsample_activation == None:
+            self.downsample_activation = activation
+        else:
+            self.downsample_activation = downsample_activation
+
+        ctr = 0
+        for i in range(conv_layers_per_block-1):
+            ctr += 1
+            l = layers.Conv2D(num_filters,
+                              kernel_size,
+                              strides=(1,1),
+                              activation=activation,
+                              kernel_regularizer=regularizer,
+                              padding="same",
+                              name=f'{name}_l{ctr}')
+
+            self.layer_list.append(l)
+
+        # final downsampling convolution
+        ctr += 1
+        l = layers.Conv2D(
+            self.downsample_filters,
+            kernel_size,
+            strides=downsample_stride,
+            activation=self.downsample_activation,
+            kernel_regularizer=regularizer,
+            padding="same",
+            name=f'{name}_l{ctr}')
+
+        self.layer_list.append(l)
+
+
+
+    def __call__(self, inputs, skip=None, **kwargs):
+        if skip == None:
+            x = inputs
+        else:
+            x = layers.Concatenate(axis=-1)([skip, inputs])
+        for layer in self.layer_list:
+            x = layer(x, **kwargs)
+        return x
+
+
+
+class RNNBlock():
+
+    def __init__(self,
+                 model='RNN',
+                 activation='relu',
+                 latent_space_dim=32,
+                 unroll=False,
+                 filters=32,
+                 kernel_size=(3,3)):
+
+        self.model = model
+        self.activation = activation
+        self.latent_space_dim = latent_space_dim
+        self.filters = filters
+        self.kernel_size = kernel_size
+        self.unroll = unroll
+
+    def __call__(self, inputs):
+        if self.model == 'RNN':
+            return self.RNN(inputs)
+        elif self.model == 'RNN_res':
+            return self.RNN_res(inputs)
+        elif self.model == 'ConvLSTM':
+            return self.ConvLSTM(inputs)
+        elif self.model == 'GRU':
+            return self.GRU(inputs)
+        elif self.model == 'LSTM':
+            return self.LSTM(inputs)
+        elif self.model == 'disabled':
+            return self.most_recent(inputs)
+        else:
+            raise Exception('Provide a model')
+
+
+    def ConvLSTM(self, inputs):
+        lstm_input = ops.flip(inputs, axis=1)
+        lstm_output = \
+            layers.ConvLSTM2D(padding='same',
+                              filters=self.filters,
+                              kernel_size=self.kernel_size)\
+                              (lstm_input)
+        return lstm_output
+
+
+    def dense_downsample(self, inputs):
+        x = inputs
+        self.Nlb, self.Nj, self.Ni, self.Nc = inputs.shape[1:]
+        self.N_feats_in = self.Nj * self.Ni * self.Nc
+        self.N_feats_out = self.Nj * self.Ni * self.filters
+        x = layers.Reshape((self.Nlb, self.N_feats_in))(x)
+
+        # x = layers.Dense(self.latent_space_dim,
+        #                  activation = self.activation)\
+        #                  (x)
+        x = layers.Dense(self.latent_space_dim,
+                         activation = self.activation)\
+                         (x)
+        # x = layers.BatchNormalization(axis=-1)(x)
+        x = ops.flip(x, axis=1)
+        return x
+
+    def dense_upsample(self, inputs):
+
+        x = inputs
+        # x = layers.Dense(self.latent_space_dim,
+        #                  activation = self.activation)\
+        #                  (x)
+
+        x = layers.Dense(self.N_feats_out,
+                         activation = self.activation)\
+                         (x)
+
+        return layers.Reshape((self.Nj,
+                               self.Ni,
+                               self.filters))(x)
+
+    def RNN(self, inputs):
+        RNN_input = self.dense_downsample(inputs)
+        RNN_output = layers.SimpleRNN(self.latent_space_dim)(RNN_input)
+        return self.dense_upsample(RNN_output)
+
+    def GRU(self, inputs):
+        GRU_input = self.dense_downsample(inputs)
+        GRU_output = layers.GRU(self.latent_space_dim)(GRU_input)
+        return self.dense_upsample(GRU_output)
+
+    def LSTM(self, inputs):
+        LSTM_input = self.dense_downsample(inputs)
+        LSTM_output = layers.LSTM(self.latent_space_dim)(LSTM_input)
+        return self.dense_upsample(LSTM_output)
+
+    def RNN_res(self, inputs):
+        x = self.most_recent(inputs)
+        y = self.RNN(inputs)
+        return layers.Add()([x,y])
+
+    def most_recent(self, inputs):
+        # assume 5D tensor, time dim ordered from recent to past
+        self.N_lb = inputs.shape[1]
+        inputs_splitted = \
+            [ops.squeeze(t,axis=1) \
+             for t in ops.split(inputs, self.N_lb, axis=1)]
+
+        # return most recent time
+        return inputs_splitted[0]
+
+
+
+# custom masking class
 @keras.saving.register_keras_serializable(name="custom_masking")
 class Masking(layers.Layer):
     def __init__(self, mask, **kwargs):
@@ -32,417 +678,41 @@ class Masking(layers.Layer):
     def call(self, inputs):
         return ops.multiply(inputs, self.mask)
 
-class AutoEncoder(keras_tuner.HyperModel):
-
-    def __init__(self, test_vec, mask, log_file,
-                 esn=None, scalers=None):
-        super(AutoEncoder, self).__init__()
-
-        self.test_vec = test_vec
-        self.mask = mask
-        self.log_file = log_file
-        self.esn = esn
-        self.resblock_ctr = 0
-        self.esn_combine_mode = 'replace'
-        self.needs_building = True
-        self.ct = ComputeTool()
-
-        self.log('AutoEncoder\n', 'w')
-
-    def summary(self):
-
-        if self.needs_building:
-            print('Model needs building, no summary available.')
-            return
-
-        print(f'dropout_rate: {self.dropout_rate}')
-        print(f'noise_stddev: {self.noise_stddev}')
-        print(f'esn: {vars(self.esn)}')
-        print(f'num_filters: {self.num_filters}')
-        print(f'num_filters_red: {self.num_filters_red}')
-        print(f'kernel_size: {self.kernel_size}')
-        print(f'num_resblocks: {self.num_resblocks}')
-        print(f'resblock_ctr: {self.resblock_ctr}')
-        print(f'esn_combine_mode: {self.esn_combine_mode}')
-
-
-    def build_model(self,
-                    conv_arch='default',
-                    learning_rate=0.002,
-                    optimizer='adam',
-                    verbosity=20,
-                    use_feedthrough=True,
-                    feedthrough_only=False,
-                    use_skip_connections=False,
-                    use_timeinput=True,
-                    feedthrough_type='multiply',
-                    noise_stddev=0.0,
-                    dropout_rate=0.0,
-                    conv_layers_per_block=1,
-                    num_feedthrough_layers=2,
-                    kernel_size=(3,3),
-                    num_filters=32,
-                    num_filters_exp=32,
-                    num_filters_red=9,
-                    inner_stride=1,
-                    L2_lambda=1e-5,
-                    ):
-
-        self.activation_encoder = 'relu'
-        self.activation_decoder = 'relu'
-        self.use_feedthrough = use_feedthrough
-        self.use_skip_connections = use_skip_connections
-        self.use_feedthrough_in_esn = use_feedthrough
-        self.feedthrough_only = feedthrough_only
-        self.feedthrough_type = feedthrough_type
-        if self.feedthrough_only: self.use_feedthrough = True
-
-        self.use_timeinput = use_timeinput
-        self.noise_stddev = noise_stddev
-        self.dropout_rate = dropout_rate
-        self.conv_layers_per_block = conv_layers_per_block
-        self.num_feedthrough_layers = num_feedthrough_layers
-        self.num_filters = num_filters
-        self.kernel_size = kernel_size
-        self.num_filters_red = num_filters_red
-        self.num_filters_exp = num_filters_exp
-        self.regularizer = regularizers.L2(L2_lambda) \
-            if L2_lambda > 0 else None
-        self.inner_stride = (inner_stride, inner_stride)
-
-        use_dropout = True if self.dropout_rate > 0 else False
-
-        Nlat, Nlon, num_channels = self.test_vec.shape
-
-        masking_layer = Masking(self.mask, name="masking_layer")
-        masking_layer_ft = Masking(self.mask, name="masking_layer_ft")
-
-        state_input = layers.Input(shape=(Nlat, Nlon, num_channels),
-                                   name="full_state_input")
-
-        if self.use_timeinput:
-            time_input = layers.Input(shape=(1,1,1),
-                                      name="time_input")
-
-        if self.use_feedthrough:
-            feedthrough = layers.Input(shape=(Nlat, Nlon, num_channels),
-                                       name="feedthrough_input")
-
-        # Encoder ------------------------------------------------------
-        if use_dropout:
-            dropout_layer_1 = layers.Dropout(self.dropout_rate,
-                                             name="dropout_1")
-
-        encoding_layers = Encoder(
-            conv_layers_per_block=self.conv_layers_per_block,
-            num_filters=[self.num_filters,
-                         self.num_filters_exp, # expansion
-                         self.num_filters_red, # reduction
-                         ],
-            kernel_size=self.kernel_size,
-            activation=self.activation_encoder,
-            downsample_strides=[(2,2),
-                                (2,2),
-                                self.inner_stride],
-            regularizer=self.regularizer)
-
-        encoded = encoding_layers(state_input)
-
-        if self.use_skip_connections:
-            x_skip_1 = encoding_layers.x_skip[0]
-            x_skip_2 = encoding_layers.x_skip[1]
-        else:
-            x_skip_1 = None
-            x_skip_2 = None
-
-        self.encoder = \
-            Model([state_input, time_input], encoded, name="encoder")
-
-        # Call ESN layer in the latent space
-        if (self.esn != None):
-            # setup feedthrough control
-            if self.use_feedthrough_in_esn:
-                control = encoding_layers(feedthrough)
-            else:
-                control = ops.multiply(encoded, 0.0)
-
-            esn_step = self.esn(encoded, time_input, control)
-
-            if (self.esn_combine_mode == 'replace' or
-                self.esn.bypass_mode):
-                encoded = esn_step
-            elif self.esn_combine_mode == 'multiply':
-                encoded = layers.Multiply()([esn_step, encoded])
-            elif self.esn_combine_mode == 'add':
-                encoded = layers.Add()([esn_step, encoded])
-
-        if self.noise_stddev > 0:
-            encoded = layers.GaussianNoise(self.noise_stddev)(encoded)
-
-        if use_dropout:
-            encoded = layers.Dropout(self.dropout_rate,
-                                     name="dropout_1")(encoded)
-
-        # Decoder blocks
-        dec_conv_block_1 = ConvBlock(self.conv_layers_per_block,
-                                     self.num_filters,
-                                     self.kernel_size,
-                                     self.activation_decoder,
-                                     regularizer=self.regularizer,
-                                     name="dec_conv_block_1")
-
-        upsample_layer_1 = layers.UpSampling2D(size=self.inner_stride,
-                                               interpolation="bilinear")
-
-        dec_conv_block_2 = ConvBlock(self.conv_layers_per_block,
-                                     self.num_filters_exp,
-                                     self.kernel_size,
-                                     self.activation_decoder,
-                                     regularizer=self.regularizer,
-                                     name="dec_conv_block_2")
-
-        upsample_layer_2 = layers.UpSampling2D(size=(2, 2),
-                                               interpolation="bilinear")
-
-        dec_conv_block_3 = ConvBlock(self.conv_layers_per_block,
-                                     self.num_filters,
-                                     self.kernel_size,
-                                     self.activation_decoder,
-                                     regularizer=self.regularizer,
-                                     name="dec_conv_block_3")
-
-        upsample_layer_3 = layers.UpSampling2D(size=(2,2),
-                                               interpolation="bilinear")
-
-        dropout_layer_2 = layers.Dropout(self.dropout_rate,
-                                         name="dropout_2")
-
-        # Should these be residual blocks instead?
-        feedthrough_block = ConvBlock(self.num_feedthrough_layers,
-                                      self.num_filters,
-                                      self.kernel_size,
-                                      activation=self.activation_decoder,
-                                      regularizer=self.regularizer,
-                                      name='feedthrough_block')
-
-        output_layer = ConvBlock(1, num_channels,
-                                 self.kernel_size,
-                                 activation="sigmoid",
-                                 regularizer=self.regularizer,
-                                 name='output_layer')
-
-        # Decoder:
-        y = dec_conv_block_1(encoded)
-        y = upsample_layer_1(y)
-        y = dec_conv_block_2(y, x_skip_2)
-        y = upsample_layer_2(y)
-        y = dec_conv_block_3(y, x_skip_1)
-        y = upsample_layer_3(y)
-
-        if self.feedthrough_only:
-            output = feedthrough_block(feedthrough)
-            output = output_layer(output)
-
-            inputs_decoder=[feedthrough]
-            inputs_autoencoder=[feedthrough]
-
-        elif self.use_feedthrough:
-            z = feedthrough_block(feedthrough)
-
-            if feedthrough_type == 'concatenate':
-                output = layers.Concatenate()([y, z])
-            elif feedthrough_type == 'multiply':
-                output = layers.Multiply()([y, z])
-            elif feedthrough_type == 'ignore':
-                output = y
-            else:
-                raise Exception('specify feedthrough_type when'
-                                ' using feedthrough')
-
-            output = output_layer(output)
-            inputs_decoder=[encoded, feedthrough]
-            inputs_autoencoder=[state_input, time_input, feedthrough]
-
-        else:
-            output = output_layer(y)
-            inputs_decoder=[encoded]
-            inputs_autoencoder=[state_input, time_input]
-
-        outputs = [masking_layer(output)]
-
-        # Construct models
-        self.decoder = Model(inputs=inputs_decoder,
-                             outputs=outputs,
-                             name="decoder")
-
-        self.autoencoder = Model(inputs=inputs_autoencoder,
-                            outputs=outputs,
-                            name="autoencoder")
-
-
-
-        loss = keras.losses.\
-            MeanSquaredError(reduction="sum_over_batch_size",
-                             name="mean_squared_error")
-
-
-        if optimizer == 'adam':
-            optim = keras.optimizers.Adam(learning_rate=learning_rate)
-        elif optimizer == 'sgd':
-            optim = keras.optimizers.SGD(learning_rate=learning_rate)
-
-        self.autoencoder.compile(optimizer=optim, loss=loss)
-
-        self.log_model()
-        self.log_model(self.autoencoder, 'a')
-        self.log_model(self.esn, 'a')
-
-        # models are constructed
-        self.needs_building = False
-
-        return self.autoencoder, self.encoder, self.decoder
-
-    def res_block(self, inputs):
-        self.resblock_ctr += 1
-        name_conv_a = f"residual_block_conv2d_a_{self.resblock_ctr}"
-        name_conv_b = f"residual_block_conv2d_b_{self.resblock_ctr}"
-        name_add_layer = f"residual_add_{self.resblock_ctr}"
-
-        x = layers.Conv2D(self.num_filters,
-                          self.kernel_size,
-                          padding="same",
-                          activation="relu",
-                          name=name_conv_a)(inputs)
-        x = layers.Conv2D(self.num_filters,
-                          self.kernel_size,
-                          padding="same",
-                          name=name_conv_b)(x)
-        x = layers.Add(name=name_add_layer)([inputs, x])
-        return x
-
-
-    # build model for hyperparameter tuning
-    def build(self, hp):
-        learning_rate = hp.Float("learning_rate",
-                                 min_value=1e-4,
-                                 max_value=5e-2,
-                                 sampling="log")
-        hypermodel, _, _ = self.build_model(learning_rate=learning_rate)
-        return hypermodel
-
-    def fit(self, hp, model, *args, **kwargs):
-        batch_sizes = hp.Int("batch_size",
-                             min_value=2,
-                             max_value=32)
-        return model.fit(*args, batch_size=batch_sizes,
-                         **kwargs)
-
-    def log(self, msg, mode='a'):
-        original = sys.stdout
-        with open(self.log_file, mode) as f:
-            sys.stdout = f
-            print(msg)
-            sys.stdout = original
-
-    def log_model(self, model=None, mode='a'):
-        if model is None:
-            model = self
-
-        original = sys.stdout
-        with open(self.log_file, mode) as f:
-            sys.stdout = f
-            model.summary()
-            sys.stdout = original
-
-
-class Encoder():
-    """Encoder. For now hardcoded to contain three convolutional
-    blocks. Hardcoding can be dealt with later.
-
-    """
-
-    def __init__(self,
-                 num_conv_blocks=3,
-                 conv_layers_per_block=2,
-                 num_filters=[32,32,8],
-                 kernel_size=(3,3),
-                 activation='relu',
-                 downsample_strides=[(2,2), (2,2), (1,1)],
-                 regularizer=regularizers.L2(1e-5)
-                 ):
-
-
-        self.block_list = []
-        self.x_skip = []
-
-        for i in range(num_conv_blocks):
-            cb = ConvBlock(conv_layers_per_block=conv_layers_per_block,
-                           num_filters=num_filters[i],
-                           kernel_size=kernel_size,
-                           activation=activation,
-                           downsample_stride=downsample_strides[i],
-                           regularizer=regularizer,
-                           name=f'conv_block_{i+1}')
-
-            self.block_list.append(cb)
-
-    def __call__(self, inputs):
-        x = inputs
-        for block in self.block_list:
-            x = block(x)
-            self.x_skip.append(x)
-
-        return x
-
-
-
-class ConvBlock():
-    """Convolutional block with optional downsampling stride in the last
-    layer.
-
-    """
-    def __init__(self,
-                 conv_layers_per_block,
-                 num_filters=32,
-                 kernel_size=(3,3),
-                 activation='relu',
-                 downsample_stride=(1,1),
-                 regularizer=regularizers.L2(1e-5),
-                 name="conv_block"):
-
-        self.layer_list = []
-        ctr = 0
-        for i in range(conv_layers_per_block-1):
-            ctr += 1
-            l = layers.Conv2D(num_filters,
-                              kernel_size,
-                              strides=(1,1),
-                              activation=activation,
-                              kernel_regularizer=regularizer,
-                              padding="same",
-                              name=f'{name}_l{ctr}')
-
-            self.layer_list.append(l)
-
-        # final downsampling convolution
-        ctr += 1
-        l = layers.Conv2D(num_filters,
-                          kernel_size,
-                          strides = downsample_stride,
-                          activation=activation,
-                          kernel_regularizer=regularizer,
-                          padding="same",
-                          name=f'{name}_l{ctr}')
-        self.layer_list.append(l)
-
-    def __call__(self, inputs, skip=None):
-        if skip == None:
-            x = inputs
-        else:
-            x = layers.Concatenate(axis=-1)([skip, inputs])
-        for layer in self.layer_list:
-            x = layer(x)
-        return x
+@keras.saving.register_keras_serializable(name="custom_loss")
+class CustomLoss(Loss):
+    def __init__(
+            self,
+            name='',
+            reduction="sum_over_batch_size",
+            losstype='NSE'
+    ):
+        super().__init__(name=name,
+                         reduction=reduction)
+        self.losstype = losstype
+
+    def call(self, y_true, y_pred):
+
+        if self.losstype == 'NSE':
+            loss = self.normalized_SE(y_true, y_pred)
+        elif self.losstype == 'MSE':
+            loss = self.mean_SE(y_true, y_pred)
+
+        print(f' :{loss:1.2e}: ', end="")
+        return loss
+
+    def normalized_SE(self, y_true, y_pred):
+        err = ops.sum(ops.square(y_pred-y_true))
+        nrm = ops.sum(ops.square(y_true))
+        return (err/nrm)
+
+    def mean_SE(self, y_true, y_pred):
+        loss = ops.mean(ops.square(y_pred-y_true))
+        return loss
+
+
+    def get_config(self):
+        config = super().get_config()
+        return config
 
 
 class TriggerESN(keras.callbacks.Callback):
@@ -484,21 +754,34 @@ class CustomValidation(keras.callbacks.Callback):
     """
     """
 
-    def __init__(self, test_data, initial_xk,
-                 plotmachine, pars, scalers):
+    def __init__(self,
+                 data,
+                 test_inds,
+                 plotmachine,
+                 pars):
+
         super().__init__()
 
-        self.initial_xk = initial_xk
-        self.test_data = test_data[0]
-        self.N_steps = self.test_data.shape[0]
-        self.T_test = test_data[1]
-        self.test_data_ft = test_data[2]
-        self.plotmachine = plotmachine
         self.pars = pars
-        self.scalers = scalers
+        self.unroll_dim = self.pars['unroll_dim']
+        self.data = data
+        self.test_inds = test_inds
+
+        # account for unrolling
+        max_inds = self.data['HR'].shape[0]
+        unr_inds = np.arange(test_inds[-1]+1,
+                             np.min([test_inds[-1]+self.unroll_dim+1,
+                                     max_inds]))
+        self.test_inds = np.concatenate([self.test_inds, unr_inds])
+
+        self.test_data = self.data['HR'][test_inds,]
+        self.test_data_ft = self.data['LR'][test_inds,]
+        self.N_steps = self.test_data.shape[0]
+        self.plotmachine = plotmachine
         self.predictions = []
         self.final_error = []
         self.final_base = []
+        self.lookback = self.pars['lookback']
 
     def on_epoch_begin(self, epoch, logs=None):
         if self.pars['predict_only']:
@@ -509,55 +792,52 @@ class CustomValidation(keras.callbacks.Callback):
         if not self.pars['predict_only']:
             self.predict(epoch, logs)
 
-    def inverse_transform(self, field, scaler):
-        return scaler.inverse_transform(field.reshape(1,-1))\
-                     .reshape(field.shape)        
-
     def predict(self, epoch, logs=None):
-
         self.predictions = np.zeros_like(self.test_data)
 
-        xk   = self.initial_xk[0]
-        xkm1 = self.initial_xk[1]
+        init_ind = self.test_inds[0]-1
+
+        xk_lb = np.expand_dims(
+            dm.create_lookback(init_ind, [self.data['HR']],
+                               self.lookback,axis=0)[0], axis=0)
+
         pb_i = keras.utils.Progbar(self.N_steps,
                                    stateful_metrics=['error', 'base'],
                                    interval=0.5)
         error, base = (0,0)
 
-        for i in range(self.N_steps):
+        for i in range(self.N_steps-self.unroll_dim):
 
-            xk_LR = np.expand_dims(self.test_data_ft[i,], axis=0)
+
+            xk_LR = [ np.expand_dims(
+                dm.create_lookback(self.test_inds[i+unroll], [self.data['LR']],
+                                   self.lookback, axis=0)[0], axis=0)
+                      for unroll in range(self.unroll_dim+1) ]
 
             Pxk = xk_LR
 
-            tid = np.expand_dims(self.T_test[i,], axis=0)
-            xkm1 = xk
-
             if self.pars['feedthrough_only']:
-                xk = self.model.predict([Pxk], verbose=0)
+                xk = self.model.predict([Pxk[0]], verbose=0)
             elif self.pars['use_feedthrough']:
-                xk = self.model.predict([xk, tid, Pxk], verbose=0)
+                xk = self.model.predict([xk_lb]+Pxk, verbose=0)
             else:
-                xk = self.model.predict([xk, tid], verbose=0)
+                xk = self.model.predict([xk_lb], verbose=0)
 
-            if ('residual_mode' in self.pars and
-                self.pars['residual_mode']):
-                xk = self.scalers['R']\
-                         .inverse_transform(xk.reshape(1,-1))\
-                         .reshape(xk.shape) + xk_LR
+            # if ( self.pars['multihead_output'] and
+            #      not self.pars['feedthrough_only'] ): xk = xk[0]
 
-            self.predictions[i,] = xk
+            if ( isinstance(xk, list) and
+                 self.unroll_dim > 0 ):
+                for j in range(self.unroll_dim+1):
+                    self.predictions[i+j,] = xk[j]
+                xk = xk[0]
+            else:
+                self.predictions[i,] = xk
 
             if self.pars['evaluate']:
-                
-                # xk = self.inverse_transform(xk, self.scalers['HR'])
-                
                 xk_true = np.expand_dims(self.test_data[i,], axis=0)
-                # xk_true = self.inverse_transform(xk_true, self.scalers['HR'])
-                # xk_LR = self.inverse_transform(xk_LR, self.scalers['LR'])
-
                 error += (np.sum(np.square(xk - xk_true)))
-                base += (np.sum(np.square(xk_LR - xk_true)))
+                base += (np.sum(np.square(xk_LR[0][:,0,] - xk_true)))
                 values = [('error', np.sqrt(error/(i+1))),
                           ('base', np.sqrt(base/(i+1)))]
 
@@ -565,12 +845,16 @@ class CustomValidation(keras.callbacks.Callback):
             else:
                 pb_i.add(1)
 
+            xk = np.expand_dims(xk, axis=1)
+            xk_lb = np.concatenate([xk, xk_lb], axis=1)\
+                [:,:self.lookback+1,]
+
+
         if self.pars['evaluate']:
             self.plotmachine.plot_prediction_error(self.test_data,
                                                    self.predictions,
                                                    self.test_data_ft,
-                                                   f'epoch_{epoch}',
-                                                   scalers=self.scalers)
+                                                   f'epoch_{epoch}')
 
             self.final_error = np.sqrt(error/(i+1))
             self.final_base = np.sqrt(base/(i+1))

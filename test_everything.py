@@ -1,20 +1,23 @@
 from importlib import reload
+from datetime import datetime
+
+import pytest
+import keras
+import glob
+import os
 
 import ae_experiment
 reload(ae_experiment)
 from ae_experiment import AE_Experiment
 
-import pytest
-import keras
-
 # set a seed
 keras.utils.set_random_seed(123)
 
+exp_name = 'test_everything'
+
 def test_short_run():
     exp = AE_Experiment(
-        exp_name='test_suite',
-        tuning_config='default',
-        detide=False,
+        exp_name=exp_name,
         compute_data=False,
         coarsening_method='gaussian_filter',
         sigma=[1,1.5,1.5],
@@ -38,24 +41,24 @@ def test_short_run():
         'num_filters_last' : 112,
         'batch_size' : 4,
         'RNN_model' : 'RNN',
-        'RNN_dim' : 8,
+        'latent_space_dim' : 8,
         'num_feedthrough_filters' : 112,
         'num_feedthrough_layers' : 1,
         'num_output_layers' : 1,
         'l2_lambda' : 0.0,
         'learning_rate' : 0.002,
-    }    
+    }
 
     exp.hyper_params.update(test_pars)
     err = exp.build_and_run_model()
     assert err < 30
 
+    cleanup()
+
 def test_save_load():
 
     exp = AE_Experiment(
-        exp_name='test_suite',
-        tuning_config='default',
-        detide=False,
+        exp_name=exp_name,
         compute_data=False,
         coarsening_method='gaussian_filter',
         sigma=[1,1.5,1.5],
@@ -79,7 +82,7 @@ def test_save_load():
         'num_filters_last' : 112,
         'batch_size' : 4,
         'RNN_model' : 'RNN',
-        'RNN_dim' : 8,
+        'latent_space_dim' : 8,
         'num_feedthrough_filters' : 112,
         'num_feedthrough_layers' : 1,
         'num_output_layers' : 1,
@@ -123,6 +126,24 @@ def test_save_load():
     err = exp.build_and_run_model()
     assert err < 30
 
+def cleanup():
+    print('cleanup:')
+
+    today = datetime.now().strftime('%Y%m%d')
+
+    files = []
+    for ext in ['.dill', '.keras']:
+        files.extend(
+            glob.glob(os.path.join(f'experiments/{exp_name}', "**", f"*{ext}"),
+                      recursive=True)
+        )
+
+    for dfile in files:
+        if today in dfile:
+            print(f'deleting {dfile}')
+            os.remove(dfile)
+
+
 if __name__=="__main__":
     test_short_run()
-    # test_save_load()
+    test_save_load()

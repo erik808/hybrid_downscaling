@@ -108,8 +108,6 @@ def test_save_load():
     exp = AE_Experiment(
         existing_model=model,
         exp_name=exp_name,
-        tuning_config='default',
-        detide=False,
         compute_data=False,
         coarsening_method='gaussian_filter',
         sigma=[1,1.5,1.5],

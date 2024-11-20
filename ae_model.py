@@ -69,21 +69,6 @@ class AutoEncoder(keras_tuner.HyperModel):
         self.N_lb = self.lookback + 1 # lookback dimension
 
 
-    def summary(self):
-
-        if self.needs_building:
-            print('Model needs building, no summary available.')
-            return
-
-        print(f'dropout_rate: {self.dropout_rate}')
-        print(f'noise_stddev: {self.noise_stddev}')
-        print(f'num_filters: {self.num_filters}')
-        print(f'num_filters_last: {self.num_filters_last}')
-        print(f'kernel_size: {self.kernel_size}')
-        print(f'num_resblocks: {self.num_resblocks}')
-        print(f'resblock_ctr: {self.resblock_ctr}')
-
-
     def build_model(self):
 
         masking_layer = Masking(self.mask, name="masking_layer")
@@ -100,16 +85,19 @@ class AutoEncoder(keras_tuner.HyperModel):
             ft_inputs = [ops.squeeze(t,axis=1) \
                          for t in ops.split(feedthrough, self.N_lb, axis=1)]
 
-        # Encoder ------------------------------------------------------
-        self.encoding_layers = Encoder(
-            num_conv_blocks=self.num_conv_blocks,
-            conv_layers_per_block=self.conv_layers_per_block,
-            num_filters=self.num_filters,
-            num_filters_last=self.num_filters_last,
-            kernel_size=self.kernel_size,
-            activation=self.activation_encoder,
-            regularizer=self.regularizer,
-            downsample_stride=self.downsample_stride)
+        # Encoder ---------------------
+        encoder_dict = self.create_param_dict([
+            'num_conv_blocks',
+            'conv_layers_per_block',
+            'num_filters',
+            'num_filters_last',
+            'kernel_size',
+            'activation_encoder',
+            'regularizer',
+            'downsample_stride',
+        ])
+
+        self.encoding_layers = Encoder(**encoder_dict)
 
         # split inputs
         state_inputs = [ops.squeeze(t,axis=1) \
@@ -157,23 +145,30 @@ class AutoEncoder(keras_tuner.HyperModel):
                                                            encoded_fts])
 
         # Run with the RNN
-        RNN_output = RNNBlock(
-            model=self.RNN_model,
-            activation=self.activation_encoder,
-            latent_space_dim=self.latent_space_dim,
-            filters=self.num_filters_last)\
-            (encoded_outputs)
+        RNN_dict = self.create_param_dict([
+            'RNN_model',
+            'activation_encoder',
+            'latent_space_dim',
+            'num_filters_last'
+            ])
+
+        RNN_output = RNNBlock(**RNN_dict)(encoded_outputs)
 
         # Decoder blocks
+        decoder_dict = self.create_param_dict([
+            'num_conv_blocks',
+            'conv_layers_per_block',
+            'num_filters',
+            'num_filters_last',
+            'kernel_size',
+            'activation_decoder',
+            'regularizer'
+            ])
+
         self.decoding_layers = Decoder(
-            num_conv_blocks=self.num_conv_blocks,
-            conv_layers_per_block=self.conv_layers_per_block,
-            num_filters=self.num_filters,
-            num_filters_last=self.num_filters_last,
-            kernel_size=self.kernel_size,
-            activation=self.activation_encoder,
-            regularizer=self.regularizer,
-            upsampling_size=self.downsample_stride)
+            **decoder_dict,
+            upsampling_size=self.downsample_stride
+        )
 
         decoded_RNN = self.decoding_layers(RNN_output)
         decoded_AE_only = self.decoding_layers(encoded_outputs_0)
@@ -272,6 +267,11 @@ class AutoEncoder(keras_tuner.HyperModel):
         return self.autoencoder, self.encoder, self.decoder
 
 
+    def create_param_dict(self, params):
+        return \
+            {key : self.__dict__[key] for key in params}
+
+
     def combine_feedthrough(self, inputs, feedthrough,
                             feedthrough_type='multiply',
                             feedthrough_block=None):
@@ -313,6 +313,23 @@ class AutoEncoder(keras_tuner.HyperModel):
         if model is None:
             model = self
         model.summary()
+
+
+
+    def summary(self):
+
+        if self.needs_building:
+            print('Model needs building, no summary available.')
+            return
+
+        print(f'dropout_rate: {self.dropout_rate}')
+        print(f'noise_stddev: {self.noise_stddev}')
+        print(f'num_filters: {self.num_filters}')
+        print(f'num_filters_last: {self.num_filters_last}')
+        print(f'kernel_size: {self.kernel_size}')
+        print(f'num_resblocks: {self.num_resblocks}')
+        print(f'resblock_ctr: {self.resblock_ctr}')
+
 
     def create_unrolled_model(
             self,
@@ -382,10 +399,7 @@ class AutoEncoder(keras_tuner.HyperModel):
 
 
 class Encoder():
-    """Encoder. For now hardcoded to contain three convolutional
-    blocks. Hardcoding can be dealt with later.
-
-    """
+    """ Encoder  """
 
     def __init__(self,
                  num_conv_blocks=3,
@@ -393,7 +407,7 @@ class Encoder():
                  num_filters_last=8,
                  conv_layers_per_block=2,
                  kernel_size=(3,3),
-                 activation='relu',
+                 activation_encoder='relu',
                  regularizer=regularizers.L2(1e-5),
                  downsample_stride=(2,2)
                  ):
@@ -408,7 +422,7 @@ class Encoder():
             cb = ConvBlock(conv_layers_per_block=conv_layers_per_block,
                            num_filters=nf,
                            kernel_size=kernel_size,
-                           activation=activation,
+                           activation=activation_encoder,
                            downsample_stride=downsample_stride,
                            regularizer=regularizer,
                            name=f'conv_block_{i+1}')
@@ -436,7 +450,7 @@ class Decoder():
                  num_filters_last=8,
                  conv_layers_per_block=2,
                  kernel_size=(3,3),
-                 activation='relu',
+                 activation_decoder='relu',
                  regularizer=regularizers.L2(1e-5),
                  upsampling_size=(2,2),
                  ):
@@ -451,7 +465,7 @@ class Decoder():
             cb = ConvBlock(conv_layers_per_block=conv_layers_per_block,
                            num_filters=nf,
                            kernel_size=kernel_size,
-                           activation=activation,
+                           activation=activation_decoder,
                            regularizer=regularizer,
                            name=f'dec_conv_block_{i+1}')
             self.block_list.append(cb)
@@ -551,17 +565,17 @@ class ConvBlock():
 class RNNBlock():
 
     def __init__(self,
-                 model='RNN',
-                 activation='relu',
+                 RNN_model='RNN',
+                 activation_encoder='relu',
                  latent_space_dim=32,
                  unroll=False,
-                 filters=32,
+                 num_filters_last=32,
                  kernel_size=(3,3)):
 
-        self.model = model
-        self.activation = activation
+        self.model = RNN_model
+        self.activation = activation_encoder
         self.latent_space_dim = latent_space_dim
-        self.filters = filters
+        self.filters = num_filters_last
         self.kernel_size = kernel_size
         self.unroll = unroll
 
@@ -576,6 +590,8 @@ class RNNBlock():
             return self.GRU(inputs)
         elif self.model == 'LSTM':
             return self.LSTM(inputs)
+        elif self.model == 'RNN_var':
+            return self.RNN_var(inputs)
         elif self.model == 'disabled':
             return self.most_recent(inputs)
         else:
@@ -592,30 +608,27 @@ class RNNBlock():
         return lstm_output
 
 
-    def dense_downsample(self, inputs):
+    def dense_downsample(
+            self,
+            inputs
+    ):
         x = inputs
         self.Nlb, self.Nj, self.Ni, self.Nc = inputs.shape[1:]
         self.N_feats_in = self.Nj * self.Ni * self.Nc
         self.N_feats_out = self.Nj * self.Ni * self.filters
         x = layers.Reshape((self.Nlb, self.N_feats_in))(x)
 
-        # x = layers.Dense(self.latent_space_dim,
-        #                  activation = self.activation)\
-        #                  (x)
         x = layers.Dense(self.latent_space_dim,
                          activation = self.activation)\
                          (x)
-        # x = layers.BatchNormalization(axis=-1)(x)
         x = ops.flip(x, axis=1)
         return x
 
-    def dense_upsample(self, inputs):
-
+    def dense_upsample(
+            self,
+            inputs
+    ):
         x = inputs
-        # x = layers.Dense(self.latent_space_dim,
-        #                  activation = self.activation)\
-        #                  (x)
-
         x = layers.Dense(self.N_feats_out,
                          activation = self.activation)\
                          (x)
@@ -628,6 +641,15 @@ class RNNBlock():
         RNN_input = self.dense_downsample(inputs)
         RNN_output = layers.SimpleRNN(self.latent_space_dim)(RNN_input)
         return self.dense_upsample(RNN_output)
+
+    def RNN_var(self, inputs):
+
+        latent_mean = self.dense_downsample(inputs)
+        latent_log_var = self.dense_downsample(inputs)
+        sampled = Sampling()(latent_mean, latent_log_var)
+
+        # latent_output = layers.SimpleRNN(self.latent_space_dim)(sampled)
+        return self.dense_upsample(sampled[:,0,])
 
     def GRU(self, inputs):
         GRU_input = self.dense_downsample(inputs)
@@ -654,6 +676,26 @@ class RNNBlock():
         # return most recent time
         return inputs_splitted[0]
 
+
+
+class Sampling(layers.Layer):
+    """
+    Sampling layer
+    """
+
+    def __init__(self, **kwargs):
+        super().__init__(**kwargs)
+        # optional seed here
+
+    def call(self, mean, log_var):
+        btch_dim = ops.shape(mean)[0]
+        time_dim = ops.shape(mean)[1]
+        feat_dim = ops.shape(mean)[2]
+        eps = keras.random.normal(
+            shape=(btch_dim, time_dim, feat_dim)
+            )
+        out = mean + ops.exp(0.5*log_var)*eps
+        return out
 
 
 # custom masking class

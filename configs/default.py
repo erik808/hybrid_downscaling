@@ -8,7 +8,7 @@ hyper_params = {
     'history' : 'all',
     'epochs' : 5,
     'batch_size' : 4,
-    'lookback' : 2,
+    'lookback' : 0,
     'unroll_dim' : 0,
     'num_conv_blocks' : 1,
     'conv_layers_per_block' : 1,
@@ -21,7 +21,7 @@ hyper_params = {
     'optimizer' : 'adam',
     'L2_lambda' : 0.0,
     'kernel_size' : (3,3),
-    'RNN_model' : 'RNN',
+    'RNN_model' : 'RNN_var',
     'latent_space_dim' : 8,
     'learning_rate' : 0.002,
     'num_filters' : 32,
@@ -49,7 +49,7 @@ __lookback_study__ = {
 tuning_config_dict['lookback_study'] = __lookback_study__
 
 
-__default__ = {
+__everything__ = {
     'epochs' : {
         'type' : 'int',
         'args' : {
@@ -191,6 +191,21 @@ __default__ = {
 }
 
 
+
+__latent_space_dim__ = {
+    'latent_space_dim' : {
+        'type' : 'int',
+        'args' : {
+            'name' : 'latent_space_dim',
+            'low'  : 1,
+            'high' : 10000,
+        },
+        'search_space' : [2,4,8,16],
+    },
+}
+
+
+
 __regularization__ = {
     'L2_lambda' : {
         'type' : 'float',
@@ -205,5 +220,6 @@ __regularization__ = {
 
 
 # combine into big dict
-tuning_config_dict['default'] = __default__
+tuning_config_dict['everything'] = __everything__
+tuning_config_dict['latent_space_dim'] = __latent_space_dim__
 tuning_config_dict['regularization'] = __regularization__

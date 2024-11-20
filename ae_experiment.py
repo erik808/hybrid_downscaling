@@ -137,7 +137,6 @@ class AE_Experiment():
         rich.print('tuning config dict:', self.tuning_config_dict)
 
 
-
     def run_optuna_study(self):
         self.init_log()
 
@@ -639,8 +638,8 @@ class AE_Experiment():
 if __name__=="__main__":
 
     exp = AE_Experiment(
-        exp_name='lookback_study',
-        tuning_config='lookback_study',
+        exp_name='variational',
+        tuning_config='latent_space_dim',
         detide=False,
         compute_data=False,
         coarsening_method='gaussian_filter',

@@ -14,7 +14,6 @@ from ae_experiment import AE_Experiment
 
 # set a seed
 keras.utils.set_random_seed(123)
-
 exp_name = 'test_everything'
 
 @tools.clean_on_end
@@ -33,7 +32,7 @@ def test_short_run():
         'future' : 100,
         'epochs' : 1,
         'unroll_dim' : 0,
-        'lookback' : 1,
+        'lookback' : 0,
         'noise_stddev' : 0.0,
         'dropout_rate' : 0.0,
         'num_conv_blocks' : 1,
@@ -43,7 +42,7 @@ def test_short_run():
         'num_filters' : 32,
         'num_filters_last' : 112,
         'batch_size' : 4,
-        'RNN_model' : 'RNN',
+        'RNN_model' : 'RNN_var',
         'latent_space_dim' : 8,
         'num_feedthrough_filters' : 112,
         'num_feedthrough_layers' : 1,
@@ -131,4 +130,4 @@ def test_save_load():
 
 if __name__=="__main__":
     test_short_run()
-    test_save_load()
+    # test_save_load()

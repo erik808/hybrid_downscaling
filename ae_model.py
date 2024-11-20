@@ -23,7 +23,6 @@ class AutoEncoder(keras_tuner.HyperModel):
         members_dict = {
             'test_vec' : [],
             'mask' : [],
-            'log_file' : 'log',
             'lookback' : 2,
             'learning_rate' : 0.002,
             'optimizer' : 'adam',
@@ -69,7 +68,6 @@ class AutoEncoder(keras_tuner.HyperModel):
         self.N_lat, self.N_lon, self.N_chan = self.test_vec.shape
         self.N_lb = self.lookback + 1 # lookback dimension
 
-        self.log('AutoEncoder\n', 'w')
 
     def summary(self):
 
@@ -311,22 +309,10 @@ class AutoEncoder(keras_tuner.HyperModel):
 
 
 
-    def log(self, msg, mode='a'):
-        original = sys.stdout
-        with open(self.log_file, mode) as f:
-            sys.stdout = f
-            print(msg)
-            sys.stdout = original
-
     def log_model(self, model=None, mode='a'):
         if model is None:
             model = self
-
-        original = sys.stdout
-        with open(self.log_file, mode) as f:
-            sys.stdout = f
-            model.summary()
-            sys.stdout = original
+        model.summary()
 
     def create_unrolled_model(
             self,

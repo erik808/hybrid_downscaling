@@ -76,10 +76,6 @@ class AE_Experiment():
         self.dirs, self.files = \
             self.dm.setup_directories(self.folder_id, self.folder_postfix)
 
-        self.trial_id = None
-        postfix, timestamp = self.create_postfix()
-        sys.stdout = Tee(self.files['log'] + f'{postfix}')
-
         if existing_model == None:
             self.load_existing_model = False
         else:
@@ -107,6 +103,7 @@ class AE_Experiment():
         # -------------------------------------------------------
         self.load_config(config_name='default')
         self.ct=ComputeTool()
+        self.trial_id = None
 
 
     def load_config(self, config_name):
@@ -284,6 +281,7 @@ class AE_Experiment():
 
 
         postfix, timestamp = self.create_postfix()
+        sys.stdout = Tee(self.files['log'] + f'{postfix}')
 
         ae_model_pars = {
             'use_feedthrough'  : use_feedthrough,
@@ -295,7 +293,6 @@ class AE_Experiment():
         ae = AutoEncoder(
             test_vec=self.data['HR'][0,:,:,:],
             mask=self.params['mask'],
-            log_file=self.files['log'] + f'{postfix}',
             **ae_model_pars
         )
 

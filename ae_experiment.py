@@ -63,7 +63,8 @@ class AE_Experiment():
             if self.tuning_config == None else f'-{self.tuning_config}'
 
         # setup new or existing directories
-        self.dm = DataManager(testing_mode=testing_mode)
+        self.testing_mode = testing_mode
+        self.dm = DataManager(testing_mode=self.testing_mode)
         self.dirs, self.files = \
             self.dm.setup_directories(self.folder_id, self.folder_postfix)
 
@@ -137,7 +138,6 @@ class AE_Experiment():
         storage = f'sqlite:///{tuning_dir}/storage.db'
         reload_tuning=True
         timeout=60*60*4 # 6h
-        n_trials=1
 
         self.setup_search_space()
 
@@ -156,7 +156,6 @@ class AE_Experiment():
             )
 
         self.study.optimize(self.objective,
-                            n_trials=n_trials,
                             timeout=timeout)
 
     def objective(self, trial):
@@ -373,7 +372,6 @@ class AE_Experiment():
                                dpi=200, show_layer_activations=False,
                                show_layer_names=True)
 
-
         ae.compiler(unrolled_model)
         self.hist = unrolled_model.fit(x=datagen_train,
                                        epochs=epochs,
@@ -385,11 +383,12 @@ class AE_Experiment():
         # SAVING -----------------------------------------------
         # save model and metadata
         mdata_file = f'{mdir}/mdata{postfix}.dill'
-        container = {'hist' : self.hist,
-                     'epochs' : epochs,
-                     'batch_size' : batch_size,
-                     'shuffle' : shuffle
-                     }
+        container = {
+            'hist' : self.hist,
+            'epochs' : epochs,
+            'batch_size' : batch_size,
+            'shuffle' : shuffle
+        }
 
         with open(mdata_file, 'wb') as file:
             dill.dump(container, file)

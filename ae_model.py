@@ -156,14 +156,6 @@ class AutoEncoder(keras_tuner.HyperModel):
         lspace_model_output = lspace_model(encoded_outputs)
         lspace_vars = lspace_model.get_lspace_vars()
 
-        # Create encoder
-        self.encoder = \
-            Model(
-                state_input,
-                [lspace_model_output,
-                 lspace_vars],
-                name="encoder")
-
         # Decoder blocks
         decoder_dict = self.create_param_dict([
             'num_conv_blocks',
@@ -236,6 +228,11 @@ class AutoEncoder(keras_tuner.HyperModel):
 
         outputs = [masking_layer(output)]
 
+        # Create encoder
+        self.encoder = Model(
+            inputs=state_input,
+            outputs=[lspace_model_output, lspace_vars],
+            name="encoder")
 
         self.decoder = Model(inputs=inputs_decoder,
                              outputs=outputs,
@@ -284,6 +281,9 @@ class AutoEncoder(keras_tuner.HyperModel):
         #                      name="mean_squared_error")
 
         loss = CustomLoss(losstype='MSE')
+
+        if self.latent_space_model == 'VAE':
+            loss = None
 
         if self.optimizer == 'adam':
             optim = keras.optimizers.Adam(learning_rate=self.learning_rate)
@@ -576,6 +576,8 @@ class LatentSpaceModel():
             return self.GRU(inputs)
         elif self.model == 'LSTM':
             return self.LSTM(inputs)
+        elif self.model == 'VAE':
+            return self.VAE(inputs)
         elif self.model == 'disabled':
             return self.most_recent(inputs)
         else:
@@ -625,18 +627,18 @@ class LatentSpaceModel():
         RNN_input = self.dense_downsample(inputs)
         RNN_output = layers.SimpleRNN(self.latent_space_dim)(RNN_input)
         # store these vars as lspace vars
-        self.lspace_vars = RNN_output
+        self.lspace_vars = [RNN_output]
         return self.dense_upsample(RNN_output)
 
-    def RNN_var(self, inputs):
-
+    def VAE(self, inputs):
         latent_mean = self.dense_downsample(inputs)
         latent_log_var = self.dense_downsample(inputs)
+        self.lspace_vars = [latent_mean[:,0,], latent_log_var[:,0,]]
         sampled = Sampling()(latent_mean,
                              latent_log_var)
 
-        # latent_output = layers.SimpleRNN(self.latent_space_dim)(sampled)
-        return self.dense_upsample(sampled[:,0,])
+        latent_output = layers.SimpleRNN(self.latent_space_dim)(sampled)
+        return self.dense_upsample(latent_output)
 
     def GRU(self, inputs):
         GRU_input = self.dense_downsample(inputs)

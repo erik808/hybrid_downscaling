@@ -244,6 +244,7 @@ class AE_Experiment():
         print(f'  - feedthrough_only: {feedthrough_only}')
 
         self.unroll_dim = self.hyper_params['unroll_dim']
+        self.latent_space_model = self.hyper_params['latent_space_model']
 
         # DATA CONFIG
         self.history = self.hyper_params['history']
@@ -346,10 +347,10 @@ class AE_Experiment():
                                      'lookback' : self.hyper_params['lookback']})
 
         cdir = self.dirs['checkpoints']
-        
+
         model_checkpoint_file = \
             f'{cdir}/autoencoder{self.postfix}.checkpoint.keras'
-        
+
         model_checkpoint_callback = keras.callbacks.ModelCheckpoint(
             filepath=model_checkpoint_file,
             monitor='error',
@@ -359,18 +360,22 @@ class AE_Experiment():
         callbacks = [self.validation_callback,
                      model_checkpoint_callback]
 
-        # Final assembly model -------------------------------
+        # Final assembly -------------------------------------
+        # default model
+        model = autoencoder
+
+        if self.latent_space_model == 'VAE':
+            model = VAE(encoder, decoder)
+            
+
         if self.unroll_dim > 0:
-            autoencoder.summary()
+            model.summary()
             model = ae.create_unrolled_model(autoencoder,
                                              self.unroll_dim)
-        else:
-            model = autoencoder
-            
-        ae.compiler(model)
 
-        model.summary()
-        self.plot_model(model)
+        ae.compiler(model)
+        # model.summary()
+        # self.plot_model(model)
 
         # TRAINING --------------------------------------------
         self.hist = model.fit(x=datagen_train,

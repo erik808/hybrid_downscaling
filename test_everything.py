@@ -42,7 +42,7 @@ def test_short_run():
         'num_filters' : 32,
         'num_filters_last' : 112,
         'batch_size' : 4,
-        'RNN_model' : 'RNN_var',
+        'latent_space_model' : 'RNN',
         'latent_space_dim' : 8,
         'num_feedthrough_filters' : 112,
         'num_feedthrough_layers' : 1,
@@ -83,7 +83,7 @@ def test_save_load():
         'num_filters' : 32,
         'num_filters_last' : 112,
         'batch_size' : 4,
-        'RNN_model' : 'RNN',
+        'latent_space_model' : 'RNN',
         'latent_space_dim' : 8,
         'num_feedthrough_filters' : 112,
         'num_feedthrough_layers' : 1,
@@ -114,14 +114,15 @@ def test_save_load():
         testing_mode=True)
 
     # adjust hyperparameters:
-    test_pars = {'history' : 128,
-                 'future' : 16,
-                 'lookback' : 1,
-                 'conv_layers_per_block' : 1,
-                 'epochs' : 1,
-                 'batch_size' : 4,
-                 'RNN_reduction_factor' : 8}
-
+    test_pars.update({
+        'history' : 128,
+        'future' : 16,
+        'lookback' : 1,
+        'conv_layers_per_block' : 1,
+        'epochs' : 1,
+        'batch_size' : 4,
+        'RNN_reduction_factor' : 8})
+    
     exp.hyper_params.update(test_pars)
     err = exp.build_and_run_model()
     assert err < 30

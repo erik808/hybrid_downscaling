@@ -279,8 +279,8 @@ class AE_Experiment():
                     .reshape(x_test.shape)
 
 
-        postfix, timestamp = self.create_postfix()
-        sys.stdout = Tee(self.files['log'] + f'{postfix}')
+        self.postfix, self.timestamp = self.create_postfix()
+        sys.stdout = Tee(self.files['log'] + f'{self.postfix}')
 
         ae_model_pars = {
             'use_feedthrough'  : use_feedthrough,
@@ -312,7 +312,7 @@ class AE_Experiment():
         autoencoder.summary()
         # save dot and png
         mdir = self.dirs['models']
-        model_png_file = f'{mdir}/autoencoder{postfix}.png'
+        model_png_file = f'{mdir}/autoencoder{self.postfix}.png'
         print(f'see {model_png_file}')
         keras.utils.plot_model(autoencoder, to_file=model_png_file,
                                show_shapes=True, rankdir='TB',
@@ -321,7 +321,7 @@ class AE_Experiment():
 
         print('----------------------------------------------------------')
         print(f'experiment: {self.folder_id}{self.folder_postfix},       ')
-        print(f'model: {postfix}                                         ')
+        print(f'model: {self.postfix}                                    ')
         print('--------------------------------------------------------- ')
 
         tic = time.time()
@@ -355,7 +355,10 @@ class AE_Experiment():
                                      'lookback' : self.hyper_params['lookback']})
 
         cdir = self.dirs['checkpoints']
-        model_checkpoint_file = f'{cdir}/autoencoder{postfix}.checkpoint.keras'
+        
+        model_checkpoint_file = \
+            f'{cdir}/autoencoder{self.postfix}.checkpoint.keras'
+        
         model_checkpoint_callback = keras.callbacks.ModelCheckpoint(
             filepath=model_checkpoint_file,
             monitor='error',
@@ -366,29 +369,26 @@ class AE_Experiment():
                      model_checkpoint_callback]
 
         # TRAINING --------------------------------------------
-        unrolled_model = ae.create_unrolled_model(autoencoder,
-                                                  self.unroll_dim)
-        unrolled_model.summary()
+        if self.unroll_dim > 0:
+            model = ae.create_unrolled_model(autoencoder,
+                                             self.unroll_dim)
+        else:
+            model = autoencoder
 
-        mdir = self.dirs['models']
-        model_png_file = f'{mdir}/unrolled_model{postfix}.png'
-        print(f'see {model_png_file}')
-        keras.utils.plot_model(unrolled_model, to_file=model_png_file,
-                               show_shapes=True, rankdir='TB',
-                               dpi=200, show_layer_activations=False,
-                               show_layer_names=True)
+        model.summary()
+        self.plot_model(model)
 
-        ae.compiler(unrolled_model)
-        self.hist = unrolled_model.fit(x=datagen_train,
-                                       epochs=epochs,
-                                       callbacks=callbacks)
+        ae.compiler(model)
+        self.hist = model.fit(x=datagen_train,
+                              epochs=epochs,
+                              callbacks=callbacks)
 
         toc = time.time()
         print(f'total training time: {(toc-tic)/60}m')
 
         # SAVING -----------------------------------------------
         # save model and metadata
-        mdata_file = f'{mdir}/mdata{postfix}.dill'
+        mdata_file = f'{mdir}/mdata{self.postfix}.dill'
         container = {
             'hist' : self.hist,
             'epochs' : epochs,
@@ -400,9 +400,9 @@ class AE_Experiment():
             dill.dump(container, file)
 
         # save models
-        self.save_path_autoencoder = f'{mdir}/autoencoder{postfix}.keras'
-        self.save_path_encoder     = f'{mdir}/encoder{postfix}.keras'
-        self.save_path_decoder     = f'{mdir}/decoder{postfix}.keras'
+        self.save_path_autoencoder = f'{mdir}/autoencoder{self.postfix}.keras'
+        self.save_path_encoder     = f'{mdir}/encoder{self.postfix}.keras'
+        self.save_path_decoder     = f'{mdir}/decoder{self.postfix}.keras'
 
         print(f'saving autoencoder to {self.save_path_autoencoder}')
         print(f'saving encoder to {self.save_path_encoder}')
@@ -416,6 +416,15 @@ class AE_Experiment():
 
         print(f'final error: {self.validation_callback.final_error}')
         return self.validation_callback.final_error
+
+    def plot_model(self, model):
+        mdir = self.dirs['models']
+        model_png_file = f'{mdir}/model{self.postfix}.png'
+        print(f'see {model_png_file}')
+        keras.utils.plot_model(model, to_file=model_png_file,
+                               show_shapes=True, rankdir='TB',
+                               dpi=200, show_layer_activations=False,
+                               show_layer_names=True)
 
 
     def setup_ranges(self, params):

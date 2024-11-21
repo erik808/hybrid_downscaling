@@ -48,6 +48,7 @@ class AutoEncoder(keras_tuner.HyperModel):
             'latent_space_dim' : 8,
         }
 
+
         # set actual class members
         members_dict.update(kwargs)
         for key, value in members_dict.items():
@@ -66,6 +67,7 @@ class AutoEncoder(keras_tuner.HyperModel):
         # infer dimensions
         self.N_lat, self.N_lon, self.N_chan = self.test_vec.shape
         self.N_lb = self.lookback + 1 # lookback dimension
+        self.loss_weights = None
 
 
     def build_model(self):
@@ -142,12 +144,14 @@ class AutoEncoder(keras_tuner.HyperModel):
         #                                                    encoded_fts])
 
         # Create and call model in the latent space
-        lspacemod_dict = self.create_param_dict([
-            'latent_space_model',
-            'activation_encoder',
-            'latent_space_dim',
-            'num_filters_last'
+        lspacemod_dict = \
+            self.create_param_dict([
+                'latent_space_model',
+                'activation_encoder',
+                'latent_space_dim',
+                'num_filters_last'
             ])
+
         lspace_model = LatentSpaceModel(**lspacemod_dict)
         lspace_model_output = lspace_model(encoded_outputs)
         lspace_vars = lspace_model.get_lspace_vars()
@@ -291,12 +295,10 @@ class AutoEncoder(keras_tuner.HyperModel):
                       loss_weights=self.loss_weights)
 
 
-
     def log_model(self, model=None, mode='a'):
         if model is None:
             model = self
         model.summary()
-
 
 
     def summary(self):

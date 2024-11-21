@@ -21,7 +21,7 @@ hyper_params = {
     'optimizer' : 'adam',
     'L2_lambda' : 0.0,
     'kernel_size' : (3,3),
-    'RNN_model' : 'RNN_var',
+    'latent_space_model' : 'RNN',
     'latent_space_dim' : 8,
     'learning_rate' : 0.002,
     'num_filters' : 32,
@@ -30,8 +30,8 @@ hyper_params = {
 }
 
 
-
-# dict for use with optuna
+# dict for use with optuna. keys represent different grid search or
+# other parameter tuning experiments
 tuning_config_dict = {}
 
 __lookback_study__ = {

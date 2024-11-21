@@ -30,7 +30,6 @@ class AutoEncoder(keras_tuner.HyperModel):
             'use_feedthrough' : True,
             'feedthrough_only' : False,
             'feedthrough_type' : 'multiply',
-            'multihead_output' : False,
             'noise_stddev' : 0.0,
             'dropout_rate' : 0.0,
             'activation_encoder' : 'leaky_relu',
@@ -45,7 +44,7 @@ class AutoEncoder(keras_tuner.HyperModel):
             'num_filters_last' : 112,
             'downsample_stride' : (2,2),
             'L2_lambda' : 0.0,
-            'RNN_model' : 'RNN',
+            'latent_space_model' : 'RNN',
             'latent_space_dim' : 8,
         }
 
@@ -142,22 +141,24 @@ class AutoEncoder(keras_tuner.HyperModel):
         #     encoded_outputs = layers.Concatenate(axis=-1)([encoded_outputs,
         #                                                    encoded_fts])
 
-        
-        self.encoder = \
-            Model(state_input, encoded_outputs, name="encoder")
-        
-        # Run with a latent space model
+        # Create and call model in the latent space
         lspacemod_dict = self.create_param_dict([
-            'RNN_model',
+            'latent_space_model',
             'activation_encoder',
             'latent_space_dim',
             'num_filters_last'
             ])
-
-
         lspace_model = LatentSpaceModel(**lspacemod_dict)
-        model_output = lspace_model(encoded_outputs)
+        lspace_model_output = lspace_model(encoded_outputs)
         lspace_vars = lspace_model.get_lspace_vars()
+
+        # Create encoder
+        self.encoder = \
+            Model(
+                state_input,
+                [lspace_model_output,
+                 lspace_vars],
+                name="encoder")
 
         # Decoder blocks
         decoder_dict = self.create_param_dict([
@@ -175,12 +176,12 @@ class AutoEncoder(keras_tuner.HyperModel):
             upsampling_size=self.downsample_stride
         )
 
-        decoded_RNN = self.decoding_layers(RNN_output)
+        decoded_state = self.decoding_layers(lspace_model_output)
         decoded_AE_only = self.decoding_layers(encoded_outputs_0)
 
         ds_filters = self.num_feedthrough_filters\
-            if self.feedthrough_only else decoded_RNN.shape[-1]
-        
+            if self.feedthrough_only else decoded_state.shape[-1]
+
         feedthrough_block = ConvBlock(
             self.num_feedthrough_layers,
             self.num_feedthrough_filters,
@@ -211,52 +212,29 @@ class AutoEncoder(keras_tuner.HyperModel):
             output = feedthrough_block(ft_inputs[0])
             output = output_block(output)
             inputs_full_model=[feedthrough]
+            inputs_decoder=[feedthrough]
 
         elif self.use_feedthrough:
             output = self.combine_feedthrough(
-                decoded_RNN,
+                decoded_state,
                 ft_inputs[0],
                 self.feedthrough_type,
                 feedthrough_block)
 
             output = output_block(output)
             inputs_full_model=[state_input, feedthrough]
+            inputs_decoder=[lspace_model_output, feedthrough]
 
         else:
-            output = output_block(decoded_RNN)
+            output = output_block(decoded_state)
             inputs_full_model=[state_input]
+            inputs_decoder=[lspace_model_output]
 
-        # multiheaded output
-        if ( self.multihead_output and
-             not self.feedthrough_only ):
+        outputs = [masking_layer(output)]
 
-            if self.use_feedthrough:
-                decoded_AE_only = self.combine_feedthrough(
-                    decoded_AE_only,
-                    ft_inputs[0],
-                    self.feedthrough_type,
-                    feedthrough_block)
-
-            #share output layer
-            output_AE_only = output_block(decoded_AE_only)
-
-            # different output layer
-            # output_AE_only = output_layer_AE_only(decoded_AE_only)
-            outputs = [masking_layer(output),
-                       masking_layer(output_AE_only),
-                       RNN_output]
-            self.loss_weights = [1.0, 0.0, 0.0]
-        else: # normal output
-
-            outputs = [masking_layer(output)]
-            self.loss_weights = None
-
-        # Construct models
-        inputs_decoder=[RNN_output]
-        outputs_decoder=[decoded_RNN]
 
         self.decoder = Model(inputs=inputs_decoder,
-                             outputs=outputs_decoder,
+                             outputs=outputs,
                              name="decoder")
 
         self.autoencoder = Model(inputs=inputs_full_model,
@@ -570,19 +548,20 @@ class ConvBlock():
 class LatentSpaceModel():
 
     def __init__(self,
-                 RNN_model='RNN',
+                 latent_space_model='RNN',
                  activation_encoder='relu',
                  latent_space_dim=32,
                  unroll=False,
                  num_filters_last=32,
                  kernel_size=(3,3)):
 
-        self.model = RNN_model
+        self.model = latent_space_model
         self.activation = activation_encoder
         self.latent_space_dim = latent_space_dim
         self.filters = num_filters_last
         self.kernel_size = kernel_size
         self.unroll = unroll
+        self.lspace_vars = None
 
     def __call__(self, inputs):
         if self.model == 'RNN':
@@ -643,9 +622,11 @@ class LatentSpaceModel():
     def RNN(self, inputs):
         RNN_input = self.dense_downsample(inputs)
         RNN_output = layers.SimpleRNN(self.latent_space_dim)(RNN_input)
+        # store these vars as lspace vars
+        self.lspace_vars = RNN_output
         return self.dense_upsample(RNN_output)
 
-    def RNN_var(self, inputs): 
+    def RNN_var(self, inputs):
 
         latent_mean = self.dense_downsample(inputs)
         latent_log_var = self.dense_downsample(inputs)
@@ -680,6 +661,11 @@ class LatentSpaceModel():
         # return most recent time
         return inputs_splitted[0]
 
+    def get_lspace_vars(self):
+        if self.lspace_vars is None:
+            return []
+        else:
+            return self.lspace_vars
 
 
 class Sampling(layers.Layer):

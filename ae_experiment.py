@@ -35,6 +35,10 @@ from ae_model import AutoEncoder
 from ae_model import CustomValidation
 from plot_utils import PlotMachine
 
+import vae
+reload(vae)
+from vae import VAE
+
 import compute_tool
 reload(compute_tool)
 from compute_tool import ComputeTool
@@ -306,19 +310,6 @@ class AE_Experiment():
 
             autoencoder, encoder, decoder =  ae.build_model()
 
-        # encoder.trainable=False
-        # decoder.trainable=False
-        # print a summary
-        autoencoder.summary()
-        # save dot and png
-        mdir = self.dirs['models']
-        model_png_file = f'{mdir}/autoencoder{self.postfix}.png'
-        print(f'see {model_png_file}')
-        keras.utils.plot_model(autoencoder, to_file=model_png_file,
-                               show_shapes=True, rankdir='TB',
-                               dpi=200, show_layer_activations=False,
-                               show_layer_names=True)
-
         print('----------------------------------------------------------')
         print(f'experiment: {self.folder_id}{self.folder_postfix},       ')
         print(f'model: {self.postfix}                                    ')
@@ -368,17 +359,20 @@ class AE_Experiment():
         callbacks = [self.validation_callback,
                      model_checkpoint_callback]
 
-        # TRAINING --------------------------------------------
+        # Final assembly model -------------------------------
         if self.unroll_dim > 0:
+            autoencoder.summary()
             model = ae.create_unrolled_model(autoencoder,
                                              self.unroll_dim)
         else:
             model = autoencoder
+            
+        ae.compiler(model)
 
         model.summary()
         self.plot_model(model)
 
-        ae.compiler(model)
+        # TRAINING --------------------------------------------
         self.hist = model.fit(x=datagen_train,
                               epochs=epochs,
                               callbacks=callbacks)
@@ -388,6 +382,7 @@ class AE_Experiment():
 
         # SAVING -----------------------------------------------
         # save model and metadata
+        mdir = self.dirs['models']
         mdata_file = f'{mdir}/mdata{self.postfix}.dill'
         container = {
             'hist' : self.hist,

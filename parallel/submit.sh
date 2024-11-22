@@ -3,7 +3,7 @@
 #SBATCH -t 04:00:00
 #SBATCH -J tuning
 #SBATCH -N 1
-#SBATCH -n 4
+#SBATCH -n 8
 #SBATCH --cpus-per-task 4
 #SBATCH --mem 36G
 #SBATCH --qos low

@@ -73,7 +73,7 @@ def test_save_load():
         'future' : 100,
         'epochs' : 2,
         'unroll_dim' : 0,
-        'lookback' : 5,
+        'lookback' : 0,
         'noise_stddev' : 0.0,
         'dropout_rate' : 0.0,
         'num_conv_blocks' : 1,
@@ -95,7 +95,6 @@ def test_save_load():
     exp.hyper_params.update(test_pars)
 
     err = exp.build_and_run_model()
-    # assert err < 30
 
     modelpath = exp.save_path_autoencoder.split('/autoencoder_')
     modelfolder = modelpath[0]

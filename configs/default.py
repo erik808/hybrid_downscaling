@@ -7,10 +7,10 @@ import numpy as np
 hyper_params = {
     'history' : 'all',
     'future' : 400,
-    'epochs' : 5,
+    'epochs' : 10,
     'batch_size' : 4,
     'unroll_dim' : 0,
-    'lookback' : 0,
+    'lookback' : 3,
     'noise_stddev' : 0.0,
     'dropout_rate' : 0.0,
     'num_conv_blocks' : 1,
@@ -162,7 +162,6 @@ __everything__ = {
 }
 
 
-
 __latent_space_dim__ = {
     'latent_space_dim' : {
         'type' : 'int',
@@ -200,6 +199,27 @@ __latent_space_dim__ = {
         },
         'search_space' : ['VAE+RNN'],
     },
+    
+    'num_output_layers' : {
+        'type' : 'int',
+        'args' : {
+            'name' : 'num_output_layers',
+            'low'  : 1,
+            'high' : 5,
+        },
+        'search_space' : [1],
+    },
+    'num_feedthrough_layers' : {
+        'type' : 'int',
+        'args' : {
+            'name' : 'num_feedthrough_layers',
+            'low'  : 1,
+            'high' : 100,
+        },
+        'search_space' : [1],
+    },
+
+    
 }
 
 

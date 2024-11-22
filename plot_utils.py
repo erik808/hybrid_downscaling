@@ -117,17 +117,16 @@ class PlotMachine():
             plt.close('all')
 
         plt.subplot(1,2,1)
-        plt.semilogy(hist.history['loss'],'.-',
-                     label=f'loss {add}')
+        for key, value in hist.history.items():
+            if key == 'error' or key == 'base':
+                continue
+            plt.semilogy(value,'.-',
+                         label=f'{key} {add}')
 
         plt.grid()
         plt.legend()
         plt.gca().set_xlabel('epoch')
 
-        if 'val_loss' in hist.history:
-            plt.subplot(1,2,1)
-            plt.semilogy(hist.history['val_loss'],'.-',
-                         label=f'validation loss {add}')
 
         plt.subplot(1,2,2)            
         if 'error' in hist.history:

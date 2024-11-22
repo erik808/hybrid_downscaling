@@ -23,7 +23,7 @@ class VAE(keras.Model):
             keras.metrics.Mean(name="KL_loss")
         self.rnn_loss_tracker = \
             keras.metrics.Mean(name="rnn_loss")
-
+        
 
     @property
     def metrics(self):
@@ -75,15 +75,17 @@ class VAE(keras.Model):
             y_mean = y_true[2]
             y_log_var = y_true[3]
 
-            rnn_loss = \
-                ops.mean( ops.square(y_mean-z_mean) +
-                          ops.square(y_log_var-z_log_var) )
+            rnn_loss_mean = \
+                ops.mean( ops.square(y_mean-z_mean) )
+            rnn_loss_var = \
+                ops.mean( ops.square(y_log_var-z_log_var) )
+            rnn_loss = rnn_loss_mean + rnn_loss_var
+
             self.rnn_loss_tracker.update_state(rnn_loss)
             rnn_dict = {'rnn_loss' : self.rnn_loss_tracker.result()}
         else:
             rnn_loss = 0
             rnn_dict = {}
-
 
         reconstruction_loss = \
             ops.mean(ops.square(y[0]-y_pred))
@@ -94,10 +96,10 @@ class VAE(keras.Model):
 
 
         if RNN_mode:
-            total_loss = reconstruction_loss + kl_loss + rnn_loss
+            # total_loss = reconstruction_loss + kl_loss + rnn_loss
+            total_loss = reconstruction_loss + rnn_loss
         else:
             total_loss = reconstruction_loss + kl_loss
-
 
         total_loss.backward()
 
@@ -110,6 +112,7 @@ class VAE(keras.Model):
         self.total_loss_tracker.update_state(total_loss)
         self.reconstruction_loss_tracker.update_state(reconstruction_loss)
         self.kl_loss_tracker.update_state(kl_loss)
+
         out_dict =  {
             'loss' : self.total_loss_tracker.result(),
             'reconstr_loss' : self.reconstruction_loss_tracker.result(),

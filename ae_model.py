@@ -656,13 +656,12 @@ class LatentSpaceModel():
             
             sampled = Sampling()(rnn_mean,
                                  rnn_log_var)
-            out = self.dense_upsample(sampled)
+            #out = self.dense_upsample(sampled)
+            out = self.dense_upsample(rnn_mean)
         else:
             self.lspace_vars = [mean[:,-1,], log_var[:,-1,]]
-            sampled = Sampling()(mean,
-                                 log_var)
-            out = self.dense_upsample(sampled[:,0,])
-
+            sampled = Sampling()(mean[:,-1,], log_var[:,-1,])
+            out = self.dense_upsample(sampled)
         return out
 
     def GRU(self, inputs):

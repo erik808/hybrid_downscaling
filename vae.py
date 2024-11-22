@@ -1,4 +1,5 @@
 import keras
+from keras import ops
 import torch
 
 
@@ -8,18 +9,20 @@ class VAE(keras.Model):
             self,
             encoder,
             decoder,
+            model='VAE',
             **kwargs):
         super().__init__(**kwargs)
         self.encoder = encoder
         self.decoder = decoder
+        self.model = model
         self.total_loss_tracker = \
             keras.metrics.Mean(name="total_loss")
         self.reconstruction_loss_tracker = \
             keras.metrics.Mean(name="reconstruction_loss")
         self.kl_loss_tracker = \
-            keras.metrics.Mean(name="kl_loss")
-        self.loss_fn = \
-            keras.losses.MeanSquaredError()
+            keras.metrics.Mean(name="KL_loss")
+        self.rnn_loss_tracker = \
+            keras.metrics.Mean(name="rnn_loss")
 
 
     @property
@@ -42,17 +45,57 @@ class VAE(keras.Model):
             x_state, x_ft = x
         else:
             x_state = x
-            
+
         self.zero_grad()
 
         # Forward pass
         enc_output, z = self.encoder(x_state)
         y_pred = self.decoder([enc_output, x_ft])
+        z_mean = z[0]
+        z_log_var = z[1]
 
-        # Compute loss
-        loss = self.loss_fn(y[0], y_pred)
+        # print(ops.norm(z_mean), end="  ")
+        # print(ops.norm(z_log_var))
 
-        loss.backward()
+        # Compute losses
+        # reconstruction_loss = ops.mean(
+        #         ops.sum(
+        #             keras.losses.binary_crossentropy(y[0], y_pred),
+        #             axis=(1, 2),
+        #         )
+        #     )
+
+        if 'RNN' in self.model:
+            tmp_input = x_state            
+            # only use this part anyway
+            tmp_input[:,0,] = y[0]
+            _, y_true = self.encoder(tmp_input)
+
+            y_mean = y_true[2]
+            y_log_var = y_true[3]
+
+            rnn_loss = \
+                ops.mean( ops.square(y_mean-z_mean) +
+                          ops.square(y_log_var-z_log_var) )
+            self.rnn_loss_tracker.update_state(rnn_loss)
+            rnn_dict = {'rnn_loss' : self.rnn_loss_tracker.result()}
+        else:
+            rnn_loss = 0
+            rnn_dict = {}
+        
+
+        reconstruction_loss = \
+            ops.mean(ops.square(y[0]-y_pred))
+
+        kl_loss = \
+            -0.5 * (1 + z_log_var - ops.square(z_mean) - ops.exp(z_log_var))
+        kl_loss = ops.mean(ops.sum(kl_loss, axis=1))
+
+        total_loss = reconstruction_loss + kl_loss
+        
+        if 'RNN' in self.model: total_loss += rnn_loss
+        
+        total_loss.backward()
 
         trainable_weights = [v for v in self.trainable_weights]
         gradients = [v.value.grad for v in trainable_weights]
@@ -60,10 +103,13 @@ class VAE(keras.Model):
         with torch.no_grad():
             self.optimizer.apply(gradients, trainable_weights)
 
-        self.total_loss_tracker.update_state(loss)
-
-        return {
+        self.total_loss_tracker.update_state(total_loss)
+        self.reconstruction_loss_tracker.update_state(reconstruction_loss)
+        self.kl_loss_tracker.update_state(kl_loss)
+        out_dict =  {
             'loss' : self.total_loss_tracker.result(),
-            # 'reconstruction_loss' : self.reconstruction_loss_tracker.result(),
-            # 'kl_loss' : self.kl_loss_tracker.result(),
-            }
+            'reconstr_loss' : self.reconstruction_loss_tracker.result(),
+            'KL_loss' : self.kl_loss_tracker.result()
+        }
+        if 'RNN' in self.model: out_dict.update(rnn_dict)
+        return out_dict

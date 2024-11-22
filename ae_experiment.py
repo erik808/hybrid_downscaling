@@ -364,8 +364,12 @@ class AE_Experiment():
         # default model
         model = autoencoder
 
-        if self.latent_space_model == 'VAE':
-            model = VAE(encoder, decoder)
+        if 'VAE' in self.latent_space_model:
+            model = VAE(
+                encoder,
+                decoder,
+                model=self.latent_space_model
+            )
             
 
         if self.unroll_dim > 0:
@@ -647,7 +651,7 @@ class AE_Experiment():
 if __name__=="__main__":
 
     exp = AE_Experiment(
-        exp_name='variational',
+        exp_name='vae_tests',
         tuning_config='latent_space_dim',
         detide=False,
         compute_data=False,

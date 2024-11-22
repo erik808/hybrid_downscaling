@@ -578,6 +578,9 @@ class LatentSpaceModel():
             return self.LSTM(inputs)
         elif self.model == 'VAE':
             return self.VAE(inputs)
+        elif self.model == 'VAE+RNN':
+            return self.VAE(inputs,
+                            latent_RNN=True)
         elif self.model == 'disabled':
             return self.most_recent(inputs)
         else:
@@ -596,28 +599,34 @@ class LatentSpaceModel():
 
     def dense_downsample(
             self,
-            inputs
+            inputs,
+            activation='class_default',
     ):
-        x = inputs
+        activ = self.activation if activation == 'class_default' \
+            else activation
+
         self.Nlb, self.Nj, self.Ni, self.Nc = inputs.shape[1:]
         self.N_feats_in = self.Nj * self.Ni * self.Nc
         self.N_feats_out = self.Nj * self.Ni * self.filters
-        x = layers.Reshape((self.Nlb, self.N_feats_in))(x)
 
+        x = layers.Reshape((self.Nlb, self.N_feats_in))(inputs)
         x = layers.Dense(self.latent_space_dim,
-                         activation = self.activation)\
+                         activation = activ)\
                          (x)
         x = ops.flip(x, axis=1)
         return x
 
     def dense_upsample(
             self,
-            inputs
+            inputs,
+            activation='class_default',
     ):
-        x = inputs
+        activ = self.activation if activation == 'class_default' \
+            else activation
+
         x = layers.Dense(self.N_feats_out,
-                         activation = self.activation)\
-                         (x)
+                         activation = activ)\
+                         (inputs)
 
         return layers.Reshape((self.Nj,
                                self.Ni,
@@ -630,15 +639,31 @@ class LatentSpaceModel():
         self.lspace_vars = [RNN_output]
         return self.dense_upsample(RNN_output)
 
-    def VAE(self, inputs):
-        latent_mean = self.dense_downsample(inputs)
-        latent_log_var = self.dense_downsample(inputs)
-        self.lspace_vars = [latent_mean[:,0,], latent_log_var[:,0,]]
-        sampled = Sampling()(latent_mean,
-                             latent_log_var)
+    def VAE(self, inputs, latent_RNN=False):
+        downsampled = self.dense_downsample(inputs)
 
-        latent_output = layers.SimpleRNN(self.latent_space_dim)(sampled)
-        return self.dense_upsample(latent_output)
+        # note these are now flipped in time
+        mean = layers.Dense(self.latent_space_dim)\
+                            (downsampled)
+        log_var = layers.Dense(self.latent_space_dim)\
+                               (downsampled)        
+        
+        if latent_RNN:
+            rnn_mean = layers.SimpleRNN(self.latent_space_dim)(mean)
+            rnn_log_var = layers.SimpleRNN(self.latent_space_dim)(log_var)
+            self.lspace_vars = [rnn_mean, rnn_log_var,
+                                mean[:,-1,], log_var[:,-1,]]
+            
+            sampled = Sampling()(rnn_mean,
+                                 rnn_log_var)
+            out = self.dense_upsample(sampled)
+        else:
+            self.lspace_vars = [mean[:,-1,], log_var[:,-1,]]
+            sampled = Sampling()(mean,
+                                 log_var)
+            out = self.dense_upsample(sampled[:,0,])
+
+        return out
 
     def GRU(self, inputs):
         GRU_input = self.dense_downsample(inputs)
@@ -682,12 +707,9 @@ class Sampling(layers.Layer):
         # optional seed here
 
     def call(self, mean, log_var):
-        btch_dim = ops.shape(mean)[0]
-        time_dim = ops.shape(mean)[1]
-        feat_dim = ops.shape(mean)[2]
         eps = keras.random.normal(
-            shape=(btch_dim, time_dim, feat_dim)
-            )
+            shape=ops.shape(mean)
+        )
         out = mean + ops.exp(0.5*log_var)*eps
         return out
 

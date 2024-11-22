@@ -6,23 +6,23 @@ import numpy as np
 # default hyper parameters
 hyper_params = {
     'history' : 'all',
+    'future' : 400,
     'epochs' : 5,
     'batch_size' : 4,
-    'lookback' : 0,
     'unroll_dim' : 0,
-    'num_conv_blocks' : 1,
-    'conv_layers_per_block' : 1,
-    'num_feedthrough_layers' : 2,
-    'num_feedthrough_filters' : 112,
-    'num_output_layers' : 2,
-    'future' : 400,
+    'lookback' : 0,
     'noise_stddev' : 0.0,
     'dropout_rate' : 0.0,
+    'num_conv_blocks' : 1,
+    'conv_layers_per_block' : 1,
+    'num_feedthrough_filters' : 112,
+    'num_feedthrough_layers' : 2,
+    'num_output_layers' : 2,
     'optimizer' : 'adam',
     'L2_lambda' : 0.0,
     'kernel_size' : (3,3),
-    'latent_space_model' : 'RNN',
-    'latent_space_dim' : 8,
+    'latent_space_model' : 'VAE',
+    'latent_space_dim' : 4,
     'learning_rate' : 0.002,
     'num_filters' : 32,
     'num_filters_last' : 112,
@@ -159,35 +159,6 @@ __everything__ = {
         },
         'search_space' : [0],
     },
-
-    'batch_size' : {
-        'type' : 'int',
-        'args' : {
-            'name' : 'batch_size',
-            'low'  : 1,
-            'high' : 100,
-        },
-        'search_space' : [4],
-    },
-
-    'RNN_model' : {
-        'type'  : 'categorical',
-        'args'  : {
-            'name':'RNN_model',
-            'choices' : ['RNN', 'RNN_res', 'LSTM', 'GRU', 'ConvLSTM' ],
-        },
-        'search_space' : ['RNN'],
-    },
-
-    'latent_space_dim' : {
-        'type' : 'int',
-        'args' : {
-            'name' : 'latent_space_dim',
-            'low'  : 1,
-            'high' : 10000,
-            },
-        'search_space' : [8],
-    },
 }
 
 
@@ -200,7 +171,32 @@ __latent_space_dim__ = {
             'low'  : 1,
             'high' : 10000,
         },
-        'search_space' : [2,4,8,16],
+        'search_space' : [4],
+    },
+    'lookback' : {
+        'type' : 'int',
+        'args' : {
+            'name' : 'lookback',
+            'low'  : 0,
+            'high' : 9,
+        },
+        'search_space' : [3],
+    },
+    'latent_space_model' : {
+        'type'  : 'categorical',
+        'args'  : {
+            'name':'latent_space_model',
+            'choices' : [
+                'RNN',
+                'RNN_res',
+                'LSTM',
+                'GRU',
+                'ConvLSTM',
+                'VAE',
+                'VAE+RNN'
+            ],
+        },
+        'search_space' : ['VAE+RNN'],
     },
 }
 

@@ -171,8 +171,9 @@ __latent_space_dim__ = {
             'low'  : 1,
             'high' : 10000,
         },
-        'search_space' : [4],
+        'search_space' : [8],
     },
+
     'lookback' : {
         'type' : 'int',
         'args' : {
@@ -182,6 +183,7 @@ __latent_space_dim__ = {
         },
         'search_space' : [3],
     },
+
     'latent_space_model' : {
         'type'  : 'categorical',
         'args'  : {

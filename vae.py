@@ -65,8 +65,9 @@ class VAE(keras.Model):
         #         )
         #     )
 
-        if 'RNN' in self.model:
-            tmp_input = x_state            
+        RNN_mode = ('RNN' in self.model)
+        if RNN_mode:
+            tmp_input = x_state
             # only use this part anyway
             tmp_input[:,0,] = y[0]
             _, y_true = self.encoder(tmp_input)
@@ -82,7 +83,7 @@ class VAE(keras.Model):
         else:
             rnn_loss = 0
             rnn_dict = {}
-        
+
 
         reconstruction_loss = \
             ops.mean(ops.square(y[0]-y_pred))
@@ -91,10 +92,13 @@ class VAE(keras.Model):
             -0.5 * (1 + z_log_var - ops.square(z_mean) - ops.exp(z_log_var))
         kl_loss = ops.mean(ops.sum(kl_loss, axis=1))
 
-        total_loss = reconstruction_loss + kl_loss
-        
-        if 'RNN' in self.model: total_loss += rnn_loss
-        
+
+        if RNN_mode:
+            total_loss = reconstruction_loss + kl_loss + rnn_loss
+        else:
+            total_loss = reconstruction_loss + kl_loss
+
+
         total_loss.backward()
 
         trainable_weights = [v for v in self.trainable_weights]
@@ -111,5 +115,5 @@ class VAE(keras.Model):
             'reconstr_loss' : self.reconstruction_loss_tracker.result(),
             'KL_loss' : self.kl_loss_tracker.result()
         }
-        if 'RNN' in self.model: out_dict.update(rnn_dict)
+        if RNN_mode: out_dict.update(rnn_dict)
         return out_dict

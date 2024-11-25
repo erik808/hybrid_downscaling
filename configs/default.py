@@ -197,7 +197,7 @@ __latent_space_dim__ = {
                 'VAE+RNN'
             ],
         },
-        'search_space' : ['VAE+RNN'],
+        'search_space' : ['RNN'],
     },
     
     'num_output_layers' : {
@@ -207,7 +207,7 @@ __latent_space_dim__ = {
             'low'  : 1,
             'high' : 5,
         },
-        'search_space' : [1],
+        'search_space' : [2],
     },
     'num_feedthrough_layers' : {
         'type' : 'int',
@@ -216,7 +216,7 @@ __latent_space_dim__ = {
             'low'  : 1,
             'high' : 100,
         },
-        'search_space' : [1],
+        'search_space' : [2],
     },
 
     

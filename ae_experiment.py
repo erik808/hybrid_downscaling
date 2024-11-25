@@ -33,11 +33,8 @@ reload(ae_model)
 
 from ae_model import AutoEncoder
 from ae_model import CustomValidation
+from ae_model import LSModelWrapper
 from plot_utils import PlotMachine
-
-import vae
-reload(vae)
-from vae import VAE
 
 import compute_tool
 reload(compute_tool)
@@ -361,15 +358,20 @@ class AE_Experiment():
                      model_checkpoint_callback]
 
         # Final assembly -------------------------------------
-        # default model
-        model = autoencoder
-
-        if 'VAE' in self.latent_space_model:
-            model = VAE(
+        if (not feedthrough_only and
+            self.latent_space_model in [
+                'VAE',
+                'VAE+RNN',
+                'RNN',
+            ]):
+            model = LSModelWrapper(
                 encoder,
                 decoder,
                 model=self.latent_space_model
             )
+        else:
+            # default model
+            model = autoencoder
             
 
         if self.unroll_dim > 0:

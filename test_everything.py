@@ -30,9 +30,9 @@ def test_short_run():
     test_pars = {
         'history' : 200,
         'future' : 100,
-        'epochs' : 1,
+        'epochs' : 3,
         'unroll_dim' : 0,
-        'lookback' : 2,
+        'lookback' : 3,
         'noise_stddev' : 0.0,
         'dropout_rate' : 0.0,
         'num_conv_blocks' : 1,
@@ -42,8 +42,8 @@ def test_short_run():
         'num_filters' : 32,
         'num_filters_last' : 112,
         'batch_size' : 4,
-        'latent_space_model' : 'VAE',
-        'latent_space_dim' : 2,
+        'latent_space_model' : 'RNN',
+        'latent_space_dim' : 8,
         'num_feedthrough_filters' : 112,
         'num_feedthrough_layers' : 1,
         'num_output_layers' : 1,
@@ -73,7 +73,7 @@ def test_save_load():
         'future' : 100,
         'epochs' : 2,
         'unroll_dim' : 0,
-        'lookback' : 0,
+        'lookback' : 2,
         'noise_stddev' : 0.0,
         'dropout_rate' : 0.0,
         'num_conv_blocks' : 1,
@@ -100,6 +100,7 @@ def test_save_load():
     modelfolder = modelpath[0]
     modelpostfix = modelpath[1].split('.keras')[0]
 
+
     model = {'folder' : modelfolder,
              'postfix' : modelpostfix}
 
@@ -119,5 +120,6 @@ def test_save_load():
 
 
 if __name__=="__main__":
-    # test_short_run()
-    test_save_load()
+    test_short_run()
+    #test_save_load()
+    #test_feedthrough_only() ## TODO

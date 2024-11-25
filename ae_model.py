@@ -1,6 +1,7 @@
 import sys
 import numpy as np
 
+import torch
 import keras
 import keras_tuner
 from keras import layers
@@ -60,8 +61,7 @@ class AutoEncoder(keras_tuner.HyperModel):
         self.losses = []
 
         # derived members:
-        self.regularizer = regularizers.L2(self.L2_lambda) \
-            if self.L2_lambda > 0 else None
+        self.regularizer = None # used to be derived from L2_lambda
         if self.feedthrough_only: self.use_feedthrough = True
         self.use_dropout = True if self.dropout_rate > 0 else False
         # infer dimensions
@@ -601,6 +601,8 @@ class LatentSpaceModel():
             self,
             inputs,
             activation='class_default',
+            do_flip=True,
+            **kwargs,
     ):
         activ = self.activation if activation == 'class_default' \
             else activation
@@ -610,23 +612,31 @@ class LatentSpaceModel():
         self.N_feats_out = self.Nj * self.Ni * self.filters
 
         x = layers.Reshape((self.Nlb, self.N_feats_in))(inputs)
-        x = layers.Dense(self.latent_space_dim,
-                         activation = activ)\
-                         (x)
-        x = ops.flip(x, axis=1)
+        x = layers.Dense(
+            self.latent_space_dim,
+            activation = activ,
+            **kwargs,
+        )(x)
+
+        if do_flip:
+            x = ops.flip(x, axis=1)
         return x
 
     def dense_upsample(
             self,
             inputs,
             activation='class_default',
+            **kwargs,
     ):
         activ = self.activation if activation == 'class_default' \
             else activation
 
-        x = layers.Dense(self.N_feats_out,
-                         activation = activ)\
-                         (inputs)
+        x = inputs
+        x = layers.Dense(
+            self.N_feats_out,
+            activation = activ,
+            **kwargs,
+        )(x)
 
         return layers.Reshape((self.Nj,
                                self.Ni,
@@ -634,34 +644,62 @@ class LatentSpaceModel():
 
     def RNN(self, inputs):
         RNN_input = self.dense_downsample(inputs)
-        RNN_output = layers.SimpleRNN(self.latent_space_dim)(RNN_input)
+        RNN_pars = {
+            'units' : self.latent_space_dim,
+            'return_sequences' : True,
+            'return_state' : False,
+#            'go_backwards' : True,
+        }
+        RNN_output = layers.SimpleRNN(**RNN_pars)(RNN_input)
+
         # store these vars as lspace vars
-        self.lspace_vars = [RNN_output]
-        return self.dense_upsample(RNN_output)
+        self.lspace_vars = {
+            'rnn_input' : RNN_input,
+            'rnn_output' : RNN_output
+        }
+        return self.dense_upsample(RNN_output[:,-1,])
 
     def VAE(self, inputs, latent_RNN=False):
+
         downsampled = self.dense_downsample(inputs)
 
-        # note these are now flipped in time
-        mean = layers.Dense(self.latent_space_dim)\
-                            (downsampled)
-        log_var = layers.Dense(self.latent_space_dim)\
-                               (downsampled)        
-        
+        # note these are flipped in time
+        mean = layers.Dense(self.latent_space_dim)(downsampled)
+        log_var = layers.Dense(self.latent_space_dim)(downsampled)
+
+        self.lspace_vars = {
+            'mean' : mean,
+            'log_var' : log_var
+            }
+
         if latent_RNN:
-            rnn_mean = layers.SimpleRNN(self.latent_space_dim)(mean)
-            rnn_log_var = layers.SimpleRNN(self.latent_space_dim)(log_var)
-            self.lspace_vars = [rnn_mean, rnn_log_var,
-                                mean[:,-1,], log_var[:,-1,]]
-            
-            sampled = Sampling()(rnn_mean,
-                                 rnn_log_var)
-            #out = self.dense_upsample(sampled)
-            out = self.dense_upsample(rnn_mean)
+
+            RNN_pars = {
+                'units' : self.latent_space_dim,
+#                'activation' : 'sigmoid',
+                'return_sequences' : True,
+                'return_state' : False
+                }
+            rnn_mean = layers.SimpleRNN(**RNN_pars)\
+                (ops.flip(mean, axis=1))
+
+            rnn_log_var = layers.SimpleRNN(**RNN_pars)\
+                (ops.flip(log_var, axis=1))
+
+            self.lspace_vars.update({
+                'rnn_mean' : rnn_mean,
+                'rnn_log_var' : rnn_log_var,
+                })
+
+            sampled = Sampling()(rnn_mean[:,-1,],
+                                 rnn_log_var[:,-1,])
+            out = self.dense_upsample(sampled)
+
         else:
-            self.lspace_vars = [mean[:,-1,], log_var[:,-1,]]
+            # ordering in time here is last last
             sampled = Sampling()(mean[:,-1,], log_var[:,-1,])
             out = self.dense_upsample(sampled)
+
         return out
 
     def GRU(self, inputs):
@@ -694,6 +732,177 @@ class LatentSpaceModel():
             return []
         else:
             return self.lspace_vars
+
+
+class LSModelWrapper(keras.Model):
+
+    def __init__(
+            self,
+            encoder,
+            decoder,
+            model='VAE',
+            **kwargs):
+        super().__init__(**kwargs)
+        self.encoder = encoder
+        self.decoder = decoder
+        self.model = model
+        self.total_loss_tracker = \
+            keras.metrics.Mean(name="total_loss")
+        self.reconstruction_loss_tracker = \
+            keras.metrics.Mean(name="reconstruction_loss")
+        self.kl_loss_tracker = \
+            keras.metrics.Mean(name="KL_loss")
+        self.rnn_loss_tracker = \
+            keras.metrics.Mean(name="rnn_loss")
+
+
+    @property
+    def metrics(self):
+        return [self.total_loss_tracker,
+                self.reconstruction_loss_tracker,
+                self.kl_loss_tracker]
+
+
+    def call(self, inputs):
+        enc_output, z_vars = self.encoder(inputs[0])
+        pred = self.decoder([enc_output, inputs[1]])
+        return pred
+
+
+    def train_step(self, data):
+
+        # common
+        self.zero_grad()
+
+        if self.model == 'VAE':
+            return self.train_step_VAE(data)
+        elif self.model == 'VAE+RNN':
+            return self.train_step_VAE(data,
+                                       RNN_hybrid=True)
+        elif self.model == 'RNN':
+            return self.train_step_RNN(data)
+        else:
+            raise Exception('no default train_step implemented (yet)')
+
+
+    def forward_pass(self, x):
+
+        ft_mode = (len(x) == 2)
+        if ft_mode:
+            x_state, x_feed = x
+        else:
+            x_state = x
+
+        z_enc, z_latent = self.encoder(x_state)
+
+        decoder_input = [z_enc, x_feed] if ft_mode else z_enc
+        y_pred = self.decoder(decoder_input)
+
+        return y_pred, z_latent
+
+
+    
+    def train_step_RNN(self, data):
+        x, y = data
+        y_pred, z = self.forward_pass(x)
+
+        _, z_true = self.encoder(y)
+        
+        rnn_loss = \
+            ops.mean(
+                ops.mean(
+                    ops.square(z_true['rnn_input'] - z['rnn_output']),
+                    axis=(1,2),
+                )
+            )
+
+        # time ordering in y is backwards so last first
+        reconstruction_loss = \
+            ops.mean(ops.square(y[0][:,0,]-y_pred))
+
+        total_loss = reconstruction_loss + rnn_loss
+
+        total_loss.backward()
+
+        trainable_weights = [v for v in self.trainable_weights]
+        gradients = [v.value.grad for v in trainable_weights]
+
+        with torch.no_grad():
+            self.optimizer.apply(gradients, trainable_weights)
+
+        self.total_loss_tracker.update_state(total_loss)
+        self.reconstruction_loss_tracker.update_state(reconstruction_loss)
+        self.rnn_loss_tracker.update_state(rnn_loss)
+
+        out_dict =  {
+            'loss' : self.total_loss_tracker.result(),
+            'reconstr_loss' : self.reconstruction_loss_tracker.result(),
+            'RNN_loss' : self.rnn_loss_tracker.result(),
+        }
+
+        return out_dict
+
+    def train_step_VAE(self, data, RNN_hybrid=False):
+        x, y = data
+        y_pred, z = self.forward_pass(x)
+
+        if RNN_hybrid:
+            _, z_true = self.encoder(y)
+
+            rnn_loss_mean = \
+                ops.mean(
+                    ops.sum(
+                        ops.square(z_true['mean'] - z['rnn_mean']),
+                        axis=(1,2),
+                    )
+                )
+
+            rnn_loss_var = \
+                ops.mean(
+                    ops.sum(
+                        ops.square(z_true['log_var'] - z['rnn_log_var']),
+                        axis=(1,2),
+                    )
+                )
+
+            rnn_loss = rnn_loss_mean + rnn_loss_var
+            self.rnn_loss_tracker.update_state(rnn_loss)
+            rnn_dict = {'rnn_loss' : self.rnn_loss_tracker.result()}
+
+        # time ordering in y is backwards so last first
+        reconstruction_loss = \
+            ops.mean(ops.square(y[0][:,0,]-y_pred))
+
+        kl_loss = \
+            -0.5 * (1 + z['log_var'] - ops.square(z['mean']) - ops.exp(z['log_var']))
+        kl_loss = ops.mean(ops.sum(kl_loss, axis=(1,2)))
+
+        if RNN_hybrid:
+            total_loss = reconstruction_loss + kl_loss + rnn_loss
+        else:
+            total_loss = reconstruction_loss + kl_loss
+
+        total_loss.backward()
+
+        trainable_weights = [v for v in self.trainable_weights]
+        gradients = [v.value.grad for v in trainable_weights]
+
+        with torch.no_grad():
+            self.optimizer.apply(gradients, trainable_weights)
+
+        self.total_loss_tracker.update_state(total_loss)
+        self.reconstruction_loss_tracker.update_state(reconstruction_loss)
+        self.kl_loss_tracker.update_state(kl_loss)
+
+        out_dict =  {
+            'loss' : self.total_loss_tracker.result(),
+            'reconstr_loss' : self.reconstruction_loss_tracker.result(),
+            'KL_loss' : self.kl_loss_tracker.result()
+        }
+        if RNN_hybrid: out_dict.update(rnn_dict)
+
+        return out_dict
+
 
 
 class Sampling(layers.Layer):

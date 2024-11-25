@@ -590,7 +590,6 @@ class DataGenerator(keras.utils.PyDataset):
 
     def __init__(self, x, y,
                  ft_type = 'hybrid',
-                 multihead_output = False,
                  batch_size = 4,
                  shuffle = False,
                  lookback = 0,
@@ -601,17 +600,14 @@ class DataGenerator(keras.utils.PyDataset):
         super().__init__(**kwargs)
         self.batch_size = batch_size
         self.ft_type = ft_type
-        self.multihead_output = (multihead_output and
-                                 not self.ft_type == 'only')
         self.shuffle = shuffle
         self.lookback = lookback
         self.encoder = encoder
         self.unroll_dim = unroll_dim
 
         self.unroll_y = (self.unroll_dim > 0 and
-                         not self.multihead_output and
                          self.ft_type == 'hybrid')
-        
+
         self.unroll_x = self.unroll_y
 
         self.__setup_data(x, y)
@@ -634,10 +630,7 @@ class DataGenerator(keras.utils.PyDataset):
         else:
             self.x = [x[0]]
 
-        if self.multihead_output:
-            self.y = [y[0], x[0]]
-        else:
-            self.y = y
+        self.y = y
 
 
         if self.unroll_x:
@@ -662,22 +655,15 @@ class DataGenerator(keras.utils.PyDataset):
         high = np.min([low + self.batch_size, self.n])
         inds = self.indices[low:high]
         batch_x = create_lookback(inds, self.x, self.lookback)
-        batch_y = [y[inds,] for y in self.y]
-
-        # add truth for RNN component
-        if self.multihead_output:
-            encoded_truth = self.encoder(self.y[0][inds,], training=False)
-            batch_y.append(encoded_truth.detach().numpy())
-            # print(self.encoder.layers[2].weights[0][0][0][0])
-            # batch_y.append(self.encoder.predict(self.y[0][inds,], verbose=0))
-            # self.encoder.trainable=True
-
+        batch_y = create_lookback(inds, self.y, self.lookback)
+        #batch_y = [y[inds,] for y in self.y]
         return (batch_x, batch_y)
 
 
     def __do_shuffle(self):
         if self.shuffle:
             np.random.shuffle(self.indices)
+
 
     def on_epoch_end(self):
         self.__do_shuffle()

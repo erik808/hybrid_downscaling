@@ -564,6 +564,13 @@ class LatentSpaceModel():
         self.kernel_size = kernel_size
         self.unroll = unroll
         self.lspace_vars = None
+        self.RNN_pars = {
+            'units' : self.latent_space_dim,
+            'return_sequences' : True,
+            'return_state' : False,
+#            'go_backwards' : True,
+        }
+
 
     def __call__(self, inputs):
         if self.model == 'RNN':
@@ -644,13 +651,7 @@ class LatentSpaceModel():
 
     def RNN(self, inputs):
         RNN_input = self.dense_downsample(inputs)
-        RNN_pars = {
-            'units' : self.latent_space_dim,
-            'return_sequences' : True,
-            'return_state' : False,
-#            'go_backwards' : True,
-        }
-        RNN_output = layers.SimpleRNN(**RNN_pars)(RNN_input)
+        RNN_output = layers.SimpleRNN(**self.RNN_pars)(RNN_input)
 
         # store these vars as lspace vars
         self.lspace_vars = {
@@ -680,7 +681,7 @@ class LatentSpaceModel():
                 'return_sequences' : True,
                 'return_state' : False
                 }
-            rnn_mean = layers.SimpleRNN(**RNN_pars)\
+            rnn_mean = layers.SimpleRNN(**self.RNN_pars)\
                 (ops.flip(mean, axis=1))
 
             rnn_log_var = layers.SimpleRNN(**RNN_pars)\
@@ -704,13 +705,19 @@ class LatentSpaceModel():
 
     def GRU(self, inputs):
         GRU_input = self.dense_downsample(inputs)
-        GRU_output = layers.GRU(self.latent_space_dim)(GRU_input)
+        GRU_output = layers.GRU(**self.RNN_pars)(GRU_input)
         return self.dense_upsample(GRU_output)
 
     def LSTM(self, inputs):
         LSTM_input = self.dense_downsample(inputs)
-        LSTM_output = layers.LSTM(self.latent_space_dim)(LSTM_input)
-        return self.dense_upsample(LSTM_output)
+        LSTM_output = layers.LSTM(**self.RNN_pars)(LSTM_input)
+        # store these vars as lspace vars
+        self.lspace_vars = {
+            'rnn_input' : LSTM_input,
+            'rnn_output' : LSTM_output
+        }
+
+        return self.dense_upsample(LSTM_output[:,-1,])
 
     def RNN_res(self, inputs):
         x = self.most_recent(inputs)
@@ -754,6 +761,7 @@ class LSModelWrapper(keras.Model):
             keras.metrics.Mean(name="KL_loss")
         self.rnn_loss_tracker = \
             keras.metrics.Mean(name="rnn_loss")
+        self.loss_fn = keras.losses.MeanSquaredError()
 
 
     @property
@@ -779,7 +787,9 @@ class LSModelWrapper(keras.Model):
         elif self.model == 'VAE+RNN':
             return self.train_step_VAE(data,
                                        RNN_hybrid=True)
-        elif self.model == 'RNN':
+        elif self.model in ['RNN',
+                            'LSTM',
+                            'GRU']:
             return self.train_step_RNN(data)
         else:
             raise Exception('no default train_step implemented (yet)')
@@ -807,20 +817,26 @@ class LSModelWrapper(keras.Model):
         y_pred, z = self.forward_pass(x)
 
         _, z_true = self.encoder(y)
+
+        rnn_loss = self.loss_fn(z_true['rnn_input'],
+                                z['rnn_output'])
         
-        rnn_loss = \
-            ops.mean(
-                ops.mean(
-                    ops.square(z_true['rnn_input'] - z['rnn_output']),
-                    axis=(1,2),
-                )
-            )
+        # rnn_loss = \
+        #     ops.mean(
+        #         ops.mean(
+        #             ops.square(z_true['rnn_input'] - z['rnn_output']),
+        #             axis=(1,2),
+        #         )
+        #     )
+
+        # reconstruction_loss = \
+        #     ops.mean(ops.square(y[0][:,0,]-y_pred))
+        
 
         # time ordering in y is backwards so last first
-        reconstruction_loss = \
-            ops.mean(ops.square(y[0][:,0,]-y_pred))
+        reconstruction_loss = self.loss_fn(y[0][:,0,], y_pred)
 
-        total_loss = reconstruction_loss + rnn_loss
+        total_loss = reconstruction_loss +  rnn_loss
 
         total_loss.backward()
 

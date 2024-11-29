@@ -363,6 +363,8 @@ class AE_Experiment():
                 'VAE',
                 'VAE+RNN',
                 'RNN',
+                'LSTM',
+                'GRU',
             ]):
             model = LSModelWrapper(
                 encoder,

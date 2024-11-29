@@ -180,7 +180,7 @@ __latent_space_dim__ = {
             'low'  : 0,
             'high' : 9,
         },
-        'search_space' : [3],
+        'search_space' : [0],
     },
 
     'latent_space_model' : {
@@ -218,6 +218,57 @@ __latent_space_dim__ = {
         },
         'search_space' : [2],
     },
+
+    'num_filters' : {
+        'type' : 'int',
+        'args' : {
+            'name' : 'num_filters',
+            'low'  : 1,
+            'high' : 200,
+        },
+        'search_space' : [64],
+    },
+    
+    'num_filters_last' : {
+        'type' : 'int',
+        'args' : {
+            'name' : 'num_filters_last',
+            'low'  : 1,
+            'high' : 100,
+        },
+        'search_space' : [128],
+    },
+
+    'num_feedthrough_filters' : {
+        'type' : 'int',
+        'args' : {
+            'name' : 'num_feedthrough_filters',
+            'low'  : 1,
+            'high' : 1000,
+        },
+        'search_space' : [128],
+    },
+    'num_conv_blocks' : {
+        'type' : 'int',
+        'args' : {
+            'name' : 'num_conv_blocks',
+            'low'  : 1,
+            'high' : 6,
+        },
+        'search_space' : [1],
+    },
+    'conv_layers_per_block' : {
+        'type' : 'int',
+        'args' : {
+            'name' : 'conv_layers_per_block',
+            'low'  : 1,
+            'high' : 6,
+        },
+        'search_space' : [1],
+    },
+
+
+
 
     
 }

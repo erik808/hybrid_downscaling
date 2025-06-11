@@ -6,7 +6,7 @@ import torch
 import keras
 import dill
 import time
-import pytide
+# import pytide
 import scipy
 from scipy.ndimage import gaussian_filter
 from sklearn.preprocessing import MinMaxScaler
@@ -190,39 +190,40 @@ class DataManager():
                                     .fillna(0.0)
 
         def detide_da(da):
-            da.load()
-            wt = pytide.WaveTable(["M2", "S2", "N2", "K1",
-                                   "O1", "Q1", "M4",
-                                   "K2", "P1", "Mf", "Mm" ])
+            raise Exception("detiding disabled")
+            # da.load()
+            # wt = pytide.WaveTable(["M2", "S2", "N2", "K1",
+            #                        "O1", "Q1", "M4",
+            #                        "K2", "P1", "Mf", "Mm" ])
 
-            dates = da.time.values
-            f, vu = wt.compute_nodal_modulations(dates)
-            latlons = np.where(mask==1)
-            ind_range = range(len(latlons[0]))
-            pb = keras.utils.Progbar(len(ind_range))
+            # dates = da.time.values
+            # f, vu = wt.compute_nodal_modulations(dates)
+            # latlons = np.where(mask==1)
+            # ind_range = range(len(latlons[0]))
+            # pb = keras.utils.Progbar(len(ind_range))
 
-            def detide_point(i):
-                if not i % 200:
-                    pb.update(i)
+            # def detide_point(i):
+            #     if not i % 200:
+            #         pb.update(i)
 
-                vals = da[:, latlons[0][i], latlons[1][i]].values
-                waves = wt.harmonic_analysis(vals, f, vu)
-                vals_tide = wt.tide_from_tide_series(dates, waves)
-                vals_detide = vals - vals_tide
-                return vals_detide
+            #     vals = da[:, latlons[0][i], latlons[1][i]].values
+            #     waves = wt.harmonic_analysis(vals, f, vu)
+            #     vals_tide = wt.tide_from_tide_series(dates, waves)
+            #     vals_detide = vals - vals_tide
+            #     return vals_detide
 
-            print(f'Detiding:')
-            with Pool(4) as p:
-                results = p.map(detide_point, ind_range)
+            # print(f'Detiding:')
+            # with Pool(4) as p:
+            #     results = p.map(detide_point, ind_range)
 
-            pb.update(ind_range.stop, finalize=True)
+            # pb.update(ind_range.stop, finalize=True)
 
-            pb = keras.utils.Progbar(len(ind_range))
-            da_dt = xr.zeros_like(da)
-            print('Filling data array:')
-            for i in ind_range:
-                da_dt[:, latlons[0][i], latlons[1][i]] = results[i]
-                pb.add(1)
+            # pb = keras.utils.Progbar(len(ind_range))
+            # da_dt = xr.zeros_like(da)
+            # print('Filling data array:')
+            # for i in ind_range:
+            #     da_dt[:, latlons[0][i], latlons[1][i]] = results[i]
+            #     pb.add(1)
 
             return da_dt
 

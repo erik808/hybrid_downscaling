@@ -121,5 +121,5 @@ def test_save_load():
 
 if __name__=="__main__":
     test_short_run()
-    #test_save_load()
+    test_save_load()
     #test_feedthrough_only() ## TODO

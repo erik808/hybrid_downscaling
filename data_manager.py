@@ -12,6 +12,14 @@ from scipy.ndimage import gaussian_filter
 from sklearn.preprocessing import MinMaxScaler
 
 
+# class DataManagerBase():
+#     def __init__(
+#             self,
+#             testing_mode=False
+#     ):
+#         self.testing_mode = testing_mode
+
+# class DataManager_CMEMS():
 class DataManager():
 
     def __init__(
@@ -140,18 +148,17 @@ class DataManager():
     def get_grid(self):
         " load grid, crop and return "
         coords = xr.open_dataset(self.coords_file)
-        mask = self.crop(xr.open_dataset(self.HR_bathy_file).mask[0,:,:])
-        l = [self.crop(coords[var]) for var in coords]
-        coords = xr.merge(l)
+        mask = self.crop(xr.open_dataset(self.HR_bathy_file).mask[0, :, :])
+        l_ = [self.crop(coords[var]) for var in coords]
+        coords = xr.merge(l_)
         return coords, mask
-
 
     def load_uv_data(self,
                      coarsen_in_time=False,
                      detide=False,
                      differences=False,
                      coarsening_method='gaussian_filter',
-                     sigma=[1,1,1],
+                     sigma=[1, 1, 1],
                      truncation=20):
 
         bt_HR = xr.open_dataset(self.HR_bathy_file)
@@ -162,12 +169,11 @@ class DataManager():
         if self.testing_mode:
             # restrict data to first X samples
             time_restrict = slice(ds_HR.time[0],
-                                  ds_HR.time[self.test_restrict-1])
+                                  ds_HR.time[self.test_restrict - 1])
             ds_HR = ds_HR.sel(time=time_restrict)
             ds_LR = ds_LR.sel(time=time_restrict)
 
-
-        mask = bt_HR.mask[0,:,:]
+        mask = bt_HR.mask[0, :, :]
         grid_HR = self.build_grid(ds_HR, mask)
         grid_LR = self.build_grid(ds_LR)
 
@@ -176,16 +182,16 @@ class DataManager():
         interp_LR_HR = xe.Regridder(grid_LR, grid_HR, "bilinear",
                                     extrap_method="inverse_dist")
 
-        da_HR_uo = ds_HR.uo.rename({'longitude':'lon',
-                                    'latitude':'lat'})\
-                                    .fillna(0.0)
+        da_HR_uo = ds_HR.uo.rename({'longitude': 'lon',
+                                    'latitude': 'lat'})\
+                           .fillna(0.0)
 
-        da_HR_vo = ds_HR.vo.rename({'longitude':'lon',
-                                    'latitude':'lat'})\
-                                    .fillna(0.0)
+        da_HR_vo = ds_HR.vo.rename({'longitude': 'lon',
+                                    'latitude': 'lat'})\
+                           .fillna(0.0)
 
         def detide_da(da):
-            raise Exception("detiding disabled")
+            raise NotImplementedError("detiding disabled/not implemented")
             # da.load()
             # wt = pytide.WaveTable(["M2", "S2", "N2", "K1",
             #                        "O1", "Q1", "M4",
@@ -237,10 +243,10 @@ class DataManager():
 
             print('Regridding HR to LR')
             da_HR_LR = interp_HR_LR(da_HR.values)
-            da_HR_LR = xr.DataArray(da_HR_LR, dims=['time','lat','lon'],
-                                    coords={'time':da_HR.time,
-                                            'lat':ds_LR.latitude.values,
-                                            'lon':ds_LR.longitude.values})
+            da_HR_LR = xr.DataArray(da_HR_LR, dims=['time', 'lat', 'lon'],
+                                    coords={'time': da_HR.time,
+                                            'lat': ds_LR.latitude.values,
+                                            'lon': ds_LR.longitude.values})
             if coarsen_in_time:
                 da_HR_LR_resamp = da_HR_LR.resample(time=coarse_time_freq)\
                                           .first()
@@ -250,7 +256,7 @@ class DataManager():
             print('Regridding LR to HR')
             da_HR_LR_HR = xr.zeros_like(da_HR)
             da_HR_LR_HR_tmp = interp_LR_HR(da_HR_LR.values)
-            da_HR_LR_HR[:,:,:] = da_HR_LR_HR_tmp
+            da_HR_LR_HR[:, :, :] = da_HR_LR_HR_tmp
 
             # remove nans
             da_LR = da_HR_LR_HR.fillna(0.0)
@@ -268,13 +274,13 @@ class DataManager():
                   f'sigma={sigma} to {da.name}...', end='')
             out_da = xr.zeros_like(da)
             # assume 3D
-            out_da[:,:,:] = gaussian_filter(da.values, sigma=sigma)
+            out_da[:, :, :] = gaussian_filter(da.values, sigma=sigma)
             toc = time.time()
 
-            mask_ = mask.rename({'latitude':'lat',
-                                'longitude':'lon'})\
-                        .assign_coords({'lat':out_da.lat,
-                                        'lon':out_da.lon})
+            mask_ = mask.rename({'latitude': 'lat',
+                                'longitude': 'lon'})\
+                        .assign_coords({'lat': out_da.lat,
+                                        'lon': out_da.lon})
 
             out_da = out_da.where(mask_ == 1)
             out_da = out_da.fillna(0.0)
@@ -286,19 +292,19 @@ class DataManager():
             orig_shape = list(ds.shape)
             data = ds.reshape(orig_shape[0], -1)
             data = data - np.mean(data, axis=0)
-            U,_,_ = scipy.linalg.svd(data.T, False)
+            U, _, _ = scipy.linalg.svd(data.T, False)
             new_shape = [truncation] + orig_shape[1:]
-            U = U[:,:truncation].T.reshape(new_shape)
+            U = U[:, :truncation].T.reshape(new_shape)
             return U
 
         def regrid_basis(U):
 
             interp_HR_LR, interp_LR_HR, mask = self.create_regridders()
-            U_HR = interp_LR_HR(np.ascontiguousarray(U.transpose(0,3,1,2)))\
-                .transpose(0,2,3,1)
+            U_HR = interp_LR_HR(np.ascontiguousarray(U.transpose(0, 3, 1, 2)))\
+                .transpose(0, 2, 3, 1)
             U_HR = np.nan_to_num(U_HR)
 
-            ## renormalize
+            #  renormalize
             orig_shape = U_HR.shape
             U_HR_MAT = U_HR.reshape(orig_shape[0], -1)
             norms = np.linalg.norm(U_HR_MAT, axis=1)
@@ -312,16 +318,16 @@ class DataManager():
             da.load()
             toc = time.time()
             print(f'done ({toc-tic:.1f}s)')
-            print(f'Creating approx. orthogonal projection... ', end='')
+            print('Creating approx. orthogonal projection... ', end='')
             tic = time.time()
             truncation = U.shape[0]
             orig_shape = da.shape
             out = xr.zeros_like(da)
             data = da.data.reshape(orig_shape[0], -1)
-            U = U.reshape(truncation,-1)
+            U = U.reshape(truncation, -1)
             coords = (U @ data.T)
             da_LR = (U.T @ coords).T
-            out[:,:,:] = da_LR.reshape(orig_shape)
+            out[:, :, :] = da_LR.reshape(orig_shape)
             toc = time.time()
             print(f'done ({toc-tic:.1f}s)')
             return out, coords
@@ -345,8 +351,8 @@ class DataManager():
             # da_LR_uo = filter_HR_data(da_HR_uo, sigma)
             # da_LR_vo = filter_HR_data(da_HR_vo, sigma)
 
-            da_LR_uo, c_uo = orth_project(U[...,0], da_HR_uo)
-            da_LR_vo, c_vo = orth_project(U[...,1], da_HR_vo)
+            da_LR_uo, c_uo = orth_project(U[..., 0], da_HR_uo)
+            da_LR_vo, c_vo = orth_project(U[..., 1], da_HR_vo)
 
             # plt.close('all')
             # plt.figure()
@@ -374,15 +380,14 @@ class DataManager():
 
         return da_HR, da_LR, mask
 
-
     def load_training_data(self,
-                           split_factor=4/5,
-                           scaling_range=(0,1),
+                           split_factor=4 / 5,
+                           scaling_range=(0, 1),
                            coarsen_in_time=False,
                            coarsening_method='gaussian_filter',
                            detide=False,
                            differences=False,
-                           sigma=[1,1,1],
+                           sigma=[1, 1, 1],
                            truncation=20):
 
         # assume everything has this shape
@@ -398,7 +403,7 @@ class DataManager():
                               truncation=truncation)
 
         # create a torch mask
-        params['mask'] = torch.tensor(da_mask.values)[None,:,:,None]
+        params['mask'] = torch.tensor(da_mask.values)[None, :, :, None]
 
         # do the assembling into channels here
         data_HR = np.stack([da_HR['uo'].values,
@@ -413,8 +418,6 @@ class DataManager():
         scalers['R']  = MinMaxScaler(feature_range=scaling_range)
 
         Nt, Nlat, Nlon, num_channels = data_HR.shape
-        data_HR_orig = data_HR
-        data_LR_orig = data_LR
 
         data_HR = scalers['HR'].fit_transform(data_HR.reshape(Nt, -1))\
                                .reshape(Nt, Nlat, Nlon, num_channels)
@@ -428,14 +431,12 @@ class DataManager():
             data_LR = scalers['LR'].fit_transform(data_LR.reshape(Nt, -1))\
                                    .reshape(Nt, Nlat, Nlon, num_channels)
 
-        scale = scalers['HR'].scale_.reshape(Nlat,Nlon,num_channels)
-
         params.update({'Nt'   : Nt,
                        'Nlat' : Nlat,
                        'Nlon' : Nlon,
                        'num_channels' : num_channels})
 
-        split = int(Nt*split_factor)
+        split = int(Nt * split_factor)
         self.train_range = range(0, split)
         self.test_range = range(split, Nt)
 
@@ -449,7 +450,6 @@ class DataManager():
 
         return data, params, scalers
 
-
     def create_training_data(self,
                              split_data=False,
                              compute_data=True,
@@ -458,16 +458,18 @@ class DataManager():
                              coarsening_method='gaussian_filter',
                              detide=False,
                              differences=False,
-                             sigma=[1,1,1],
+                             sigma=[1, 1, 1],
                              truncation=20):
 
-        postfix =  ''
+        postfix = ''
         postfix += '_detided' if detide else ''
         postfix += '_diff' if differences else ''
 
-        if (coarsening_method == 'gaussian_filter' and
-            len(sigma) > 0):
-            sigma_str = str(sigma).replace(', ', '-').replace('.','_')
+        if (
+                coarsening_method == 'gaussian_filter' and
+                len(sigma) > 0
+        ):
+            sigma_str = str(sigma).replace(', ', '-').replace('.', '_')
             postfix += f'_blur_{sigma_str}'
         elif (coarsening_method == 'reduced_basis'):
             postfix += f'_reduced_basis_tr{truncation}'
@@ -475,13 +477,15 @@ class DataManager():
         postfix += '_testing' if self.testing_mode else ''
 
         dill_file     = f'{self.data_dir}/ae_esn_training_data{postfix}.dill'
-        dill_file_enc = f'{self.data_dir}/ae_esn_training_data{postfix}_encoded.dill'
+        dill_file_enc = (
+            f'{self.data_dir}/ae_esn_training_data{postfix}'
+            '_encoded.dill')
 
         enc_data = {}
         if compute_data:
             print('Create training data')
             orig_data, params, scalers  = \
-                self.load_training_data(split_factor=4/5,
+                self.load_training_data(split_factor=4 / 5,
                                         coarsen_in_time=coarsen_in_time,
                                         coarsening_method=coarsening_method,
                                         detide=detide,
@@ -497,7 +501,7 @@ class DataManager():
             with open(dill_file, 'wb') as file:
                 dill.dump(container, file)
 
-            if encoder != None:
+            if encoder is not None:
                 print('Create encoded train and test data...')
                 enc_data = {}
                 for period in ['train', 'test']:
@@ -523,7 +527,7 @@ class DataManager():
             params = data['params']
             scalers = data['scalers']
 
-            if encoder != None:
+            if encoder is not None:
                 print(f'  loading from {dill_file_enc}')
                 with open(dill_file_enc, 'rb') as file:
                     data_enc = dill.load(file)
@@ -574,7 +578,7 @@ class DataManager():
                 'results'     : results_dir,
                 'movies'      : movie_dir,
                 'checkpoints' : checkpoints_dir,
-                'logs'        : logs_dir,}
+                'logs'        : logs_dir}
 
         files = {'log' : log_file}
 

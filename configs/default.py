@@ -29,11 +29,6 @@ hyper_params = {
     'downsample_stride' : (2,2),
 }
 
-
-# dict for use with optuna. keys represent different grid search or
-# other parameter tuning experiments
-tuning_config_dict = {}
-
 __lookback_study__ = {
     'lookback' : {
         'type' : 'int',
@@ -45,9 +40,6 @@ __lookback_study__ = {
         'search_space' : np.arange(0,10).tolist(),
     },
 }
-
-tuning_config_dict['lookback_study'] = __lookback_study__
-
 
 __everything__ = {
     'epochs' : {
@@ -267,13 +259,8 @@ __latent_space_dim__ = {
         'search_space' : [1],
     },
 
-
-
-
     
 }
-
-
 
 __regularization__ = {
     'L2_lambda' : {
@@ -287,8 +274,10 @@ __regularization__ = {
     },
 },
 
-
-# combine into big dict
+# dict for use with optuna. keys represent different grid search or
+# other parameter tuning experiments
+tuning_config_dict = {}
+tuning_config_dict['lookback_study'] = __lookback_study__
 tuning_config_dict['everything'] = __everything__
 tuning_config_dict['latent_space_dim'] = __latent_space_dim__
 tuning_config_dict['regularization'] = __regularization__

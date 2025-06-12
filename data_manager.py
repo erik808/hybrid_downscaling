@@ -11,6 +11,7 @@ import scipy
 from scipy.ndimage import gaussian_filter
 from sklearn.preprocessing import MinMaxScaler
 
+
 class DataManager():
 
     def __init__(
@@ -38,7 +39,6 @@ class DataManager():
             (f'{self.data_dir}/cmems_mod_nws_phy-uv_my_7km-2D_PT1H-i_'
              f'uo-vo_4.22E-7.78E_56.80N-58.67N_2023-01-01-2023-12-31.nc')
 
-
     def build_grid(self, ds=[], mask=[]):
         assert (len(ds) > 0 or
                 len(mask) > 0), 'Either ds or mask should be given'
@@ -52,8 +52,8 @@ class DataManager():
 
         Nlat = lat_arr.shape[0]
         Nlon = lon_arr.shape[0]
-        lat_grid = np.tile(lat_arr, (Nlon,1)).T
-        lon_grid = np.tile(lon_arr, (Nlat,1))
+        lat_grid = np.tile(lat_arr, (Nlon, 1)).T
+        lon_grid = np.tile(lon_arr, (Nlat, 1))
         grid = {}
         grid['N'] = Nlat
         grid['M'] = Nlon
@@ -64,7 +64,7 @@ class DataManager():
         return grid
 
     def crop(self, input_field):
-        return input_field[...,3:-2,:-1]
+        return input_field[..., 3:-2, :-1]
 
     def regrid_to_transect(self, tpicker, resolution=1e2):
 
@@ -72,10 +72,10 @@ class DataManager():
         mask = self.crop(xr.open_dataset(self.HR_bathy_file).mask)
         grid_orig = self.build_grid(mask)
 
-        lons = grid_orig['lon'][0,:]
-        lats = grid_orig['lat'][:,0]
-        dlon = float((lons[1:]-lons[:-1]).mean())
-        dlat = float((lats[1:]-lats[:-1]).mean())
+        lons = grid_orig['lon'][0, :]
+        lats = grid_orig['lat'][:, 0]
+        dlon = float((lons[1:] - lons[:-1]).mean())
+        dlat = float((lats[1:] - lats[:-1]).mean())
         grid_aspect = dlon / dlat
         print(f' grid aspect ratio: {grid_aspect}')
 
@@ -91,8 +91,8 @@ class DataManager():
         grid_upscale = {}
         grid_upscale['N'] = resolution
         grid_upscale['M'] = resolution
-        lat_mat = np.tile(lat_arr, (resolution,1)).T
-        lon_mat = np.tile(lon_arr, (resolution,1))
+        lat_mat = np.tile(lat_arr, (resolution, 1)).T
+        lon_mat = np.tile(lon_arr, (resolution, 1))
         grid_upscale['lat'] = np.ascontiguousarray(lat_mat)
         grid_upscale['lon'] = np.ascontiguousarray(lon_mat)
         grid_upscale['mask'] = np.identity(resolution)
@@ -102,14 +102,13 @@ class DataManager():
                                           extrap_method="inverse_dist")
         return interp_to_transect
 
-
     def create_regridders(self):
         print('Create regridders')
         bt_HR = xr.open_dataset(self.HR_bathy_file)
         ds_HR = xr.open_mfdataset(self.HR_data_files, parallel=True)
         ds_LR = xr.open_dataset(self.LR_data_file)
 
-        mask = bt_HR.mask[0,:,:]
+        mask = bt_HR.mask[0, :, :]
         grid_HR = self.build_grid(ds_HR, mask)
         grid_LR = self.build_grid(ds_LR)
 
@@ -120,15 +119,14 @@ class DataManager():
 
         return interp_HR_LR, interp_LR_HR, mask
 
-
     def get_coarse_data(self, time_range, interpolate=False):
 
         if not interpolate:
-            time_slice=slice(time_range[0],time_range[-1])
+            time_slice=slice(time_range[0], time_range[-1])
             ds_LR = xr.open_dataset(self.LR_data_file)\
                       .sel(time=time_slice)
         else:
-                      #.fillna(0.0)\
+            # .fillna(0.0)\
             ds_LR = xr.open_dataset(self.LR_data_file)\
                       .interp(time=time_range, method='linear')
 
@@ -137,7 +135,7 @@ class DataManager():
                        ds_LR['vo'].values], axis=1)
         do=np.nan_to_num(self.crop(regridder(da)))
 
-        return do.transpose(0,2,3,1)
+        return do.transpose(0, 2, 3, 1)
 
     def get_grid(self):
         " load grid, crop and return "
@@ -222,7 +220,7 @@ class DataManager():
             #     da_dt[:, latlons[0][i], latlons[1][i]] = results[i]
             #     pb.add(1)
 
-            return da_dt
+            # return da_dt
 
         if detide:
             da_HR_uo = detide_da(da_HR_uo)
@@ -583,16 +581,15 @@ class DataManager():
         return dirs, files
 
 
-
 class DataGenerator(keras.utils.PyDataset):
 
     def __init__(self, x, y,
-                 ft_type = 'hybrid',
-                 batch_size = 4,
-                 shuffle = False,
-                 lookback = 0,
-                 encoder = None,
-                 unroll_dim = 1,
+                 ft_type='hybrid',
+                 batch_size=4,
+                 shuffle=False,
+                 lookback=0,
+                 encoder=None,
+                 unroll_dim=1,
                  **kwargs):
 
         super().__init__(**kwargs)
@@ -609,7 +606,6 @@ class DataGenerator(keras.utils.PyDataset):
         self.unroll_x = self.unroll_y
 
         self.__setup_data(x, y)
-
 
     def __setup_data(self, x, y):
         assert len(x) == 2
@@ -630,23 +626,20 @@ class DataGenerator(keras.utils.PyDataset):
 
         self.y = y
 
-
         if self.unroll_x:
             # set of shifted feedthrough inputs. self.indices is
             # truncated with unroll_dim to make sure this does not
             # lead to problems.
-            ft_set = [ x[1][i:,] for i in range(self.unroll_dim+1) ]
+            ft_set = [x[1][i:,] for i in range(self.unroll_dim + 1)]
             # append feedthroughs to state input
             self.x =[x[0]] + ft_set
 
         if self.unroll_y:
-            self.y = [ y[0][i:,] for i in range(self.unroll_dim+1) ]
-
+            self.y = [y[0][i:,] for i in range(self.unroll_dim + 1)]
 
     def __len__(self):
         # number of batches
         return int(np.ceil(self.n / self.batch_size))
-
 
     def __getitem__(self, index):
         low  = index * self.batch_size
@@ -654,14 +647,12 @@ class DataGenerator(keras.utils.PyDataset):
         inds = self.indices[low:high]
         batch_x = create_lookback(inds, self.x, self.lookback)
         batch_y = create_lookback(inds, self.y, self.lookback)
-        #batch_y = [y[inds,] for y in self.y]
+        # batch_y = [y[inds,] for y in self.y]
         return (batch_x, batch_y)
-
 
     def __do_shuffle(self):
         if self.shuffle:
             np.random.shuffle(self.indices)
-
 
     def on_epoch_end(self):
         self.__do_shuffle()
@@ -671,9 +662,9 @@ def create_lookback(inds, data, lookback, axis=1):
     batch = list()
 
     for var in data:
-        lb_fields = list() # lookback fields
-        for lb in range(lookback+1):
-            lb_field = var[inds-lb,]
+        lb_fields = list()  # lookback fields
+        for lb in range(lookback + 1):
+            lb_field = var[inds - lb,]
             lb_fields.append(lb_field)
 
         batch.append(np.stack(lb_fields, axis=axis))
@@ -683,7 +674,7 @@ def create_lookback(inds, data, lookback, axis=1):
 
 class CustomScaler():
 
-    def __init__(self, scaling_type = 'minmax_per_feature'):
+    def __init__(self, scaling_type='minmax_per_feature'):
         self.scaling_type = scaling_type
         self.shift = None
         self.scale = None
@@ -709,7 +700,8 @@ class CustomScaler():
         self.fitted = True
 
     def transform(self, data):
-        if not self.fitted: raise Exception('scaler not fitted')
+        if not self.fitted:
+            raise Exception('scaler not fitted')
         return (data - self.shift) * self.scale
 
     def fit_transform(self, data):
@@ -717,5 +709,6 @@ class CustomScaler():
         return self.transform(data)
 
     def inverse_transform(self, data):
-        if not fitted: raise Exception('scaler not fitted')
-        return (x / self.scale) + self.shift
+        if not self.fitted:
+            raise Exception('scaler not fitted')
+        return (data / self.scale) + self.shift

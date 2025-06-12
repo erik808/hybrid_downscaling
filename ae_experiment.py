@@ -54,9 +54,11 @@ class AE_Experiment():
             existing_model=None,
             exp_name=None,
             tuning_config=None,
-            detide=False,
+            detide=False,  # -> test case factorization
             compute_data=False,
-            coarsening_method='gaussian_filter',
+            coarsening_method='gaussian_filter',  # belongs to
+                                                  # testcase
+                                                  # factorization
             truncation=1000,
             sigma=[1, 1, 1],
             feedthrough_type='hybrid',

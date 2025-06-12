@@ -10,9 +10,6 @@ import time
 import scipy
 from scipy.ndimage import gaussian_filter
 from sklearn.preprocessing import MinMaxScaler
-from sklearn.preprocessing import StandardScaler
-from multiprocess import Pool
-
 
 class DataManager():
 

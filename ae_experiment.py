@@ -2,7 +2,6 @@ import importlib
 from importlib import reload
 
 import rich
-import os
 import sys
 import dill
 
@@ -18,6 +17,7 @@ from keras import ops
 
 import data_manager
 reload(data_manager)
+
 from data_manager import DataManager
 from data_manager import DataGenerator
 
@@ -29,19 +29,23 @@ reload(tools)
 from tools import Tee
 
 import ae_model
-reload(ae_model)
 
-from ae_model import AutoEncoder
 from ae_model import CustomValidation
 from ae_model import LSModelWrapper
 from plot_utils import PlotMachine
 
 import compute_tool
 reload(compute_tool)
+reload(ae_model)
+from ae_model import AutoEncoder
 from compute_tool import ComputeTool
 
-#-------------------------------------------------------
-#-------------------------------------------------------
+import plot_utils
+reload(plot_utils)
+
+# -------------------------------------------------------
+# -------------------------------------------------------
+
 
 class AE_Experiment():
 
@@ -54,7 +58,7 @@ class AE_Experiment():
             compute_data=False,
             coarsening_method='gaussian_filter',
             truncation=1000,
-            sigma=[1,1,1],
+            sigma=[1, 1, 1],
             feedthrough_type='hybrid',
             testing_mode=False
     ):
@@ -66,10 +70,10 @@ class AE_Experiment():
         self.feedthrough_type = feedthrough_type
 
         self.folder_id = self.init_timestamp \
-            if self.exp_name == None else self.exp_name
+            if self.exp_name is None else self.exp_name
         self.folder_id = self.exp_name
         self.folder_postfix = ''\
-            if self.tuning_config == None else f'-{self.tuning_config}'
+            if self.tuning_config is None else f'-{self.tuning_config}'
 
         # setup new or existing directories
         self.testing_mode = testing_mode
@@ -77,7 +81,7 @@ class AE_Experiment():
         self.dirs, self.files = \
             self.dm.setup_directories(self.folder_id, self.folder_postfix)
 
-        if existing_model == None:
+        if existing_model is None:
             self.load_existing_model = False
         else:
             self.load_existing_model = True
@@ -105,7 +109,6 @@ class AE_Experiment():
         self.load_config(config_name='default')
         self.ct=ComputeTool()
         self.trial_id = None
-
 
     def load_config(self, config_name):
         # Load a config that lives in the <configs> dir: config_file =
@@ -137,14 +140,13 @@ class AE_Experiment():
         rich.print('default hyper params:', self.hyper_params)
         rich.print('tuning config dict:', self.tuning_config_dict)
 
-
     def run_optuna_study(self):
         self.init_log()
 
         tuning_dir = self.dirs['tuning']
         storage = f'sqlite:///{tuning_dir}/storage.db'
         reload_tuning=True
-        timeout=60*60*4 # 6h
+        timeout=60 * 60 * 4  # 6h
 
         self.setup_search_space()
 
@@ -166,7 +168,7 @@ class AE_Experiment():
                             timeout=timeout)
 
     def objective(self, trial):
-        self.trial_id = trial._trial_id-1
+        self.trial_id = trial._trial_id - 1
         self.setup_search_space(trial)
         self.log(trial)
         err = self.build_and_run_model()
@@ -176,14 +178,13 @@ class AE_Experiment():
                            search_space=[], trial=None):
 
         var = suggest_args['name']
-        trial_mode = True if trial != None else False
+        trial_mode = True if trial is not None else False
         suggest_fun = getattr(trial, f'suggest_{vartype}') \
             if trial_mode else []
 
         if trial_mode:
             self.hyper_params[var] = suggest_fun(**suggest_args)
         self.search_space[var] = search_space
-
 
     def setup_search_space(self, trial=None):
 
@@ -203,14 +204,12 @@ class AE_Experiment():
         self.gridSampler = \
             optuna.samplers.GridSampler(self.search_space)
 
-
     def init_log(self):
         tuning_dir = self.dirs['tuning']
         self.study_log = f'{tuning_dir}/optuna_{self.init_timestamp}.log'
         with open(self.study_log, "w") as file:
-            print('study log ______________________________' ,
+            print('study log ______________________________',
                   file=file)
-
 
     def log(self, trial):
         print(f'writing log to {self.study_log}')
@@ -262,24 +261,12 @@ class AE_Experiment():
         train_data_ft  = self.data['LR'][self.train_range_k,]
         train_time_ft  = self.data['time'][self.train_range_k,]
 
-        # HR test data
-        test_data      = self.data['HR'][self.test_range,]
-        # LR/control/feedthrough test data
-        test_data_ft   = self.data['LR'][self.test_range,]
-        test_time      = self.data['time'][self.test_range,]
-
         if alternative_control == 'coarse_model':
             x_train = self.dm.get_coarse_data(train_time_ft, interpolate=True)
-            x_test = self.dm.get_coarse_data(test_time, interpolate=True)
             train_data_ft = \
                 self.scalers['R']\
-                    .fit_transform(x_train.reshape(len(train_time_ft),-1))\
+                    .fit_transform(x_train.reshape(len(train_time_ft), -1))\
                     .reshape(x_train.shape)
-            test_data_ft = \
-                self.scalers['R']\
-                    .transform(x_test.reshape(len(test_time),-1))\
-                    .reshape(x_test.shape)
-
 
         self.postfix, self.timestamp = self.create_postfix()
         sys.stdout = Tee(self.files['log'] + f'{self.postfix}')
@@ -292,7 +279,7 @@ class AE_Experiment():
         ae_model_pars.update(self.hyper_params)
 
         ae = AutoEncoder(
-            test_vec=self.data['HR'][0,:,:,:],
+            test_vec=self.data['HR'][0, :, :, :],
             mask=self.params['mask'],
             **ae_model_pars
         )
@@ -306,7 +293,7 @@ class AE_Experiment():
 
         else:
 
-            autoencoder, encoder, decoder =  ae.build_model()
+            autoencoder, encoder, decoder = ae.build_model()
 
         print('----------------------------------------------------------')
         print(f'experiment: {self.folder_id}{self.folder_postfix},       ')
@@ -314,17 +301,17 @@ class AE_Experiment():
         print('--------------------------------------------------------- ')
 
         tic = time.time()
-        dgen_args = { 'ft_type' : self.feedthrough_type,
-                      'batch_size' : batch_size,
-                      'shuffle' : shuffle,
-                      'lookback' : self.hyper_params['lookback'],
-                      'unroll_dim' : self.unroll_dim,
-                      'encoder' : encoder,
+        dgen_args = {'ft_type' : self.feedthrough_type,
+                     'batch_size' : batch_size,
+                     'shuffle' : shuffle,
+                     'lookback' : self.hyper_params['lookback'],
+                     'unroll_dim' : self.unroll_dim,
+                     'encoder' : encoder,
                      }
 
         datagen_train = DataGenerator(
-            x = [train_data_inp, train_data_ft],
-            y = [train_data_otp],
+            x=[train_data_inp, train_data_ft],
+            y=[train_data_otp],
             **dgen_args
         )
 
@@ -332,16 +319,18 @@ class AE_Experiment():
                                   trial_id=self.trial_id)
 
         self.validation_callback = \
-            CustomValidation(data = self.data,
-                             test_inds = self.test_range,
+            CustomValidation(data=self.data,
+                             test_inds=self.test_range,
                              plotmachine=plotmachine,
-                             pars = {'feedthrough_only': feedthrough_only,
-                                     'use_feedthrough': use_feedthrough,
-                                     'multihead_output' : False,
-                                     'unroll_dim' : self.unroll_dim,
-                                     'predict_only' : predict_only,
-                                     'evaluate' : evaluate,
-                                     'lookback' : self.hyper_params['lookback']})
+                             pars={'feedthrough_only': feedthrough_only,
+                                   'use_feedthrough': use_feedthrough,
+                                   'multihead_output' : False,
+                                   'unroll_dim' : self.unroll_dim,
+                                   'predict_only' : predict_only,
+                                   'evaluate' : evaluate,
+                                   'lookback' : self.hyper_params['lookback']
+                                   }
+                             )
 
         cdir = self.dirs['checkpoints']
 
@@ -358,14 +347,16 @@ class AE_Experiment():
                      model_checkpoint_callback]
 
         # Final assembly -------------------------------------
-        if (not feedthrough_only and
-            self.latent_space_model in [
-                'VAE',
-                'VAE+RNN',
-                'RNN',
-                'LSTM',
-                'GRU',
-            ]):
+        if (
+                not feedthrough_only and
+                self.latent_space_model in [
+                    'VAE',
+                    'VAE+RNN',
+                    'RNN',
+                    'LSTM',
+                    'GRU',
+                ]
+        ):
             model = LSModelWrapper(
                 encoder,
                 decoder,
@@ -374,7 +365,6 @@ class AE_Experiment():
         else:
             # default model
             model = autoencoder
-            
 
         if self.unroll_dim > 0:
             model.summary()
@@ -434,7 +424,6 @@ class AE_Experiment():
                                dpi=200, show_layer_activations=False,
                                show_layer_names=True)
 
-
     def setup_ranges(self, params):
 
         if self.history == 'all':  # use all data we have
@@ -453,7 +442,6 @@ class AE_Experiment():
                                     params['test_range'].stop)
         self.test_range = full_test_range[:self.future,]
 
-
     def my_loss(self, y_true, y_pred):
 
         # usage:
@@ -466,14 +454,14 @@ class AE_Experiment():
         y_true = ops.convert_to_tensor(y_true, dtype=y_pred.dtype)
 
         def compute_2d_energy_spectrum(tensor):
-            im = ops.zeros_like(tensor[...,0]) # imaginary part
-            s_u = ops.fft2((tensor[...,0], im))
-            s_v = ops.fft2((tensor[...,1], im))
+            im = ops.zeros_like(tensor[..., 0])  # imaginary part
+            s_u = ops.fft2((tensor[..., 0], im))
+            s_v = ops.fft2((tensor[..., 1], im))
             u = ops.square(ops.sqrt(ops.square(s_u[0]) +
                                     ops.square(s_u[1])))
             v = ops.square(ops.sqrt(ops.square(s_v[0]) +
                                     ops.square(s_v[1])))
-            E = (u + v)/2
+            E = (u + v) / 2
             E = E / ops.max(E)
 
             return E
@@ -485,9 +473,8 @@ class AE_Experiment():
         bias=0.0
         first_log = ops.log(ops.maximum(s_true, epsilon) + bias)
         second_log = ops.log(ops.maximum(s_pred, epsilon) + bias)
-        out = ops.mean(ops.square(first_log - second_log), axis=(1,2))
+        out = ops.mean(ops.square(first_log - second_log), axis=(1, 2))
         return out
-
 
     def plot_spectra(self):
         plotmachine = PlotMachine(results_dir=self.dirs['results'],
@@ -509,25 +496,18 @@ class AE_Experiment():
         plotmachine.plot_enstrophy_spectrum(transect_name='along_flow',
                                             data=data_dict)
 
-
         self.spec_across = \
             plotmachine.plot_energy_spectrum(transect_name='across_flow',
                                              data=data_dict)
         plotmachine.plot_enstrophy_spectrum(transect_name='across_flow',
                                             data=data_dict)
 
-
     def plot_history(self):
         plotmachine = PlotMachine(results_dir=self.dirs['results'],
                                   trial_id=self.trial_id)
         plotmachine.plot_history(self.hist)
 
-
     def create_movie(self, alternative_control=False):
-
-        Nlon = self.params['Nlon']
-        Nlat = self.params['Nlat']
-        num_channels = self.params['num_channels']
 
         truth = self.data['HR'][self.test_range,]
         lowres = self.data['LR'][self.test_range,]
@@ -536,29 +516,36 @@ class AE_Experiment():
         if alternative_control == 'coarse_model':
             x = self.dm.get_coarse_data(test_time, interpolate=True)
             lowres = self.scalers['LR']\
-                         .transform(x.reshape(len(test_time),-1))\
+                         .transform(x.reshape(len(test_time), -1))\
                          .reshape(x.shape)
-
 
         predictions = self.validation_callback.predictions
 
         vort_truth = self.ct.vorticity(truth, self.scalers['HR'])
-        vort_truth_fn = lambda i : vort_truth[i,]
+
+        def vort_truth_fn(i):
+            return vort_truth[i,]
 
         vort_pred = self.ct.vorticity(predictions,
-                                 self.scalers['HR'])
-        vort_pred_fn = lambda i : vort_pred[i,]
+                                      self.scalers['HR'])
+
+        def vort_pred_fn(i):
+            return vort_pred[i,]
 
         vort_lowres = self.ct.vorticity(lowres,
-                                   self.scalers['LR'])
-        vort_lowres_fn = lambda i : vort_lowres[i,]
+                                        self.scalers['LR'])
+
+        def vort_lowres_fn(i):
+            return vort_lowres[i,]
 
         error = np.sqrt(np.square(vort_truth - vort_pred))
-        error_fn = lambda i : error[i,]
 
-        def get_rolling_spec(field, window_size=4*12):
+        def error_fn(i):
+            return error[i,]
+
+        def get_rolling_spec(field, window_size=4 * 12):
             return xr.DataArray(field,
-                                dims=['time','wavenumber'],
+                                dims=['time', 'wavenumber'],
                                 coords={'time' : test_time})\
                      .rolling(time=window_size).mean()
 
@@ -590,7 +577,7 @@ class AE_Experiment():
             'Error' : {'values' : error_fn,
                        'type' : '2d',
                        'vmin' : 0,
-                       'vmax' : vort_max/3,
+                       'vmax' : vort_max / 3,
                        'cmap' : 'viridis',
                        'cbar_label' : 'vorticity (day$^{-1}$)'},
 
@@ -600,11 +587,11 @@ class AE_Experiment():
                 'type' : '1d',
                 'values' :
                 {'HR truth' : lambda i :
-                 get_rolling_spec(self.spec_along['truth'])[i,:],
+                 get_rolling_spec(self.spec_along['truth'])[i, :],
                  'Model prediction' : lambda i :
-                 get_rolling_spec(self.spec_along['pred'])[i,:],
+                 get_rolling_spec(self.spec_along['pred'])[i, :],
                  'LR forcing' : lambda i :
-                 get_rolling_spec(self.spec_along['lowres'])[i,:]
+                 get_rolling_spec(self.spec_along['lowres'])[i, :]
                  },
                 'ymin' : 1e-6,
                 'ymax' : 2,
@@ -617,21 +604,18 @@ class AE_Experiment():
                 'type' : '1d',
                 'values' :
                 {'HR truth' : lambda i :
-                 get_rolling_spec(self.spec_across['truth'])[i,:],
+                 get_rolling_spec(self.spec_across['truth'])[i, :],
                  'Model prediction' : lambda i :
-                 get_rolling_spec(self.spec_across['pred'])[i,:],
+                 get_rolling_spec(self.spec_across['pred'])[i, :],
                  'LR forcing' : lambda i :
-                 get_rolling_spec(self.spec_across['lowres'])[i,:]
+                 get_rolling_spec(self.spec_across['lowres'])[i, :]
                  },
                 'ymin' : 1e-6,
                 'ymax' : 2,
                 'xmin' : 1,
                 'xmax' : 55,
-            } }
-
-        import plot_utils
-        reload(plot_utils)
-        from plot_utils import PlotMachine
+            }
+        }
 
         plotmachine = PlotMachine(results_dir=self.dirs['results'],
                                   movie_dir=self.dirs['movies'],
@@ -643,7 +627,7 @@ class AE_Experiment():
     def create_postfix(self):
 
         postfix = ''
-        if self.trial_id != None:
+        if self.trial_id is not None:
             postfix += f'_trial_{self.trial_id}'
 
         timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
@@ -661,7 +645,7 @@ if __name__=="__main__":
         compute_data=False,
         coarsening_method='gaussian_filter',
         truncation=100,
-        sigma=[1,1.5,1.5],
+        sigma=[1, 1.5, 1.5],
         feedthrough_type='hybrid')
 
     exp.run_optuna_study()

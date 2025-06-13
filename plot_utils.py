@@ -4,7 +4,6 @@ import numpy as np
 import os
 from multiprocess import Pool
 from importlib import reload
-import dill
 import data_manager
 reload(data_manager)
 from data_manager import DataFactory
@@ -12,9 +11,9 @@ import compute_tool
 reload(compute_tool)
 from compute_tool import ComputeTool
 
-class PlotMachine():
 
-    def __init__(self, figsize=(16,8),
+class PlotMachine():
+    def __init__(self, figsize=(16, 8),
                  output_dict={},
                  time_array=None,
                  results_dir=None,
@@ -31,12 +30,13 @@ class PlotMachine():
         self.pool_size=1
         self.trial_id=trial_id
         self.dm = DataFactory()
+        os.environ["DISPLAY"] = ":0"
 
     def plot_single_frame(self, frame_id, output_dict=None):
         self.output_dict = self.output_dict \
-            if output_dict == None else output_dict
+            if output_dict is None else output_dict
 
-        fig = plt.figure(figsize=self.figsize)
+        plt.figure(figsize=self.figsize)
         postfix = self.create_postfix()
         fig_name = f'{self.results_dir}/results_autoencoder{postfix}.png'
         print(fig_name)
@@ -45,44 +45,45 @@ class PlotMachine():
     def create_movie(self, output_dict=None):
 
         self.output_dict = self.output_dict \
-            if output_dict == None else output_dict
+            if output_dict is None else output_dict
 
-        fig = plt.figure(figsize=self.figsize)
+        plt.figure(figsize=self.figsize)
 
         if self.pool_size == 1:
-            for i in range(0,len(self.time_array),
+            for i in range(0, len(self.time_array),
                            self.frame_stride):
                 self.plot_frame(i)
         else:
             with Pool(self.pool_size) as p:
-                p.map(self.plot_frame, range(0,len(self.time_array),
+                p.map(self.plot_frame, range(0, len(self.time_array),
                                              self.frame_stride))
 
         postfix = self.create_postfix()
         movie_name = f'movie{postfix}.mov'
         framerate = 24
-        sys_cmd = ( f"ffmpeg -r {framerate} -f image2 -pattern_type glob -i "
-                    f"'{self.movie_dir}/frame-*.png' "
-                    f"-vcodec libx264 -crf 25  -pix_fmt yuv420p -y "
-                    f"{self.movie_dir}/{movie_name}" )
+        sys_cmd = (f"ffmpeg -r {framerate} -f image2 -pattern_type glob -i "
+                   f"'{self.movie_dir}/frame-*.png' "
+                   f"-vcodec libx264 -crf 25  -pix_fmt yuv420p -y "
+                   f"{self.movie_dir}/{movie_name}"
+                   )
 
         print(sys_cmd)
         os.system(sys_cmd)
-        sys_cmd = ( f"rm {self.movie_dir}/frame-*.png")
+        sys_cmd = (f"rm {self.movie_dir}/frame-*.png")
         print(sys_cmd)
         os.system(sys_cmd)
 
     def plot_frame(self, id, fig_name=None):
         print(f'plotting frame {id}')
         plt.clf()
-        if fig_name == None:
+        if fig_name is None:
             fig_name = f'{self.movie_dir}/frame-{id:06d}.png'
 
         Nsub = len(self.output_dict)
         dim0 = int(np.ceil(np.sqrt(Nsub)))
         dim1 = int(np.ceil(Nsub / dim0))
         for f, (key, item) in enumerate(self.output_dict.items()):
-            plt.subplot(dim1,dim0,f+1)
+            plt.subplot(dim1, dim0, f + 1)
             if item['type'] == '2d':
                 h = plt.imshow(item['values'](id),
                                cmap=item['cmap'],
@@ -105,7 +106,6 @@ class PlotMachine():
                 plt.gca().set_ylim(item['ymin'], item['ymax'])
                 plt.gca().set_xlim(item['xmin'], item['xmax'])
 
-
         plt.suptitle(f"date: {np.datetime64(self.time_array[id], 'h')}")
         plt.savefig(fig_name, bbox_inches='tight')
 
@@ -116,19 +116,18 @@ class PlotMachine():
             fig_name = f'{self.results_dir}/history{postfix}.png'
             plt.close('all')
 
-        plt.subplot(1,2,1)
+        plt.subplot(1, 2, 1)
         for key, value in hist.history.items():
             if key == 'error' or key == 'base':
                 continue
-            plt.semilogy(value,'.-',
+            plt.semilogy(value, '.-',
                          label=f'{key} {add}')
 
         plt.grid()
         plt.legend()
         plt.gca().set_xlabel('epoch')
 
-
-        plt.subplot(1,2,2)            
+        plt.subplot(1, 2, 2)
         if 'error' in hist.history:
             plt.semilogy(hist.history['error'],'.-',
                          label=f'validation error {add}')
@@ -178,7 +177,7 @@ class PlotMachine():
         postfix += f'_{timestamp}'
 
         return postfix
-    
+
 
     def plot_enstrophy_spectrum(self,
                                 transect_name='along_flow',

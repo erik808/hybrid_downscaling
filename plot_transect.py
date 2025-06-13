@@ -20,8 +20,6 @@ data, params, scalers, _ = \
                             sigma=[1,1.5,1.5],
                             truncation=100)
 
-
-
 ct=ComputeTool()
 
 snapshot = 5000

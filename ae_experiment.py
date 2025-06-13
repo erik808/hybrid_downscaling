@@ -18,7 +18,7 @@ from keras import ops
 import data_manager
 reload(data_manager)
 
-from data_manager import DataManager
+from data_manager import DataFactory
 from data_manager import DataGenerator
 
 import plot_utils
@@ -54,16 +54,20 @@ class AE_Experiment():
             existing_model=None,
             exp_name=None,
             tuning_config=None,
-            detide=False,  # -> test case factorization
-            compute_data=False,
-            coarsening_method='gaussian_filter',  # belongs to
-                                                  # testcase
-                                                  # factorization
-            truncation=1000,
-            sigma=[1, 1, 1],
+            case_study='cmems',
+            # detide=False,  # -> test case factorization
+            # compute_data=False,
+            # coarsening_method='gaussian_filter',  # belongs to
+            #                                       # testcase
+            #                                       # factorization
+            # truncation=1000,
+            # sigma=[1, 1.5, 1.5],  # -> test case factorization
             feedthrough_type='hybrid',
             testing_mode=False
     ):
+
+        self.load_config(config_name='default')
+        self.load_config(config_name='data_config_cmems')
 
         self.init_timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
         self.exp_name = exp_name
@@ -79,7 +83,8 @@ class AE_Experiment():
 
         # setup new or existing directories
         self.testing_mode = testing_mode
-        self.dm = DataManager(testing_mode=self.testing_mode)
+        self.dm = DataFactory(case_study=case_study,
+                              testing_mode=self.testing_mode)
         self.dirs, self.files = \
             self.dm.setup_directories(self.folder_id, self.folder_postfix)
 
@@ -102,20 +107,22 @@ class AE_Experiment():
         # -------------------------------------------------------
         # Load or compute data
         self.data, self.params, self.scalers, _ = \
-            self.dm.create_training_data(compute_data=compute_data,
-                                         detide=detide,
-                                         coarsening_method=coarsening_method,
-                                         sigma=sigma,
-                                         truncation=truncation)
+            self.dm.create_training_data(
+                compute_data=self.compute_data,
+                detide=self.detide,
+                coarsening_method=self.coarsening_method,
+                sigma=self.sigma,
+                truncation=self.truncation)
+
         # -------------------------------------------------------
-        self.load_config(config_name='default')
+
         self.ct=ComputeTool()
         self.trial_id = None
 
     def load_config(self, config_name):
         # Load a config that lives in the <configs> dir: config_file =
         # <configs>/<config_name>.py. Overwrite class members and
-        # create new ones according what is present in
+        # create new ones according to what is present in
         # config_file. Exclude "__" members and functions.
 
         config_file = f'configs.{config_name}'
@@ -289,12 +296,10 @@ class AE_Experiment():
         if self.load_existing_model:
             autoencoder = \
                 keras.models.load_model(self.load_path_autoencoder)
-
             encoder = keras.models.load_model(self.load_path_encoder)
             decoder = keras.models.load_model(self.load_path_decoder)
 
         else:
-
             autoencoder, encoder, decoder = ae.build_model()
 
         print('----------------------------------------------------------')
@@ -643,11 +648,8 @@ if __name__=="__main__":
     exp = AE_Experiment(
         exp_name='vae_tests',
         tuning_config='latent_space_dim',
-        detide=False,
-        compute_data=False,
-        coarsening_method='gaussian_filter',
-        truncation=100,
-        sigma=[1, 1.5, 1.5],
-        feedthrough_type='hybrid')
+        feedthrough_type='hybrid',
+        case_study='cmems',
+    )
 
     exp.run_optuna_study()

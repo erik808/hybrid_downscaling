@@ -7,7 +7,7 @@ from importlib import reload
 import dill
 import data_manager
 reload(data_manager)
-from data_manager import DataManager
+from data_manager import DataFactory
 import compute_tool
 reload(compute_tool)
 from compute_tool import ComputeTool
@@ -30,7 +30,7 @@ class PlotMachine():
         self.frame_stride=4
         self.pool_size=1
         self.trial_id=trial_id
-        self.dm = DataManager()
+        self.dm = DataFactory()
 
     def plot_single_frame(self, frame_id, output_dict=None):
         self.output_dict = self.output_dict \

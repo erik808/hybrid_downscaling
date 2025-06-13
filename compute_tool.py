@@ -2,7 +2,7 @@ import numpy as np
 from importlib import reload
 import data_manager
 reload(data_manager)
-from data_manager import DataManager
+from data_manager import DataFactory
 import dill
 
 from transectpicker.transectpicker import TransectPicker
@@ -15,7 +15,7 @@ class ComputeTool():
 
     def __init__(self):
 
-        self.dm = DataManager()
+        self.dm = DataFactory()
         self.grid, self.binary_mask = self.dm.get_grid()
         self.mask = np.where(self.binary_mask==0, np.nan, 1)
         self.e1 = self.grid.e1t.data # in m

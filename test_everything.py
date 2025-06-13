@@ -7,7 +7,6 @@ from ae_experiment import AE_Experiment
 import tools
 reload(tools)
 
-
 # set a seed
 keras.utils.set_random_seed(123)
 exp_name = 'test_everything'
@@ -17,9 +16,7 @@ exp_name = 'test_everything'
 def test_short_run():
     exp = AE_Experiment(
         exp_name=exp_name,
-        compute_data=False,
-        coarsening_method='gaussian_filter',
-        sigma=[1, 1.5, 1.5],
+        case_study='cmems',
         feedthrough_type='hybrid',
         testing_mode=True)
 
@@ -59,9 +56,7 @@ def test_save_load():
 
     exp = AE_Experiment(
         exp_name=exp_name,
-        compute_data=False,
-        coarsening_method='gaussian_filter',
-        sigma=[1, 1.5, 1.5],
+        case_study='cmems',
         feedthrough_type='hybrid',
         testing_mode=True)
 
@@ -104,9 +99,7 @@ def test_save_load():
     exp = AE_Experiment(
         existing_model=model,
         exp_name=exp_name,
-        compute_data=False,
-        coarsening_method='gaussian_filter',
-        sigma=[1, 1.5, 1.5],
+        case_study='cmems',
         feedthrough_type='hybrid',
         testing_mode=True)
 

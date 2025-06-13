@@ -12,20 +12,54 @@ from scipy.ndimage import gaussian_filter
 from sklearn.preprocessing import MinMaxScaler
 
 
-# class DataManagerBase():
-#     def __init__(
-#             self,
-#             testing_mode=False
-#     ):
-#         self.testing_mode = testing_mode
+class DataFactory():
+    def __new__(
+            cls,
+            testing_mode=False,
+            case_study='cmems',
+    ):
+        if case_study == 'cmems':
+            return DataManagerCMEMS(testing_mode)
+        else:
+            raise ValueError("unknown case study")
 
-# class DataManager_CMEMS():
-class DataManager():
+
+class DataManagerBase():
+    def setup_directories(self, experiment_id, add_id):
+        models_dir = f'experiments/{experiment_id}{add_id}/models'
+        tuning_dir = f'experiments/{experiment_id}{add_id}/tuning'
+        results_dir = f'experiments/{experiment_id}{add_id}/results'
+        movie_dir = f'experiments/{experiment_id}{add_id}/movies'
+        logs_dir = f'experiments/{experiment_id}{add_id}/logs'
+        checkpoints_dir = f'experiments/{experiment_id}{add_id}/checkpoints'
+        log_file = f'{logs_dir}/log.txt'
+
+        os.system(f'mkdir -p {models_dir}')
+        os.system(f'mkdir -p {tuning_dir}')
+        os.system(f'mkdir -p {movie_dir}')
+        os.system(f'mkdir -p {results_dir}')
+        os.system(f'mkdir -p {checkpoints_dir}')
+        os.system(f'mkdir -p {logs_dir}')
+
+        dirs = {'models'      : models_dir,
+                'tuning'      : tuning_dir,
+                'results'     : results_dir,
+                'movies'      : movie_dir,
+                'checkpoints' : checkpoints_dir,
+                'logs'        : logs_dir}
+
+        files = {'log' : log_file}
+
+        return dirs, files
+
+
+class DataManagerCMEMS(DataManagerBase):
 
     def __init__(
             self,
             testing_mode=False
     ):
+
         self.testing_mode = testing_mode
         self.test_restrict = 3000
 
@@ -556,33 +590,6 @@ class DataManager():
             out_data = orig_data
 
         return out_data, params, scalers, enc_data
-
-    def setup_directories(self, experiment_id, add_id):
-        models_dir = f'experiments/{experiment_id}{add_id}/models'
-        tuning_dir = f'experiments/{experiment_id}{add_id}/tuning'
-        results_dir = f'experiments/{experiment_id}{add_id}/results'
-        movie_dir = f'experiments/{experiment_id}{add_id}/movies'
-        logs_dir = f'experiments/{experiment_id}{add_id}/logs'
-        checkpoints_dir = f'experiments/{experiment_id}{add_id}/checkpoints'
-        log_file = f'{logs_dir}/log.txt'
-
-        os.system(f'mkdir -p {models_dir}')
-        os.system(f'mkdir -p {tuning_dir}')
-        os.system(f'mkdir -p {movie_dir}')
-        os.system(f'mkdir -p {results_dir}')
-        os.system(f'mkdir -p {checkpoints_dir}')
-        os.system(f'mkdir -p {logs_dir}')
-
-        dirs = {'models'      : models_dir,
-                'tuning'      : tuning_dir,
-                'results'     : results_dir,
-                'movies'      : movie_dir,
-                'checkpoints' : checkpoints_dir,
-                'logs'        : logs_dir}
-
-        files = {'log' : log_file}
-
-        return dirs, files
 
 
 class DataGenerator(keras.utils.PyDataset):

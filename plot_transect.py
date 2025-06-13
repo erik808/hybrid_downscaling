@@ -9,10 +9,10 @@ import compute_tool
 reload(compute_tool)
 from compute_tool import ComputeTool
 import data_manager
-from data_manager import DataManager
+from data_manager import DataFactory
 
 
-dm = DataManager()
+dm = DataFactory()
 data, params, scalers, _ = \
     dm.create_training_data(compute_data=False,
                             detide=False,

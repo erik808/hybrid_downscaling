@@ -13,14 +13,9 @@ if __name__=="__main__":
     }
 
     exp = AE_Experiment(
-        existing_model = model,
+        existing_model=model,
         exp_name='restart_test_RNN',
         tuning_config='default',
-        detide=False,
-        compute_data=False,
-        coarsening_method='gaussian_filter',
-        truncation=100,
-        sigma=[1,1.5,1.5],
         feedthrough_type='hybrid')
 
     # adjust hyperparameters:

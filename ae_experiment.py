@@ -1,4 +1,3 @@
-import importlib
 from importlib import reload
 
 import sys
@@ -43,7 +42,6 @@ import plot_utils
 reload(plot_utils)
 
 # -------------------------------------------------------
-# -------------------------------------------------------
 
 
 class AE_Experiment():
@@ -54,17 +52,9 @@ class AE_Experiment():
             exp_name=None,
             tuning_config=None,
             case_study='cmems',
-            # detide=False,  # -> test case factorization
-            # compute_data=False,
-            # coarsening_method='gaussian_filter',  # belongs to
-            #                                       # testcase
-            #                                       # factorization
-            # truncation=1000,
-            # sigma=[1, 1.5, 1.5],  # -> test case factorization
             feedthrough_type='hybrid',
             testing_mode=False
     ):
-
         tools.load_config(self, config_name='default')
         tools.load_config(self, config_name='data_config_cmems')
 
@@ -107,16 +97,11 @@ class AE_Experiment():
         # Load or compute data
         self.data, self.params, self.scalers, _ = \
             self.dm.create_training_data(
-                compute_data=self.compute_data,
-                detide=self.detide,
-                coarsening_method=self.coarsening_method,
-                sigma=self.sigma,
                 truncation=self.truncation)
 
         # -------------------------------------------------------
         self.ct=ComputeTool()
         self.trial_id = None
-
 
     def run_optuna_study(self):
         self.init_log()

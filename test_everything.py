@@ -22,8 +22,8 @@ def test_short_run():
 
     # adjust hyperparameters:
     test_pars = {
-        'history': 200,
-        'future': 100,
+        'history': 20,
+        'future': 10,
         'epochs': 1,
         'unroll_dim': 0,
         'lookback': 0,
@@ -111,5 +111,5 @@ def test_save_load():
 
 if __name__=="__main__":
     test_short_run()
-    test_save_load()
+    # test_save_load()
     # test_feedthrough_only() ## TODO

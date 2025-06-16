@@ -6,6 +6,7 @@ import dill
 import time
 # import pytide
 import scipy
+import tools
 from scipy.ndimage import gaussian_filter
 from sklearn.preprocessing import MinMaxScaler
 
@@ -21,6 +22,7 @@ class DataManagerCMEMS(DataManagerBase):
 
         self.testing_mode = testing_mode
         self.test_restrict = 3000
+        tools.load_config(self, config_name='data_config_cmems')
 
         self.data_dir      = 'data'
         self.transect_dir  = f'{self.data_dir}/transects'
@@ -148,10 +150,7 @@ class DataManagerCMEMS(DataManagerBase):
 
     def load_uv_data(self,
                      coarsen_in_time=False,
-                     detide=False,
                      differences=False,
-                     coarsening_method='gaussian_filter',
-                     sigma=[1, 1, 1],
                      truncation=20):
 
         bt_HR = xr.open_dataset(self.HR_bathy_file)
@@ -221,7 +220,7 @@ class DataManagerCMEMS(DataManagerBase):
 
             # return da_dt
 
-        if detide:
+        if self.detide:
             da_HR_uo = detide_da(da_HR_uo)
             da_HR_vo = detide_da(da_HR_vo)
 
@@ -325,15 +324,15 @@ class DataManagerCMEMS(DataManagerBase):
             print(f'done ({toc-tic:.1f}s)')
             return out, coords
 
-        if coarsening_method == 'regridding':
+        if self.coarsening_method == 'regridding':
             da_LR_uo = create_da_LR(da_HR_uo, coarsen_in_time)
             da_LR_vo = create_da_LR(da_HR_vo, coarsen_in_time)
 
-        elif coarsening_method == 'gaussian_filter':
-            da_LR_uo = filter_HR_data(da_HR_uo, sigma)
-            da_LR_vo = filter_HR_data(da_HR_vo, sigma)
+        elif self.coarsening_method == 'gaussian_filter':
+            da_LR_uo = filter_HR_data(da_HR_uo, self.sigma)
+            da_LR_vo = filter_HR_data(da_HR_vo, self.sigma)
 
-        elif coarsening_method == 'reduced_basis':
+        elif self.coarsening_method == 'reduced_basis':
 
             data_LR = np.stack([ds_LR['uo'].fillna(0.0).values,
                                 ds_LR['vo'].fillna(0.0).values], axis=3)
@@ -361,7 +360,8 @@ class DataManagerCMEMS(DataManagerBase):
             # plt.pause(1)
 
         else:
-            raise Exception('invalid coarsening_method {coarsening_method}')
+            raise Exception('invalid coarsening_method '
+                            f'{self.coarsening_method}')
 
         # Crop data
         da_HR = {'uo': self.crop(da_HR_uo),
@@ -377,10 +377,7 @@ class DataManagerCMEMS(DataManagerBase):
                            split_factor=4 / 5,
                            scaling_range=(0, 1),
                            coarsen_in_time=False,
-                           coarsening_method='gaussian_filter',
-                           detide=False,
                            differences=False,
-                           sigma=[1, 1, 1],
                            truncation=20):
 
         # assume everything has this shape
@@ -389,10 +386,7 @@ class DataManagerCMEMS(DataManagerBase):
 
         da_HR, da_LR, da_mask = \
             self.load_uv_data(coarsen_in_time=coarsen_in_time,
-                              detide=detide,
                               differences=differences,
-                              sigma=sigma,
-                              coarsening_method=coarsening_method,
                               truncation=truncation)
 
         # create a torch mask
@@ -445,26 +439,22 @@ class DataManagerCMEMS(DataManagerBase):
 
     def create_training_data(self,
                              split_data=False,
-                             compute_data=True,
                              encoder=None,
                              coarsen_in_time=False,
-                             coarsening_method='gaussian_filter',
-                             detide=False,
                              differences=False,
-                             sigma=[1, 1, 1],
                              truncation=20):
 
         postfix = ''
-        postfix += '_detided' if detide else ''
+        postfix += '_detided' if self.detide else ''
         postfix += '_diff' if differences else ''
 
         if (
-                coarsening_method == 'gaussian_filter' and
-                len(sigma) > 0
+                self.coarsening_method == 'gaussian_filter' and
+                len(self.sigma) > 0
         ):
-            sigma_str = str(sigma).replace(', ', '-').replace('.', '_')
+            sigma_str = str(self.sigma).replace(', ', '-').replace('.', '_')
             postfix += f'_blur_{sigma_str}'
-        elif (coarsening_method == 'reduced_basis'):
+        elif (self.coarsening_method == 'reduced_basis'):
             postfix += f'_reduced_basis_tr{truncation}'
 
         postfix += '_testing' if self.testing_mode else ''
@@ -475,15 +465,12 @@ class DataManagerCMEMS(DataManagerBase):
             '_encoded.dill')
 
         enc_data = {}
-        if compute_data:
+        if self.compute_data:
             print('Create training data')
             orig_data, params, scalers  = \
                 self.load_training_data(split_factor=4 / 5,
                                         coarsen_in_time=coarsen_in_time,
-                                        coarsening_method=coarsening_method,
-                                        detide=detide,
                                         differences=differences,
-                                        sigma=sigma,
                                         truncation=truncation)
 
             container = {'data' : orig_data,
@@ -529,23 +516,21 @@ class DataManagerCMEMS(DataManagerBase):
             else:
                 enc_data = None
 
-        if not split_data:
-            out_data = {}
-            out_data['HR'] = np.append(
-                orig_data['train']['HR'], orig_data['test']['HR'],
-                axis=0)
-            out_data['LR'] = np.append(
-                orig_data['train']['LR'], orig_data['test']['LR'],
-                axis=0)
-            out_data['time'] = np.append(
-                orig_data['train']['time'], orig_data['test']['time'],
-                axis=0)
+        # Join data:
+        out_data = {}
+        out_data['HR'] = np.append(
+            orig_data['train']['HR'], orig_data['test']['HR'],
+            axis=0)
+        out_data['LR'] = np.append(
+            orig_data['train']['LR'], orig_data['test']['LR'],
+            axis=0)
+        out_data['time'] = np.append(
+            orig_data['train']['time'], orig_data['test']['time'],
+            axis=0)
 
-            len_train = orig_data['train']['time'].shape[0]
-            len_test = orig_data['test']['time'].shape[0]
-            params['train_range'] = range(0, len_train)
-            params['test_range'] = range(len_train, len_train + len_test)
-        else:
-            out_data = orig_data
+        len_train = orig_data['train']['time'].shape[0]
+        len_test = orig_data['test']['time'].shape[0]
+        params['train_range'] = range(0, len_train)
+        params['test_range'] = range(len_train, len_train + len_test)
 
         return out_data, params, scalers, enc_data

@@ -148,11 +148,7 @@ class DataManagerCMEMS(DataManagerBase):
         coords = xr.merge(l_)
         return coords, mask
 
-    def load_uv_data(self,
-                     coarsen_in_time=False,
-                     differences=False,
-                     truncation=20):
-
+    def load_uv_data(self):
         bt_HR = xr.open_dataset(self.HR_bathy_file)
         ds_HR = xr.open_mfdataset(self.HR_data_files,
                                   parallel=True)
@@ -224,7 +220,7 @@ class DataManagerCMEMS(DataManagerBase):
             da_HR_uo = detide_da(da_HR_uo)
             da_HR_vo = detide_da(da_HR_vo)
 
-        if differences:
+        if self.differences:
             print('Replace data with forward differences')
             da_HR_uo = da_HR_uo.diff('time')
             da_HR_vo = da_HR_vo.diff('time')
@@ -325,8 +321,8 @@ class DataManagerCMEMS(DataManagerBase):
             return out, coords
 
         if self.coarsening_method == 'regridding':
-            da_LR_uo = create_da_LR(da_HR_uo, coarsen_in_time)
-            da_LR_vo = create_da_LR(da_HR_vo, coarsen_in_time)
+            da_LR_uo = create_da_LR(da_HR_uo, self.coarsen_in_time)
+            da_LR_vo = create_da_LR(da_HR_vo, self.coarsen_in_time)
 
         elif self.coarsening_method == 'gaussian_filter':
             da_LR_uo = filter_HR_data(da_HR_uo, self.sigma)
@@ -337,7 +333,7 @@ class DataManagerCMEMS(DataManagerBase):
             data_LR = np.stack([ds_LR['uo'].fillna(0.0).values,
                                 ds_LR['vo'].fillna(0.0).values], axis=3)
 
-            U = reduced_basis(data_LR, truncation)
+            U = reduced_basis(data_LR, self.truncation)
             U = regrid_basis(U)
 
             # da_LR_uo = filter_HR_data(da_HR_uo, sigma)
@@ -373,21 +369,14 @@ class DataManagerCMEMS(DataManagerBase):
 
         return da_HR, da_LR, mask
 
-    def load_training_data(self,
-                           split_factor=4 / 5,
-                           scaling_range=(0, 1),
-                           coarsen_in_time=False,
-                           differences=False,
-                           truncation=20):
+    def load_training_data(self):
 
         # assume everything has this shape
         params = {}
         data = {}
 
         da_HR, da_LR, da_mask = \
-            self.load_uv_data(coarsen_in_time=coarsen_in_time,
-                              differences=differences,
-                              truncation=truncation)
+            self.load_uv_data()
 
         # create a torch mask
         params['mask'] = torch.tensor(da_mask.values)[None, :, :, None]
@@ -400,9 +389,9 @@ class DataManagerCMEMS(DataManagerBase):
 
         # scaler = CustomScaler(scaling_type='minmax_per_feature')
         scalers = {}
-        scalers['HR'] = MinMaxScaler(feature_range=scaling_range)
-        scalers['LR'] = MinMaxScaler(feature_range=scaling_range)
-        scalers['R']  = MinMaxScaler(feature_range=scaling_range)
+        scalers['HR'] = MinMaxScaler(feature_range=self.scaling_range)
+        scalers['LR'] = MinMaxScaler(feature_range=self.scaling_range)
+        scalers['R']  = MinMaxScaler(feature_range=self.scaling_range)
 
         Nt, Nlat, Nlon, num_channels = data_HR.shape
 
@@ -423,7 +412,7 @@ class DataManagerCMEMS(DataManagerBase):
                        'Nlon' : Nlon,
                        'num_channels' : num_channels})
 
-        split = int(Nt * split_factor)
+        split = int(Nt * self.split_factor)
         self.train_range = range(0, split)
         self.test_range = range(split, Nt)
 
@@ -438,15 +427,12 @@ class DataManagerCMEMS(DataManagerBase):
         return data, params, scalers
 
     def create_training_data(self,
-                             split_data=False,
                              encoder=None,
-                             coarsen_in_time=False,
-                             differences=False,
-                             truncation=20):
+                             ):
 
         postfix = ''
         postfix += '_detided' if self.detide else ''
-        postfix += '_diff' if differences else ''
+        postfix += '_diff' if self.differences else ''
 
         if (
                 self.coarsening_method == 'gaussian_filter' and
@@ -455,7 +441,7 @@ class DataManagerCMEMS(DataManagerBase):
             sigma_str = str(self.sigma).replace(', ', '-').replace('.', '_')
             postfix += f'_blur_{sigma_str}'
         elif (self.coarsening_method == 'reduced_basis'):
-            postfix += f'_reduced_basis_tr{truncation}'
+            postfix += f'_reduced_basis_tr{self.truncation}'
 
         postfix += '_testing' if self.testing_mode else ''
 
@@ -468,10 +454,7 @@ class DataManagerCMEMS(DataManagerBase):
         if self.compute_data:
             print('Create training data')
             orig_data, params, scalers  = \
-                self.load_training_data(split_factor=4 / 5,
-                                        coarsen_in_time=coarsen_in_time,
-                                        differences=differences,
-                                        truncation=truncation)
+                self.load_training_data()
 
             container = {'data' : orig_data,
                          'params' : params,

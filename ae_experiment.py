@@ -94,10 +94,9 @@ class AE_Experiment():
                 f'{mdir}/decoder_{self.load_model_postfix}.keras'
 
         # -------------------------------------------------------
-        # Load or compute data
+        # Load and/or compute data
         self.data, self.params, self.scalers, _ = \
-            self.dm.create_training_data(
-                truncation=self.truncation)
+            self.dm.create_training_data()
 
         # -------------------------------------------------------
         self.ct=ComputeTool()

@@ -2,6 +2,7 @@ import glob
 import os
 import sys
 from datetime import datetime
+import importlib
 
 
 class Tee:
@@ -19,8 +20,6 @@ class Tee:
     def flush(self):
         self.file.flush()
         self.stdout.flush()
-
-
 
 
 # decorator to make sure functions clean on ending
@@ -47,3 +46,31 @@ def cleanup(exp_name):
         if today in dfile:
             print(f'deleting {dfile}')
             os.remove(dfile)
+
+
+def load_config(obj, config_name):
+    # Load a config that lives in the <configs> dir: config_file =
+    # <configs>/<config_name>.py. Overwrite class members and
+    # create new ones according to what is present in
+    # config_file. Exclude "__" members and functions.
+
+    config_file = f'configs.{config_name}'
+    print(f'Load config: {config_file}')
+
+    try:
+        config = importlib.import_module(config_file)
+    except ModuleNotFoundError:
+        raise ModuleNotFoundError(config_file)
+
+    importlib.reload(config)
+
+    module_vars = vars(config)
+
+    # load variables
+    config_vars = {
+        key: value for key, value in module_vars.items()
+        if not key.startswith("__") and not callable(value)
+    }
+
+    for (key, value) in config_vars.items():
+        setattr(obj, key, value)

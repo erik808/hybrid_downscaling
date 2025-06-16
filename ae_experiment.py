@@ -1,7 +1,6 @@
 import importlib
 from importlib import reload
 
-import rich
 import sys
 import dill
 
@@ -66,7 +65,8 @@ class AE_Experiment():
             testing_mode=False
     ):
 
-        self.load_config(config_name='default')
+        tools.load_config(self, config_name='default')
+        tools.load_config(self, config_name='data_config_cmems')
 
         self.init_timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
         self.exp_name = exp_name
@@ -117,35 +117,6 @@ class AE_Experiment():
         self.ct=ComputeTool()
         self.trial_id = None
 
-    def load_config(self, config_name):
-        # Load a config that lives in the <configs> dir: config_file =
-        # <configs>/<config_name>.py. Overwrite class members and
-        # create new ones according to what is present in
-        # config_file. Exclude "__" members and functions.
-
-        config_file = f'configs.{config_name}'
-        print(f'Load config: {config_file}')
-
-        try:
-            config = importlib.import_module(config_file)
-        except ModuleNotFoundError:
-            raise ModuleNotFoundError(config_file)
-
-        importlib.reload(config)
-
-        module_vars = vars(config)
-
-        # load variables
-        config_vars = {
-            key: value for key, value in module_vars.items()
-            if not key.startswith("__") and not callable(value)
-        }
-
-        for (key, value) in config_vars.items():
-            setattr(self, key, value)
-
-        rich.print('default hyper params:', self.hyper_params)
-        rich.print('tuning config dict:', self.tuning_config_dict)
 
     def run_optuna_study(self):
         self.init_log()

@@ -2,7 +2,6 @@ import numpy as np
 import keras
 from data_manager_cmes import DataManagerCMEMS
 
-
 class DataFactory():
     def __new__(
             cls,

@@ -8,9 +8,6 @@ class DataManagerBase(ABC):
     def create_training_data(self):
         pass
 
-    def get_coarse_data(self):
-        pass
-
     def setup_directories(self, experiment_id, add_id):
         models_dir = f'experiments/{experiment_id}{add_id}/models'
         tuning_dir = f'experiments/{experiment_id}{add_id}/tuning'

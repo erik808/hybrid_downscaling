@@ -72,8 +72,10 @@ class AE_Experiment():
 
         # setup new or existing directories
         self.testing_mode = testing_mode
-        self.dm = DataFactory(case_study=case_study,
-                              testing_mode=self.testing_mode)
+        self.dm = DataFactory(
+            case_study=case_study,
+            testing_mode=self.testing_mode
+        )
         self.dirs, self.files = \
             self.dm.setup_directories(self.folder_id, self.folder_postfix)
 
@@ -189,8 +191,7 @@ class AE_Experiment():
 
     def build_and_run_model(self,
                             predict_only=False,
-                            evaluate=True,
-                            alternative_control=None):
+                            evaluate=True):
 
         # AE-MODEL CONFIG
         use_feedthrough = True if (self.feedthrough_type == 'hybrid' or
@@ -221,14 +222,6 @@ class AE_Experiment():
         train_data_otp = self.data['HR'][self.train_range_k,]
         # control/feedthrough data
         train_data_ft  = self.data['LR'][self.train_range_k,]
-        train_time_ft  = self.data['time'][self.train_range_k,]
-
-        if alternative_control == 'coarse_model':
-            x_train = self.dm.get_coarse_data(train_time_ft, interpolate=True)
-            train_data_ft = \
-                self.scalers['R']\
-                    .fit_transform(x_train.reshape(len(train_time_ft), -1))\
-                    .reshape(x_train.shape)
 
         self.postfix, self.timestamp = self.create_postfix()
         sys.stdout = Tee(self.files['log'] + f'{self.postfix}')
@@ -467,17 +460,11 @@ class AE_Experiment():
                                   trial_id=self.trial_id)
         plotmachine.plot_history(self.hist)
 
-    def create_movie(self, alternative_control=False):
+    def create_movie(self):
 
         truth = self.data['HR'][self.test_range,]
         lowres = self.data['LR'][self.test_range,]
         test_time = self.data['time'][self.test_range,]
-
-        if alternative_control == 'coarse_model':
-            x = self.dm.get_coarse_data(test_time, interpolate=True)
-            lowres = self.scalers['LR']\
-                         .transform(x.reshape(len(test_time), -1))\
-                         .reshape(x.shape)
 
         predictions = self.validation_callback.predictions
 

@@ -1,7 +1,15 @@
 import os
+from abc import ABC, abstractmethod
 
 
-class DataManagerBase():
+class DataManagerBase(ABC):
+
+    @abstractmethod
+    def create_training_data(self):
+        pass
+
+    def get_coarse_data(self):
+        pass
 
     def setup_directories(self, experiment_id, add_id):
         models_dir = f'experiments/{experiment_id}{add_id}/models'

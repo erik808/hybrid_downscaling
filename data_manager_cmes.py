@@ -42,6 +42,9 @@ class DataManagerCMEMS(DataManagerBase):
             (f'{self.data_dir}/cmems_mod_nws_phy-uv_my_7km-2D_PT1H-i_'
              f'uo-vo_4.22E-7.78E_56.80N-58.67N_2023-01-01-2023-12-31.nc')
 
+    def dummy(self):
+        print("naja")
+
     def build_grid(self, ds=[], mask=[]):
         assert (len(ds) > 0 or
                 len(mask) > 0), 'Either ds or mask should be given'

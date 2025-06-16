@@ -56,7 +56,6 @@ class AE_Experiment():
             testing_mode=False
     ):
         tools.load_config(self, config_name='default')
-        tools.load_config(self, config_name='data_config_cmems')
 
         self.init_timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
         self.exp_name = exp_name
@@ -76,7 +75,6 @@ class AE_Experiment():
             case_study=case_study,
             testing_mode=self.testing_mode
         )
-        breakpoint()
         self.dirs, self.files = \
             self.dm.setup_directories(self.folder_id, self.folder_postfix)
 

@@ -5,6 +5,10 @@ from abc import ABC, abstractmethod
 class DataManagerBase(ABC):
 
     @abstractmethod
+    def __init__(self, testing_mode):
+        pass
+
+    @abstractmethod
     def create_training_data(self):
         pass
 

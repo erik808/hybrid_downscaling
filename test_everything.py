@@ -13,7 +13,46 @@ exp_name = 'test_everything'
 
 
 @tools.clean_on_end
-def test_short_run():
+def test_short_run_swot():
+    exp = AE_Experiment(
+        exp_name=exp_name,
+        case_study='swot',
+        feedthrough_type='hybrid',
+        testing_mode=True)
+
+    # adjust hyperparameters:
+    test_pars = {
+        'history': 20,
+        'future': 10,
+        'epochs': 1,
+        'unroll_dim': 0,
+        'lookback': 0,
+        'noise_stddev': 0.0,
+        'dropout_rate': 0.0,
+        'num_conv_blocks': 1,
+        'kernel_size': (3, 3),
+        'downsample_stride': (2, 2),
+        'conv_layers_per_block': 1,
+        'num_filters': 64,
+        'num_filters_last': 128,
+        'batch_size': 4,
+        'latent_space_model': 'RNN',
+        'latent_space_dim': 4,
+        'num_feedthrough_filters': 128,
+        'num_feedthrough_layers': 2,
+        'num_output_layers': 2,
+        'l2_lambda': 0.0,
+        'learning_rate': 0.002,
+    }
+
+    exp.hyper_params.update(test_pars)
+    err = exp.build_and_run_model()
+    assert err < 30
+    return exp_name
+
+
+@tools.clean_on_end
+def test_short_run_cmems():
     exp = AE_Experiment(
         exp_name=exp_name,
         case_study='cmems',
@@ -52,7 +91,7 @@ def test_short_run():
 
 
 @tools.clean_on_end
-def test_save_load():
+def test_save_load_cmems():
 
     exp = AE_Experiment(
         exp_name=exp_name,
@@ -110,6 +149,6 @@ def test_save_load():
 
 
 if __name__=="__main__":
-    test_short_run()
-    # test_save_load()
+    test_short_run_swot()
+    # test_save_load_cmems()
     # test_feedthrough_only() ## TODO

@@ -1,6 +1,7 @@
 import numpy as np
 import keras
 from data_manager_cmes import DataManagerCMEMS
+from data_manager_swot import DataManagerSWOT
 
 
 class DataFactory():
@@ -11,6 +12,8 @@ class DataFactory():
     ):
         if case_study == 'cmems':
             return DataManagerCMEMS(testing_mode)
+        if case_study == 'swot':
+            return DataManagerSWOT(testing_mode)
         else:
             raise ValueError("unknown case study")
 

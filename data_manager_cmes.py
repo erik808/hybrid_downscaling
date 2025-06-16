@@ -4,7 +4,7 @@ import xesmf as xe
 import torch
 import dill
 import time
-# import pytide
+# import pytide  # disabled for now, compatibility issues
 import scipy
 import tools
 from scipy.ndimage import gaussian_filter

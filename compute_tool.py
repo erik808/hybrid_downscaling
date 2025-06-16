@@ -1,15 +1,16 @@
 import numpy as np
 from importlib import reload
-import data_manager
-reload(data_manager)
-from data_manager import DataFactory
+import data_utils
+reload(data_utils)
+from data_utils import DataFactory
 import dill
 
 from transectpicker.transectpicker import TransectPicker
 
+
 class ComputeTool():
-    """This class takes care of computations: spectra, vorticity, energy,
-    enstrophy.
+    """This class takes care of computations for the CMEMS data: spectra,
+    vorticity, energy, enstrophy.
 
     """
 
@@ -18,9 +19,9 @@ class ComputeTool():
         self.dm = DataFactory()
         self.grid, self.binary_mask = self.dm.get_grid()
         self.mask = np.where(self.binary_mask==0, np.nan, 1)
-        self.e1 = self.grid.e1t.data # in m
-        self.e2 = self.grid.e2t.data # in m
-        self.tdim = 60 * 60 * 24 # seconds to days
+        self.e1 = self.grid.e1t.data  # in m
+        self.e2 = self.grid.e2t.data  # in m
+        self.tdim = 60 * 60 * 24  # seconds to days
         self.transect_regridder = 'none'
 
     def construct_regridder(self, transect_name):

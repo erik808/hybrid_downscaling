@@ -4,9 +4,9 @@ import numpy as np
 import os
 from multiprocess import Pool
 from importlib import reload
-import data_manager
-reload(data_manager)
-from data_manager import DataFactory
+import data_utils
+reload(data_utils)
+from data_utils import DataFactory
 import compute_tool
 reload(compute_tool)
 from compute_tool import ComputeTool
@@ -129,13 +129,12 @@ class PlotMachine():
 
         plt.subplot(1, 2, 2)
         if 'error' in hist.history:
-            plt.semilogy(hist.history['error'],'.-',
+            plt.semilogy(hist.history['error'], '.-',
                          label=f'validation error {add}')
 
         if 'base' in hist.history and plot_baseline:
-            plt.semilogy(hist.history['base'],'.-',
-                         label=f'validation baseline')
-
+            plt.semilogy(hist.history['base'], '.-',
+                         label='validation baseline')
 
         plt.grid()
         plt.legend()

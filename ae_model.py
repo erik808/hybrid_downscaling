@@ -10,7 +10,8 @@ from keras.models import Model
 from keras.losses import Loss
 
 from compute_tool import ComputeTool
-import data_manager as dm
+import data_utils as dm
+
 
 class AutoEncoder(keras_tuner.HyperModel):
 
@@ -39,17 +40,16 @@ class AutoEncoder(keras_tuner.HyperModel):
             'num_feedthrough_layers' : 2,
             'num_feedthrough_filters' : 112,
             'num_output_layers' : 2,
-            'kernel_size' : (3,3),
+            'kernel_size' : (3, 3),
             'num_filters' : 32,
             'num_filters_last' : 112,
-            'downsample_stride' : (2,2),
+            'downsample_stride' : (2, 2),
             'L2_lambda' : 0.0,
             'latent_space_model' : 'RNN',
             'latent_space_dim' : 8,
         }
 
-
-        # set actual class members
+        #  set actual class members
         members_dict.update(kwargs)
         for key, value in members_dict.items():
             setattr(self, key, value)
@@ -60,12 +60,13 @@ class AutoEncoder(keras_tuner.HyperModel):
         self.losses = []
 
         # derived members:
-        self.regularizer = None # used to be derived from L2_lambda
-        if self.feedthrough_only: self.use_feedthrough = True
+        self.regularizer = None  # used to be derived from L2_lambda
+        if self.feedthrough_only:
+            self.use_feedthrough = True
         self.use_dropout = True if self.dropout_rate > 0 else False
         # infer dimensions
         self.N_lat, self.N_lon, self.N_chan = self.test_vec.shape
-        self.N_lb = self.lookback + 1 # lookback dimension
+        self.N_lb = self.lookback + 1  # lookback dimension
         self.loss_weights = None
 
 

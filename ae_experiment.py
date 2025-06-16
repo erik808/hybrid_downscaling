@@ -15,11 +15,11 @@ import numpy as np
 import keras
 from keras import ops
 
-import data_manager
-reload(data_manager)
+import data_utils
+reload(data_utils)
 
-from data_manager import DataFactory
-from data_manager import DataGenerator
+from data_utils import DataFactory
+from data_utils import DataGenerator
 
 import plot_utils
 reload(plot_utils)
@@ -67,7 +67,6 @@ class AE_Experiment():
     ):
 
         self.load_config(config_name='default')
-        self.load_config(config_name='data_config_cmems')
 
         self.init_timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
         self.exp_name = exp_name
@@ -115,7 +114,6 @@ class AE_Experiment():
                 truncation=self.truncation)
 
         # -------------------------------------------------------
-
         self.ct=ComputeTool()
         self.trial_id = None
 

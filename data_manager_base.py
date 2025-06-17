@@ -1,4 +1,5 @@
 import os
+from typing import Tuple
 from abc import ABC, abstractmethod
 
 
@@ -9,7 +10,7 @@ class DataManagerBase(ABC):
         pass
 
     @abstractmethod
-    def create_training_data(self):
+    def create_training_data(self) -> Tuple[dict, dict, dict, dict]:
         pass
 
     def setup_directories(self, experiment_id, add_id):

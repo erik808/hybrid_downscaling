@@ -14,8 +14,10 @@ class ComputeTool():
 
     """
 
-    def __init__(self):
+    def __init__(self,
+                 case_study='cmems'):
 
+        self.case_study = case_study
         self.dm = DataFactory()
         self.grid, self.binary_mask = self.dm.get_grid()
         self.mask = np.where(self.binary_mask==0, np.nan, 1)
@@ -40,7 +42,6 @@ class ComputeTool():
                     self.dm.regrid_to_transect(tpicker,
                                                resolution=transect_res)
 
-
     def compute_spectrum_along_transect(self, data, scaler=None,
                                         transect_name='along_flow',
                                         spectrum_type='energy'):
@@ -58,12 +59,11 @@ class ComputeTool():
             raise Exception('Not implemented yet')
         return spectrum
 
-
     def taper_data(self, data):
         # taper the boundaries
         n = data.shape[1]
-        x = np.linspace(0,1,n)
-        tpr = (1+np.tanh((x-0.1)*3e1))/2
+        x = np.linspace(0, 1, n)
+        tpr = (1 + np.tanh((x - 0.1) * 3e1)) / 2
         tpr = tpr + np.flip(tpr) - 1
         if data.ndim == 3:
             data = (data.transpose(2,0,1)*tpr)\
@@ -72,20 +72,19 @@ class ComputeTool():
             data = data*tpr
         else:
             raise Exception('data has wrong shape')
-            
-        return data
 
+        return data
 
     def compute_energy_spectrum(self, data):
         """ normalized energy spectrum
         """
-        data = (data.transpose(1,0,2) - np.mean(data, axis=1))\
-            .transpose(1,0,2) # remove spatial average
+        data = (data.transpose(1, 0, 2) - np.mean(data, axis=1))\
+            .transpose(1, 0, 2)  # remove spatial average
         data = data - np.mean(data, axis=0) # remove time average
 
         data = self.taper_data(data)
         H = np.fft.rfft(data, axis=1)
-        S = 0.5*np.sum(np.square(np.abs(H)), axis=2)
+        S = 0.5 * np.sum(np.square(np.abs(H)), axis=2)
         S = S / np.max(S)
         return S
 
@@ -95,13 +94,13 @@ class ComputeTool():
         """
         data = (data.T - np.mean(data, axis=1)).T # remove spatial average
         data = data - np.mean(data, axis=0) # remove time average
-        
+
         data = self.taper_data(data)
         H = np.fft.rfft(data, axis=1)
         S = 0.5*np.square(np.abs(H))
         S = S / np.max(S)
         return S
-    
+
 
     def do_regridding(self, field):
         # regrid
@@ -120,14 +119,14 @@ class ComputeTool():
              np.arange(field_tr.shape[2]), ]
 
         return field_tr
-    
+
 
     def invert_and_regrid(self, data, scaler):
         data = self.check_data_dims(data)
         field = self.inverse_transform(data, scaler)
         field_tr = self.do_regridding(field)
         return field_tr
-    
+
 
     def inverse_transform(self, data, scaler=None):
         data = self.check_data_dims(data)

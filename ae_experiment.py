@@ -58,6 +58,7 @@ class AE_Experiment():
         tools.load_config(self, config_name='default')
 
         self.init_timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
+        self.case_study = case_study
         self.exp_name = exp_name
         self.tuning_config = tuning_config
         self.do_gridsearch = True
@@ -72,7 +73,7 @@ class AE_Experiment():
         # setup new or existing directories
         self.testing_mode = testing_mode
         self.dm = DataFactory(
-            case_study=case_study,
+            case_study=self.case_study,
             testing_mode=self.testing_mode
         )
         self.dirs, self.files = \
@@ -99,10 +100,8 @@ class AE_Experiment():
         self.data, self.params, self.scalers, _ = \
             self.dm.create_training_data()
 
-        breakpoint()
-
         # -------------------------------------------------------
-        self.ct=ComputeTool()
+        self.ct=ComputeTool(case_study=self.case_study)
         self.trial_id = None
 
     def run_optuna_study(self):

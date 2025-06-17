@@ -24,9 +24,13 @@ class DataManagerSWOT(DataManagerBase):
         # fix time gaps
         start = np.datetime64(self.ds.time[0].data)
         end   = np.datetime64(self.ds.time[-1].data)
-        time_arr  = np.arange(start, end, dtype='datetime64[D]')
+        time_arr = np.arange(start, end, dtype='datetime64[D]')\
+                     .astype('datetime64[ns]')
 
-        self.ds = self.ds.interp(time=time_arr, method='linear')
+        print('interpolating...')
+        self.ds = self.ds.interp(time=time_arr,
+                                 method='linear')
+        print('interpolating... done')
         data_HR = self.ds.ssha.data
         data_LR = self.ds.sla.data
 
@@ -43,9 +47,16 @@ class DataManagerSWOT(DataManagerBase):
         data_LR = scaler.transform(data_LR.reshape(Nt, -1))\
                         .reshape(Nt, Nlat, Nlon)
 
+        # assemble into dicts
         data = {}
         data['HR'] = data_HR
         data['LR'] = data_LR
         data['time'] = self.ds.time.data
 
-        breakpoint()
+        params = {}
+
+        scalers = {}
+        scalers['HR'] = scaler
+        scalers['LR'] = scaler
+
+        return data, params, scalers, {}

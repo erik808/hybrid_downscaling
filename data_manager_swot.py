@@ -1,11 +1,9 @@
 import tools
 import xarray as xr
 import numpy as np
+
 from data_manager_base import DataManagerBase
-from importlib import reload
-import data_utils
-reload(data_utils)
-from data_utils import CustomScaler
+from tools import CustomScaler
 
 
 class DataManagerSWOT(DataManagerBase):
@@ -23,6 +21,12 @@ class DataManagerSWOT(DataManagerBase):
 
         self.ds = xr.open_dataset(self.swot_duacs_fname)
 
+        # fix time gaps
+        start = np.datetime64(self.ds.time[0].data)
+        end   = np.datetime64(self.ds.time[-1].data)
+        time_arr  = np.arange(start, end, dtype='datetime64[D]')
+
+        self.ds = self.ds.interp(time=time_arr, method='linear')
         data_HR = self.ds.ssha.data
         data_LR = self.ds.sla.data
 
@@ -38,5 +42,10 @@ class DataManagerSWOT(DataManagerBase):
         scaler.scale = np.nan_to_num(scaler.scale, nan=1.0)
         data_LR = scaler.transform(data_LR.reshape(Nt, -1))\
                         .reshape(Nt, Nlat, Nlon)
+
+        data = {}
+        data['HR'] = data_HR
+        data['LR'] = data_LR
+        data['time'] = self.ds.time.data
 
         breakpoint()

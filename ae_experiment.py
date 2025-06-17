@@ -99,6 +99,8 @@ class AE_Experiment():
         self.data, self.params, self.scalers, _ = \
             self.dm.create_training_data()
 
+        breakpoint()
+
         # -------------------------------------------------------
         self.ct=ComputeTool()
         self.trial_id = None

@@ -1,7 +1,11 @@
 import tools
 import xarray as xr
+import numpy as np
 from data_manager_base import DataManagerBase
-from sklearn.preprocessing import MinMaxScaler
+from importlib import reload
+import data_utils
+reload(data_utils)
+from data_utils import CustomScaler
 
 
 class DataManagerSWOT(DataManagerBase):
@@ -25,15 +29,14 @@ class DataManagerSWOT(DataManagerBase):
         Nt, Nlat, Nlon = data_HR.shape
         assert data_LR.shape == data_HR.shape
 
-        scaler = MinMaxScaler(feature_range=self.scaling_range)
-        data_HR = scaler.fit_transform(data_HR.reshape(Nt, -1))\
-                        .reshape(Nt, Nlat, Nlon, 1)
-        data_LR = scaler.transform(data_LR.reshape(Nt, -1))\
-                        .reshape(Nt, Nlat, Nlon, 1)
+        #  We scale the data with a single scaling for all features
+        scaler = CustomScaler('minmax_over_all_features')
 
-        import matplotlib.pyplot as plt
-        plt.close('all')
-        plt.imshow(data_LR[50, :, :,])
-        plt.pause(1)
+        data_HR = scaler.fit_transform(data_HR.reshape(Nt, -1))\
+                        .reshape(Nt, Nlat, Nlon)
+        scaler.shift = np.nan_to_num(scaler.shift, nan=0.0)
+        scaler.scale = np.nan_to_num(scaler.scale, nan=1.0)
+        data_LR = scaler.transform(data_LR.reshape(Nt, -1))\
+                        .reshape(Nt, Nlat, Nlon)
 
         breakpoint()

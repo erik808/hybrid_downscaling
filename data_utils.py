@@ -119,20 +119,21 @@ class CustomScaler():
 
     def fit(self, data):
         if self.scaling_type == 'standardize_per_feature':
-            self.shift = np.mean(data, axis=0)
-            self.scale = np.mean(data, axis=0)
+            self.shift = np.nanmean(data, axis=0)
+            self.scale = np.nanmean(data, axis=0)
 
         elif self.scaling_type == 'standardize_over_all_features':
-            self.shift = np.mean(data)
-            self.scale = np.mean(data)
+            self.shift = np.nanmean(data)
+            self.scale = np.nanmean(data)
 
         elif self.scaling_type == 'minmax_per_feature':
-            self.scale = 1.0 / (np.max(data, axis=0) - np.min(data, axis=0))
-            self.shift = np.min(data, axis=0)
+            self.scale = 1.0 / (np.nanmax(data, axis=0) -
+                                np.nanmin(data, axis=0))
+            self.shift = np.nanmin(data, axis=0)
 
         elif self.scaling_type == 'minmax_over_all_features':
-            self.scale = 1.0 / (np.max(data) - np.min(data))
-            self.shift = np.min(data)
+            self.scale = 1.0 / (np.nanmax(data) - np.nanmin(data))
+            self.shift = np.nanmin(data)
 
         self.fitted = True
 

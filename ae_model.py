@@ -9,7 +9,6 @@ from keras import regularizers
 from keras.models import Model
 from keras.losses import Loss
 
-from compute_tool import ComputeTool
 import data_utils as dm
 
 
@@ -56,7 +55,6 @@ class AutoEncoder(keras_tuner.HyperModel):
 
         self.resblock_ctr = 0
         self.needs_building = True
-        self.ct = ComputeTool()
         self.losses = []
 
         # derived members:
@@ -250,11 +248,9 @@ class AutoEncoder(keras_tuner.HyperModel):
 
         return self.autoencoder, self.encoder, self.decoder
 
-
     def create_param_dict(self, params):
         return \
             {key : self.__dict__[key] for key in params}
-
 
     def combine_feedthrough(self, inputs, feedthrough,
                             feedthrough_type='multiply',
@@ -273,7 +269,6 @@ class AutoEncoder(keras_tuner.HyperModel):
             raise Exception('specify feedthrough_type when'
                             ' using feedthrough')
         return outputs
-
 
     def compiler(self, model):
         # loss = keras.losses.\
@@ -294,12 +289,10 @@ class AutoEncoder(keras_tuner.HyperModel):
         model.compile(optimizer=optim, loss=loss,
                       loss_weights=self.loss_weights)
 
-
     def log_model(self, model=None, mode='a'):
         if model is None:
             model = self
         model.summary()
-
 
     def summary(self):
 
@@ -314,7 +307,6 @@ class AutoEncoder(keras_tuner.HyperModel):
         print(f'kernel_size: {self.kernel_size}')
         print(f'num_resblocks: {self.num_resblocks}')
         print(f'resblock_ctr: {self.resblock_ctr}')
-
 
     def create_unrolled_model(
             self,
@@ -342,16 +334,18 @@ class AutoEncoder(keras_tuner.HyperModel):
                 name="unrolled_state_input")
 
         if self.use_feedthrough:
-            feedthrough = [layers.Input(
-                shape=(self.N_lb, self.N_lat, self.N_lon, self.N_chan),
-                name=f'unrolled_feedthrough_input_{i}')
-                           for i in range(unroll_dim+1) ]
+            feedthrough = [
+                layers.Input(
+                    shape=(self.N_lb, self.N_lat, self.N_lon, self.N_chan),
+                    name=f'unrolled_feedthrough_input_{i}')
+                for i in range(unroll_dim + 1)
+            ]
         else:
             feedthrough = []
 
         xk_lb = state_input
         x_out = []
-        for i in range(unroll_dim+1):
+        for i in range(unroll_dim + 1):
             model = model if not use_clones else models[i]
 
             if self.feedthrough_only:
@@ -811,7 +805,7 @@ class LSModelWrapper(keras.Model):
         return y_pred, z_latent
 
 
-    
+
     def train_step_RNN(self, data):
         x, y = data
         y_pred, z = self.forward_pass(x)
@@ -820,7 +814,7 @@ class LSModelWrapper(keras.Model):
 
         rnn_loss = self.loss_fn(z_true['rnn_input'],
                                 z['rnn_output'])
-        
+
         # rnn_loss = \
         #     ops.mean(
         #         ops.mean(
@@ -831,7 +825,7 @@ class LSModelWrapper(keras.Model):
 
         # reconstruction_loss = \
         #     ops.mean(ops.square(y[0][:,0,]-y_pred))
-        
+
 
         # time ordering in y is backwards so last first
         reconstruction_loss = self.loss_fn(y[0][:,0,], y_pred)

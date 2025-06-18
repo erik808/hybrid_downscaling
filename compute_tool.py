@@ -1,4 +1,6 @@
 import numpy as np
+import os
+import matplotlib.pyplot as plt
 from importlib import reload
 import data_utils
 reload(data_utils)
@@ -18,6 +20,7 @@ class ComputeTool():
                  case_study='cmems'):
 
         self.case_study = case_study
+
         self.dm = DataFactory()
         self.grid, self.binary_mask = self.dm.get_grid()
         self.mask = np.where(self.binary_mask==0, np.nan, 1)
@@ -66,10 +69,10 @@ class ComputeTool():
         tpr = (1 + np.tanh((x - 0.1) * 3e1)) / 2
         tpr = tpr + np.flip(tpr) - 1
         if data.ndim == 3:
-            data = (data.transpose(2,0,1)*tpr)\
-                .transpose(1,2,0)
+            data = (data.transpose(2, 0, 1) * tpr)\
+                .transpose(1, 2, 0)
         elif data.ndim == 2:
-            data = data*tpr
+            data = data * tpr
         else:
             raise Exception('data has wrong shape')
 
@@ -80,7 +83,7 @@ class ComputeTool():
         """
         data = (data.transpose(1, 0, 2) - np.mean(data, axis=1))\
             .transpose(1, 0, 2)  # remove spatial average
-        data = data - np.mean(data, axis=0) # remove time average
+        data = data - np.mean(data, axis=0)  # remove time average
 
         data = self.taper_data(data)
         H = np.fft.rfft(data, axis=1)
@@ -88,38 +91,35 @@ class ComputeTool():
         S = S / np.max(S)
         return S
 
-
     def compute_enstrophy_spectrum(self, data):
         """ normalized enstrophy spectrum
         """
-        data = (data.T - np.mean(data, axis=1)).T # remove spatial average
-        data = data - np.mean(data, axis=0) # remove time average
+        data = (data.T - np.mean(data, axis=1)).T  # remove spatial average
+        data = data - np.mean(data, axis=0)  # remove time average
 
         data = self.taper_data(data)
         H = np.fft.rfft(data, axis=1)
-        S = 0.5*np.square(np.abs(H))
+        S = 0.5 * np.square(np.abs(H))
         S = S / np.max(S)
         return S
-
 
     def do_regridding(self, field):
         # regrid
         if field.shape[-1] != self.regridder.shape_in[-1]:
             field_tr = \
                 self.regridder(
-                    np.ascontiguousarray(field.transpose(0,3,1,2)))\
-                    .transpose(0,2,3,1)
+                    np.ascontiguousarray(
+                        field.transpose(0, 3, 1, 2))
+                ).transpose(0, 2, 3, 1)
         else:
             field_tr = \
                 self.regridder(np.ascontiguousarray(field))
 
         # select transect along diagonal
-        field_tr = field_tr\
-            [:, np.arange(field_tr.shape[1]),
-             np.arange(field_tr.shape[2]), ]
+        field_tr = field_tr[:, np.arange(field_tr.shape[1]),
+                            np.arange(field_tr.shape[2]), ]
 
         return field_tr
-
 
     def invert_and_regrid(self, data, scaler):
         data = self.check_data_dims(data)
@@ -127,24 +127,21 @@ class ComputeTool():
         field_tr = self.do_regridding(field)
         return field_tr
 
-
     def inverse_transform(self, data, scaler=None):
         data = self.check_data_dims(data)
-        if scaler == None:
+        if scaler is None:
             return data
         else:
             Nt, Nlat, Nlon, num_channels = data.shape
-            return scaler.inverse_transform(data.reshape(Nt,-1))\
+            return scaler.inverse_transform(data.reshape(Nt, -1))\
                          .reshape(Nt, Nlat, Nlon, num_channels)
-
 
     def check_data_dims(self, data):
 
         assert (data.ndim >= 3 and
                 data.ndim <= 4), " wrong data input format "
 
-        if data.ndim == 3: # assume time dimension is not present,
-                           # prepend it.
+        if data.ndim == 3:  # assume time dimension is not present, prepend it.
             data = np.expand_dims(data, axis=0)
         return data
 
@@ -157,16 +154,17 @@ class ComputeTool():
         data = self.inverse_transform(data, scaler)
 
         # assume last dimension has variables, ordered as (u,v,...)
-        u = data[...,0]  # m/s
-        v = data[...,1]  # m/s
+        u = data[..., 0]  # m/s
+        v = data[..., 1]  # m/s
 
         # compute vorticity
-        zeta = self.tdim/(self.e1*self.e2) *\
-            (np.diff(v*self.e2, axis=2, prepend=np.nan) -
-             np.diff(u*self.e1, axis=1, prepend=np.nan))
+        zeta = self.tdim /(self.e1 * self.e2) *\
+            (np.diff(v * self.e2, axis=2, prepend=np.nan) -
+             np.diff(u * self.e1, axis=1, prepend=np.nan))
 
         # crop nans away
-        if crop: zeta = zeta[...,1:,1:]
+        if crop:
+            zeta = zeta[..., 1:, 1:]
 
         return zeta.squeeze()
 
@@ -179,19 +177,19 @@ class ComputeTool():
         data = self.inverse_transform(data, scaler)
 
         # assume last dimension has variables, ordered as (u,v,...)
-        u = data[...,0]  # m/s
-        v = data[...,1]  # m/s
+        u = data[..., 0]  # m/s
+        v = data[..., 1]  # m/s
 
         # compute divergence
-        xi = self.tdim/(self.e1*self.e2) *\
-            (np.diff(u*self.e2, axis=2, prepend=np.nan) +
-             np.diff(v*self.e1, axis=1, prepend=np.nan))
+        xi = self.tdim / (self.e1 * self.e2) *\
+            (np.diff(u * self.e2, axis=2, prepend=np.nan) +
+             np.diff(v * self.e1, axis=1, prepend=np.nan))
 
         # crop nans away
-        if crop: xi = xi[...,1:,1:]
+        if crop:
+            xi = xi[..., 1:, 1:]
 
         return xi.squeeze()
-
 
     def create_transect(self, field):
         """Support function that wraps the transectpicker.
@@ -203,7 +201,7 @@ class ComputeTool():
         # create transect dir if not existing
         os.system(f'mkdir -p {self.dm.transect_dir}')
 
-        plt.subplots(figsize=(5,4))
+        plt.subplots(figsize=(5, 4))
         im = plt.pcolormesh(field)
         tpicker = TransectPicker(im, field)
         plt.show()

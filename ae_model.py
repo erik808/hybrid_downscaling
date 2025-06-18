@@ -97,7 +97,7 @@ class AutoEncoder(keras_tuner.HyperModel):
         self.encoding_layers = Encoder(**encoder_dict)
 
         # split inputs
-        state_inputs = [ops.squeeze(t,axis=1) \
+        state_inputs = [ops.squeeze(t, axis=1)
                         for t in ops.split(state_input, self.N_lb, axis=1)]
 
         # apply encoder in training and inference mode separately
@@ -106,8 +106,8 @@ class AutoEncoder(keras_tuner.HyperModel):
             self.encoding_layers(state_inputs[0], training=True)
 
         encoded_outputs_lb = \
-            [ self.encoding_layers(inpt, training=False)\
-              for inpt in state_inputs[1:] ]
+            [self.encoding_layers(inpt, training=False)
+             for inpt in state_inputs[1:]]
 
         encoded_outputs = [encoded_outputs_0] + encoded_outputs_lb
 
@@ -952,7 +952,7 @@ class CustomLoss(Loss):
             self,
             name='',
             reduction="sum_over_batch_size",
-            losstype='NSE'
+            losstype='MSE'
     ):
         super().__init__(name=name,
                          reduction=reduction)
@@ -975,6 +975,7 @@ class CustomLoss(Loss):
 
     def mean_SE(self, y_true, y_pred):
         loss = ops.mean(ops.square(y_pred - y_true))
+        breakpoint()
         return loss
 
     def get_config(self):

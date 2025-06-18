@@ -27,6 +27,7 @@ reload(tools)
 from tools import Tee
 
 import ae_model
+reload(ae_model)
 
 from ae_model import CustomValidation
 from ae_model import LSModelWrapper
@@ -34,7 +35,6 @@ from plot_utils import PlotMachine
 
 import compute_tool
 reload(compute_tool)
-reload(ae_model)
 from ae_model import AutoEncoder
 from compute_tool import ComputeTool
 
@@ -333,6 +333,7 @@ class AE_Experiment():
                               epochs=epochs,
                               callbacks=callbacks)
 
+        breakpoint()
         toc = time.time()
         print(f'total training time: {(toc-tic)/60}m')
 

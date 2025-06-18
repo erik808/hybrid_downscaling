@@ -84,7 +84,8 @@ class DataManagerSWOT(DataManagerBase):
 
         params = {}
         params['train_range'] = range(0, split)
-        params['test_range'] = range(split, Nt)
+        params['test_range'] = (range(split, Nt) if split != Nt else
+                                range(0, Nt))
         params['mask'] = mask
 
         scalers = {}

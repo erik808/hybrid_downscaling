@@ -26,19 +26,19 @@ def test_short_run_swot():
         'future': 10,
         'epochs': 1,
         'unroll_dim': 0,
-        'lookback': 0,
+        'lookback': 2,
         'noise_stddev': 0.0,
         'dropout_rate': 0.0,
         'num_conv_blocks': 1,
         'kernel_size': (3, 3),
         'downsample_stride': (2, 2),
         'conv_layers_per_block': 1,
-        'num_filters': 8,
-        'num_filters_last': 8,
+        'num_filters': 16,
+        'num_filters_last': 16,
         'batch_size': 4,
         'latent_space_model': 'RNN',
         'latent_space_dim': 4,
-        'num_feedthrough_filters': 8,
+        'num_feedthrough_filters': 16,
         'num_feedthrough_layers': 2,
         'num_output_layers': 2,
         'l2_lambda': 0.0,
@@ -149,7 +149,7 @@ def test_save_load_cmems():
 
 
 if __name__=="__main__":
-    test_short_run_cmems()
-    # test_short_run_swot()
+    # test_short_run_cmems()
+    test_short_run_swot()
     # test_save_load_cmems()
     # test_feedthrough_only() ## TODO

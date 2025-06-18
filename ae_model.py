@@ -67,11 +67,9 @@ class AutoEncoder(keras_tuner.HyperModel):
         self.N_lb = self.lookback + 1  # lookback dimension
         self.loss_weights = None
 
-
     def build_model(self):
 
         masking_layer = Masking(self.mask, name="masking_layer")
-        masking_layer_ft = Masking(self.mask, name="masking_layer_ft")
 
         state_input = layers.Input(shape=(self.N_lb, self.N_lat, self.N_lon,
                                           self.N_chan),
@@ -81,7 +79,7 @@ class AutoEncoder(keras_tuner.HyperModel):
             feedthrough = layers.Input(
                 shape=(self.N_lb, self.N_lat, self.N_lon, self.N_chan),
                 name="feedthrough_input")
-            ft_inputs = [ops.squeeze(t,axis=1) \
+            ft_inputs = [ops.squeeze(t, axis=1)
                          for t in ops.split(feedthrough, self.N_lb, axis=1)]
 
         # Encoder ---------------------
@@ -757,22 +755,18 @@ class LSModelWrapper(keras.Model):
             keras.metrics.Mean(name="rnn_loss")
         self.loss_fn = keras.losses.MeanSquaredError()
 
-
     @property
     def metrics(self):
         return [self.total_loss_tracker,
                 self.reconstruction_loss_tracker,
                 self.kl_loss_tracker]
 
-
     def call(self, inputs):
         enc_output, z_vars = self.encoder(inputs[0])
         pred = self.decoder([enc_output, inputs[1]])
         return pred
 
-
     def train_step(self, data):
-
         # common
         self.zero_grad()
 
@@ -788,7 +782,6 @@ class LSModelWrapper(keras.Model):
         else:
             raise Exception('no default train_step implemented (yet)')
 
-
     def forward_pass(self, x):
 
         ft_mode = (len(x) == 2)
@@ -803,8 +796,6 @@ class LSModelWrapper(keras.Model):
         y_pred = self.decoder(decoder_input)
 
         return y_pred, z_latent
-
-
 
     def train_step_RNN(self, data):
         x, y = data
@@ -826,11 +817,10 @@ class LSModelWrapper(keras.Model):
         # reconstruction_loss = \
         #     ops.mean(ops.square(y[0][:,0,]-y_pred))
 
-
         # time ordering in y is backwards so last first
-        reconstruction_loss = self.loss_fn(y[0][:,0,], y_pred)
+        reconstruction_loss = self.loss_fn(y[0][:, 0,], y_pred)
 
-        total_loss = reconstruction_loss +  rnn_loss
+        total_loss = reconstruction_loss + rnn_loss
 
         total_loss.backward()
 
@@ -844,7 +834,7 @@ class LSModelWrapper(keras.Model):
         self.reconstruction_loss_tracker.update_state(reconstruction_loss)
         self.rnn_loss_tracker.update_state(rnn_loss)
 
-        out_dict =  {
+        out_dict = {
             'loss' : self.total_loss_tracker.result(),
             'reconstr_loss' : self.reconstruction_loss_tracker.result(),
             'RNN_loss' : self.rnn_loss_tracker.result(),
@@ -863,7 +853,7 @@ class LSModelWrapper(keras.Model):
                 ops.mean(
                     ops.sum(
                         ops.square(z_true['mean'] - z['rnn_mean']),
-                        axis=(1,2),
+                        axis=(1, 2),
                     )
                 )
 
@@ -871,7 +861,7 @@ class LSModelWrapper(keras.Model):
                 ops.mean(
                     ops.sum(
                         ops.square(z_true['log_var'] - z['rnn_log_var']),
-                        axis=(1,2),
+                        axis=(1, 2),
                     )
                 )
 
@@ -881,11 +871,12 @@ class LSModelWrapper(keras.Model):
 
         # time ordering in y is backwards so last first
         reconstruction_loss = \
-            ops.mean(ops.square(y[0][:,0,]-y_pred))
+            ops.mean(ops.square(y[0][:, 0,] - y_pred))
 
         kl_loss = \
-            -0.5 * (1 + z['log_var'] - ops.square(z['mean']) - ops.exp(z['log_var']))
-        kl_loss = ops.mean(ops.sum(kl_loss, axis=(1,2)))
+            -0.5 * (1 + z['log_var'] - ops.square(z['mean']) -
+                    ops.exp(z['log_var']))
+        kl_loss = ops.mean(ops.sum(kl_loss, axis=(1, 2)))
 
         if RNN_hybrid:
             total_loss = reconstruction_loss + kl_loss + rnn_loss
@@ -904,15 +895,15 @@ class LSModelWrapper(keras.Model):
         self.reconstruction_loss_tracker.update_state(reconstruction_loss)
         self.kl_loss_tracker.update_state(kl_loss)
 
-        out_dict =  {
+        out_dict = {
             'loss' : self.total_loss_tracker.result(),
             'reconstr_loss' : self.reconstruction_loss_tracker.result(),
             'KL_loss' : self.kl_loss_tracker.result()
         }
-        if RNN_hybrid: out_dict.update(rnn_dict)
+        if RNN_hybrid:
+            out_dict.update(rnn_dict)
 
         return out_dict
-
 
 
 class Sampling(layers.Layer):
@@ -928,7 +919,7 @@ class Sampling(layers.Layer):
         eps = keras.random.normal(
             shape=ops.shape(mean)
         )
-        out = mean + ops.exp(0.5*log_var)*eps
+        out = mean + ops.exp(0.5 * log_var) * eps
         return out
 
 
@@ -954,6 +945,7 @@ class Masking(layers.Layer):
     def call(self, inputs):
         return ops.multiply(inputs, self.mask)
 
+
 @keras.saving.register_keras_serializable(name="custom_loss")
 class CustomLoss(Loss):
     def __init__(
@@ -977,14 +969,13 @@ class CustomLoss(Loss):
         return loss
 
     def normalized_SE(self, y_true, y_pred):
-        err = ops.sum(ops.square(y_pred-y_true))
+        err = ops.sum(ops.square(y_pred - y_true))
         nrm = ops.sum(ops.square(y_true))
-        return (err/nrm)
+        return (err / nrm)
 
     def mean_SE(self, y_true, y_pred):
-        loss = ops.mean(ops.square(y_pred-y_true))
+        loss = ops.mean(ops.square(y_pred - y_true))
         return loss
-
 
     def get_config(self):
         config = super().get_config()
@@ -1115,18 +1106,16 @@ class CustomValidation(keras.callbacks.Callback):
             if self.pars['evaluate']:
                 xk_true = np.expand_dims(self.test_data[i,], axis=0)
                 error += (np.sum(np.square(xk - xk_true)))
-                base += (np.sum(np.square(xk_LR[0][:,0,] - xk_true)))
-                values = [('error', np.sqrt(error/(i+1))),
-                          ('base', np.sqrt(base/(i+1)))]
+                base += (np.sum(np.square(xk_LR[0][:, 0,] - xk_true)))
+                values = [('error', np.sqrt(error / (i + 1))),
+                          ('base', np.sqrt(base / (i + 1)))]
 
                 pb_i.add(1, values=values)
             else:
                 pb_i.add(1)
 
             xk = np.expand_dims(xk, axis=1)
-            xk_lb = np.concatenate([xk, xk_lb], axis=1)\
-                [:,:self.lookback+1,]
-
+            xk_lb = np.concatenate([xk, xk_lb], axis=1)[:, :self.lookback + 1,]
 
         if self.pars['evaluate']:
             self.plotmachine.plot_prediction_error(self.test_data,
@@ -1134,7 +1123,7 @@ class CustomValidation(keras.callbacks.Callback):
                                                    self.test_data_ft,
                                                    f'epoch_{epoch}')
 
-            self.final_error = np.sqrt(error/(i+1))
-            self.final_base = np.sqrt(base/(i+1))
+            self.final_error = np.sqrt(error / (i + 1))
+            self.final_base = np.sqrt(base / (i + 1))
             logs['error'] = self.final_error
             logs['base']  = self.final_base

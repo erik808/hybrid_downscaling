@@ -333,7 +333,6 @@ class AE_Experiment():
                               epochs=epochs,
                               callbacks=callbacks)
 
-        breakpoint()
         toc = time.time()
         print(f'total training time: {(toc-tic)/60}m')
 

@@ -21,31 +21,31 @@ class AutoEncoder(keras_tuner.HyperModel):
         super(AutoEncoder, self).__init__()
 
         members_dict = {
-            'test_vec' : [],
-            'mask' : [],
-            'lookback' : 2,
-            'learning_rate' : 0.002,
-            'optimizer' : 'adam',
-            'verbosity' : 20,
-            'use_feedthrough' : True,
-            'feedthrough_only' : False,
-            'feedthrough_type' : 'multiply',
-            'noise_stddev' : 0.0,
-            'dropout_rate' : 0.0,
-            'activation_encoder' : 'leaky_relu',
-            'activation_decoder' : 'leaky_relu',
-            'num_conv_blocks' : 1,
-            'conv_layers_per_block' : 1,
-            'num_feedthrough_layers' : 2,
-            'num_feedthrough_filters' : 112,
-            'num_output_layers' : 2,
-            'kernel_size' : (3, 3),
-            'num_filters' : 32,
-            'num_filters_last' : 112,
-            'downsample_stride' : (2, 2),
-            'L2_lambda' : 0.0,
-            'latent_space_model' : 'RNN',
-            'latent_space_dim' : 8,
+            'test_vec': [],
+            'mask': [],
+            'lookback': 2,
+            'learning_rate': 0.002,
+            'optimizer': 'adam',
+            'verbosity': 20,
+            'use_feedthrough': True,
+            'feedthrough_only': False,
+            'feedthrough_type': 'multiply',
+            'noise_stddev': 0.0,
+            'dropout_rate': 0.0,
+            'activation_encoder': 'leaky_relu',
+            'activation_decoder': 'leaky_relu',
+            'num_conv_blocks': 1,
+            'conv_layers_per_block': 1,
+            'num_feedthrough_layers': 2,
+            'num_feedthrough_filters': 112,
+            'num_output_layers': 2,
+            'kernel_size': (3, 3),
+            'num_filters': 32,
+            'num_filters_last': 112,
+            'downsample_stride': (2, 2),
+            'L2_lambda': 0.0,
+            'latent_space_model': 'RNN',
+            'latent_space_dim': 8,
         }
 
         #  set actual class members
@@ -248,7 +248,7 @@ class AutoEncoder(keras_tuner.HyperModel):
 
     def create_param_dict(self, params):
         return \
-            {key : self.__dict__[key] for key in params}
+            {key: self.__dict__[key] for key in params}
 
     def combine_feedthrough(self, inputs, feedthrough,
                             feedthrough_type='multiply',
@@ -269,11 +269,11 @@ class AutoEncoder(keras_tuner.HyperModel):
         return outputs
 
     def compiler(self, model):
-        # loss = keras.losses.\
-        #     MeanSquaredError(reduction="sum_over_batch_size",
-        #                      name="mean_squared_error")
+        loss = keras.losses.\
+            MeanSquaredError(reduction="sum_over_batch_size",
+                             name="mean_squared_error")
 
-        loss = CustomLoss(losstype='MSE')
+        # loss = CustomLoss(losstype='MSE')
 
         if self.latent_space_model == 'VAE':
             loss = None
@@ -284,7 +284,8 @@ class AutoEncoder(keras_tuner.HyperModel):
             optim = keras.optimizers.SGD(learning_rate=self.learning_rate)
 
         print(f'loss_weights: {self.loss_weights}')
-        model.compile(optimizer=optim, loss=loss,
+        model.compile(optimizer=optim,
+                      #loss=loss,
                       loss_weights=self.loss_weights)
 
     def log_model(self, model=None, mode='a'):
@@ -557,10 +558,10 @@ class LatentSpaceModel():
         self.unroll = unroll
         self.lspace_vars = None
         self.RNN_pars = {
-            'units' : self.latent_space_dim,
-            'return_sequences' : True,
-            'return_state' : False,
-#            'go_backwards' : True,
+            'units': self.latent_space_dim,
+            'return_sequences': True,
+            'return_state': False,
+#            'go_backwards': True,
         }
 
 
@@ -647,8 +648,8 @@ class LatentSpaceModel():
 
         # store these vars as lspace vars
         self.lspace_vars = {
-            'rnn_input' : RNN_input,
-            'rnn_output' : RNN_output
+            'rnn_input': RNN_input,
+            'rnn_output': RNN_output
         }
         return self.dense_upsample(RNN_output[:,-1,])
 
@@ -661,17 +662,17 @@ class LatentSpaceModel():
         log_var = layers.Dense(self.latent_space_dim)(downsampled)
 
         self.lspace_vars = {
-            'mean' : mean,
-            'log_var' : log_var
+            'mean': mean,
+            'log_var': log_var
             }
 
         if latent_RNN:
 
             RNN_pars = {
-                'units' : self.latent_space_dim,
-#                'activation' : 'sigmoid',
-                'return_sequences' : True,
-                'return_state' : False
+                'units': self.latent_space_dim,
+#                'activation': 'sigmoid',
+                'return_sequences': True,
+                'return_state': False
                 }
             rnn_mean = layers.SimpleRNN(**self.RNN_pars)\
                 (ops.flip(mean, axis=1))
@@ -680,8 +681,8 @@ class LatentSpaceModel():
                 (ops.flip(log_var, axis=1))
 
             self.lspace_vars.update({
-                'rnn_mean' : rnn_mean,
-                'rnn_log_var' : rnn_log_var,
+                'rnn_mean': rnn_mean,
+                'rnn_log_var': rnn_log_var,
                 })
 
             sampled = Sampling()(rnn_mean[:,-1,],
@@ -705,8 +706,8 @@ class LatentSpaceModel():
         LSTM_output = layers.LSTM(**self.RNN_pars)(LSTM_input)
         # store these vars as lspace vars
         self.lspace_vars = {
-            'rnn_input' : LSTM_input,
-            'rnn_output' : LSTM_output
+            'rnn_input': LSTM_input,
+            'rnn_output': LSTM_output
         }
 
         return self.dense_upsample(LSTM_output[:,-1,])
@@ -739,7 +740,7 @@ class LSModelWrapper(keras.Model):
             self,
             encoder,
             decoder,
-            model='VAE',
+            model='RNN',
             **kwargs):
         super().__init__(**kwargs)
         self.encoder = encoder
@@ -754,7 +755,7 @@ class LSModelWrapper(keras.Model):
         self.rnn_loss_tracker = \
             keras.metrics.Mean(name="rnn_loss")
         self.loss_fn = keras.losses.MeanSquaredError()
-
+        
     @property
     def metrics(self):
         return [self.total_loss_tracker,
@@ -835,9 +836,9 @@ class LSModelWrapper(keras.Model):
         self.rnn_loss_tracker.update_state(rnn_loss)
 
         out_dict = {
-            'loss' : self.total_loss_tracker.result(),
-            'reconstr_loss' : self.reconstruction_loss_tracker.result(),
-            'RNN_loss' : self.rnn_loss_tracker.result(),
+            'loss': self.total_loss_tracker.result(),
+            'reconstr_loss': self.reconstruction_loss_tracker.result(),
+            'RNN_loss': self.rnn_loss_tracker.result(),
         }
 
         return out_dict
@@ -867,7 +868,7 @@ class LSModelWrapper(keras.Model):
 
             rnn_loss = rnn_loss_mean + rnn_loss_var
             self.rnn_loss_tracker.update_state(rnn_loss)
-            rnn_dict = {'rnn_loss' : self.rnn_loss_tracker.result()}
+            rnn_dict = {'rnn_loss': self.rnn_loss_tracker.result()}
 
         # time ordering in y is backwards so last first
         reconstruction_loss = \
@@ -896,16 +897,16 @@ class LSModelWrapper(keras.Model):
         self.kl_loss_tracker.update_state(kl_loss)
 
         out_dict = {
-            'loss' : self.total_loss_tracker.result(),
-            'reconstr_loss' : self.reconstruction_loss_tracker.result(),
-            'KL_loss' : self.kl_loss_tracker.result()
+            'loss': self.total_loss_tracker.result(),
+            'reconstr_loss': self.reconstruction_loss_tracker.result(),
+            'KL_loss': self.kl_loss_tracker.result()
         }
         if RNN_hybrid:
             out_dict.update(rnn_dict)
 
         return out_dict
 
-
+@keras.saving.register_keras_serializable(name="sampling")
 class Sampling(layers.Layer):
     """
     Sampling layer
@@ -921,6 +922,11 @@ class Sampling(layers.Layer):
         )
         out = mean + ops.exp(0.5 * log_var) * eps
         return out
+    
+    def get_config(self):
+        config = super().get_config()
+        return config
+
 
 
 # custom masking class
@@ -933,7 +939,7 @@ class Masking(layers.Layer):
     def get_config(self):
         config = super().get_config()
         config.update({
-            'mask' : keras.saving.serialize_keras_object(self.mask)})
+            'mask': keras.saving.serialize_keras_object(self.mask)})
         return config
 
     @classmethod
@@ -965,7 +971,7 @@ class CustomLoss(Loss):
         elif self.losstype == 'MSE':
             loss = self.mean_SE(y_true, y_pred)
 
-        print(f' :{loss:1.2e}: ', end="")
+        print(f':{loss:1.2e}: ', end="")
         return loss
 
     def normalized_SE(self, y_true, y_pred):
@@ -975,7 +981,6 @@ class CustomLoss(Loss):
 
     def mean_SE(self, y_true, y_pred):
         loss = ops.mean(ops.square(y_pred - y_true))
-        breakpoint()
         return loss
 
     def get_config(self):
@@ -1116,7 +1121,7 @@ class CustomValidation(keras.callbacks.Callback):
                 pb_i.add(1)
 
             xk = np.expand_dims(xk, axis=1)
-            xk_lb = np.concatenate([xk, xk_lb], axis=1)[:, :self.lookback + 1,]
+            xk_lb = np.concatenate([xk, xk_lb], axis=1)[:,:self.lookback + 1,]
 
         if self.pars['evaluate']:
             self.plotmachine.plot_prediction_error(self.test_data,

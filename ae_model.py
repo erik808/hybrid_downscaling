@@ -1045,8 +1045,8 @@ class CustomValidation(keras.callbacks.Callback):
 
         # account for unrolling
         max_inds = self.data['HR'].shape[0]
-        unr_inds = np.arange(test_inds[-1]+1,
-                             np.min([test_inds[-1]+self.unroll_dim+1,
+        unr_inds = np.arange(test_inds[-1] + 1,
+                             np.min([test_inds[-1] + self.unroll_dim + 1,
                                      max_inds]))
         self.test_inds = np.concatenate([self.test_inds, unr_inds])
 

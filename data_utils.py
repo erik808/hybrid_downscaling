@@ -1,5 +1,10 @@
 import numpy as np
 import keras
+import data_manager_cmes
+import data_manager_swot
+from importlib import reload
+reload(data_manager_cmes)
+reload(data_manager_swot)
 from data_manager_cmes import DataManagerCMEMS
 from data_manager_swot import DataManagerSWOT
 

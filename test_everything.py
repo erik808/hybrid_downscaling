@@ -149,7 +149,7 @@ def test_save_load_cmems():
 
 
 if __name__=="__main__":
-    test_short_run_cmems()
-    # test_short_run_swot()
+    # test_short_run_cmems()
+    test_short_run_swot()
     # test_save_load_cmems()
     # test_feedthrough_only() ## TODO

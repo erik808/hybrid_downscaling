@@ -514,4 +514,5 @@ class DataManagerCMEMS(DataManagerBase):
         params['train_range'] = range(0, len_train)
         params['test_range'] = range(len_train, len_train + len_test)
 
+        breakpoint()
         return out_data, params, scalers, enc_data

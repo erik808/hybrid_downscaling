@@ -329,6 +329,7 @@ class AE_Experiment():
         # self.plot_model(model)
 
         # TRAINING --------------------------------------------
+        breakpoint()
         self.hist = model.fit(x=datagen_train,
                               epochs=epochs,
                               callbacks=callbacks)

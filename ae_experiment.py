@@ -329,11 +329,11 @@ class AE_Experiment():
         # self.plot_model(model)
 
         # TRAINING --------------------------------------------
-        breakpoint()
         self.hist = model.fit(x=datagen_train,
                               epochs=epochs,
                               callbacks=callbacks)
 
+        breakpoint()
         toc = time.time()
         print(f'total training time: {(toc-tic)/60}m')
 

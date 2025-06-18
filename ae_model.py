@@ -1071,41 +1071,43 @@ class CustomValidation(keras.callbacks.Callback):
     def predict(self, epoch, logs=None):
         self.predictions = np.zeros_like(self.test_data)
 
-        init_ind = self.test_inds[0]-1
+        init_ind = self.test_inds[0] - 1
 
         xk_lb = np.expand_dims(
             dm.create_lookback(init_ind, [self.data['HR']],
-                               self.lookback,axis=0)[0], axis=0)
+                               self.lookback, axis=0)[0], axis=0)
 
         pb_i = keras.utils.Progbar(self.N_steps,
                                    stateful_metrics=['error', 'base'],
                                    interval=0.5)
-        error, base = (0,0)
+        error, base = (0, 0)
 
-        for i in range(self.N_steps-self.unroll_dim):
-
-
-            xk_LR = [ np.expand_dims(
-                dm.create_lookback(self.test_inds[i+unroll], [self.data['LR']],
+        for i in range(self.N_steps - self.unroll_dim):
+            xk_LR = [np.expand_dims(
+                dm.create_lookback(self.test_inds[i + unroll],
+                                   [self.data['LR']],
                                    self.lookback, axis=0)[0], axis=0)
-                      for unroll in range(self.unroll_dim+1) ]
+                     for unroll in range(self.unroll_dim + 1)
+                     ]
 
             Pxk = xk_LR
 
             if self.pars['feedthrough_only']:
                 xk = self.model.predict([Pxk[0]], verbose=0)
             elif self.pars['use_feedthrough']:
-                xk = self.model.predict([xk_lb]+Pxk, verbose=0)
+                xk = self.model.predict([xk_lb] + Pxk, verbose=0)
             else:
                 xk = self.model.predict([xk_lb], verbose=0)
 
             # if ( self.pars['multihead_output'] and
             #      not self.pars['feedthrough_only'] ): xk = xk[0]
 
-            if ( isinstance(xk, list) and
-                 self.unroll_dim > 0 ):
-                for j in range(self.unroll_dim+1):
-                    self.predictions[i+j,] = xk[j]
+            if (
+                    isinstance(xk, list) and
+                    self.unroll_dim > 0
+            ):
+                for j in range(self.unroll_dim + 1):
+                    self.predictions[i + j,] = xk[j]
                 xk = xk[0]
             else:
                 self.predictions[i,] = xk

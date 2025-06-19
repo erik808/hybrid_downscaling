@@ -745,8 +745,8 @@ class LSModelWrapper(keras.Model):
             keras.metrics.Mean(name="KL_loss")
         self.rnn_loss_tracker = \
             keras.metrics.Mean(name="rnn_loss")
-        # self.loss_fn = keras.losses.MeanSquaredError()
-        self.loss_fn = CustomLoss(losstype='MSE')
+        self.loss_fn = keras.losses.MeanSquaredError()
+        # self.loss_fn = CustomLoss(losstype='MSE')
 
     @property
     def metrics(self):
@@ -764,7 +764,6 @@ class LSModelWrapper(keras.Model):
         else:
             input_decoder = enc_output
         pred = self.decoder(input_decoder)
-
         return pred
 
     def train_step(self, data):
@@ -803,23 +802,22 @@ class LSModelWrapper(keras.Model):
         y_pred, z = self.forward_pass(x)
 
         _, z_true = self.encoder(y)
-
         rnn_loss = self.loss_fn(z_true['rnn_input'],
                                 z['rnn_output'])
 
-        # rnn_loss = \
-        #     ops.mean(
-        #         ops.mean(
-        #             ops.square(z_true['rnn_input'] - z['rnn_output']),
-        #             axis=(1,2),
-        #         )
-        #     )
-
-        # reconstruction_loss = \
-        #     ops.mean(ops.square(y[0][:,0,]-y_pred))
+        # ignore nan result
+        rnn_loss = 0 if np.isnan(rnn_loss.detach()) else rnn_loss
 
         # time ordering in y is backwards so last first
-        reconstruction_loss = self.loss_fn(y[0][:, 0,], y_pred)
+        y_true = y[0][:, 0,]
+
+        # create a mask on the fly
+        mask = ops.where(ops.isnan(y_true), 0, 1)
+
+        # apply mask
+        y_pred = ops.multiply(mask, y_pred)
+        y_true = ops.where(mask==0, 0, y_true)
+        reconstruction_loss = self.loss_fn(y_true, y_pred)
 
         total_loss = reconstruction_loss + rnn_loss
 

@@ -2,7 +2,6 @@ import numpy as np
 
 import torch
 import keras
-import keras_tuner
 from keras import layers
 from keras import ops
 from keras import regularizers
@@ -12,14 +11,12 @@ from keras.losses import Loss
 import data_utils as dm
 
 
-class AutoEncoder(keras_tuner.HyperModel):
+class AutoEncoder():
 
     def __init__(
             self,
             **kwargs
     ):
-        super(AutoEncoder, self).__init__()
-
         members_dict = {
             'test_vec': [],
             'mask': [],
@@ -71,9 +68,16 @@ class AutoEncoder(keras_tuner.HyperModel):
 
         masking_layer = Masking(self.mask, name="masking_layer")
 
-        state_input = layers.Input(shape=(self.N_lb, self.N_lat, self.N_lon,
-                                          self.N_chan),
-                                   name="full_state_input")
+        # input and feedthrough dimensions:
+        # <batch_size> x <lookback> x <lat> x <lon> x <channels>
+        # lookback axis is backward in time:
+        # so input[:,0,] is the most recent field
+        state_input = layers.Input(
+            shape=(self.N_lb,
+                   self.N_lat,
+                   self.N_lon,
+                   self.N_chan),
+            name="full_state_input")
 
         if self.use_feedthrough:
             feedthrough = layers.Input(
@@ -96,7 +100,7 @@ class AutoEncoder(keras_tuner.HyperModel):
 
         self.encoding_layers = Encoder(**encoder_dict)
 
-        # split inputs
+        # split inputs along time axis (axis=1)
         state_inputs = [ops.squeeze(t, axis=1)
                         for t in ops.split(state_input, self.N_lb, axis=1)]
 
@@ -111,7 +115,8 @@ class AutoEncoder(keras_tuner.HyperModel):
 
         encoded_outputs = [encoded_outputs_0] + encoded_outputs_lb
 
-        # encoded_outputs = [ self.encoding_layers(inpt) for inpt in state_inputs]
+        # encoded_outputs = \
+        # [ self.encoding_layers(inpt) for inpt in state_inputs]
         # encoded_outputs_0 = encoded_outputs[0]
 
         # apply encoder to feedthrough
@@ -123,7 +128,6 @@ class AutoEncoder(keras_tuner.HyperModel):
 
         # join encoded outputs
         encoded_outputs = ops.stack(encoded_outputs, axis=1)
-
 
         # Apply noise
         if self.noise_stddev > 0:
@@ -269,14 +273,14 @@ class AutoEncoder(keras_tuner.HyperModel):
         return outputs
 
     def compiler(self, model):
-        loss = keras.losses.\
-            MeanSquaredError(reduction="sum_over_batch_size",
-                             name="mean_squared_error")
+        # loss = keras.losses.\
+        #     MeanSquaredError(reduction="sum_over_batch_size",
+        #                      name="mean_squared_error")
 
         # loss = CustomLoss(losstype='MSE')
 
-        if self.latent_space_model == 'VAE':
-            loss = None
+        # if self.latent_space_model == 'VAE':
+        loss = None
 
         if self.optimizer == 'adam':
             optim = keras.optimizers.Adam(learning_rate=self.learning_rate)
@@ -285,7 +289,7 @@ class AutoEncoder(keras_tuner.HyperModel):
 
         print(f'loss_weights: {self.loss_weights}')
         model.compile(optimizer=optim,
-                      #loss=loss,
+                      loss=loss,
                       loss_weights=self.loss_weights)
 
     def log_model(self, model=None, mode='a'):
@@ -539,7 +543,6 @@ class ConvBlock():
         return x
 
 
-
 class LatentSpaceModel():
 
     def __init__(self,
@@ -548,7 +551,7 @@ class LatentSpaceModel():
                  latent_space_dim=32,
                  unroll=False,
                  num_filters_last=32,
-                 kernel_size=(3,3)):
+                 kernel_size=(3, 3)):
 
         self.model = latent_space_model
         self.activation = activation_encoder
@@ -563,7 +566,6 @@ class LatentSpaceModel():
             'return_state': False,
 #            'go_backwards': True,
         }
-
 
     def __call__(self, inputs):
         if self.model == 'RNN':
@@ -586,16 +588,13 @@ class LatentSpaceModel():
         else:
             raise Exception('Provide a model')
 
-
     def ConvLSTM(self, inputs):
         lstm_input = ops.flip(inputs, axis=1)
         lstm_output = \
             layers.ConvLSTM2D(padding='same',
                               filters=self.filters,
-                              kernel_size=self.kernel_size)\
-                              (lstm_input)
+                              kernel_size=self.kernel_size)(lstm_input)
         return lstm_output
-
 
     def dense_downsample(
             self,
@@ -614,7 +613,7 @@ class LatentSpaceModel():
         x = layers.Reshape((self.Nlb, self.N_feats_in))(inputs)
         x = layers.Dense(
             self.latent_space_dim,
-            activation = activ,
+            activation=activ,
             **kwargs,
         )(x)
 
@@ -634,7 +633,7 @@ class LatentSpaceModel():
         x = inputs
         x = layers.Dense(
             self.N_feats_out,
-            activation = activ,
+            activation=activ,
             **kwargs,
         )(x)
 
@@ -651,7 +650,7 @@ class LatentSpaceModel():
             'rnn_input': RNN_input,
             'rnn_output': RNN_output
         }
-        return self.dense_upsample(RNN_output[:,-1,])
+        return self.dense_upsample(RNN_output[:, -1,])
 
     def VAE(self, inputs, latent_RNN=False):
 
@@ -664,34 +663,35 @@ class LatentSpaceModel():
         self.lspace_vars = {
             'mean': mean,
             'log_var': log_var
-            }
+        }
 
         if latent_RNN:
-
             RNN_pars = {
                 'units': self.latent_space_dim,
-#                'activation': 'sigmoid',
+                # 'activation': 'sigmoid',
                 'return_sequences': True,
                 'return_state': False
-                }
-            rnn_mean = layers.SimpleRNN(**self.RNN_pars)\
-                (ops.flip(mean, axis=1))
+            }
+            rnn_mean = (layers.SimpleRNN(**self.RNN_pars)
+                        (ops.flip(mean, axis=1))
+                        )
 
-            rnn_log_var = layers.SimpleRNN(**RNN_pars)\
-                (ops.flip(log_var, axis=1))
+            rnn_log_var = (layers.SimpleRNN(**RNN_pars)
+                           (ops.flip(log_var, axis=1))
+                           )
 
             self.lspace_vars.update({
                 'rnn_mean': rnn_mean,
                 'rnn_log_var': rnn_log_var,
-                })
+            })
 
-            sampled = Sampling()(rnn_mean[:,-1,],
-                                 rnn_log_var[:,-1,])
+            sampled = Sampling()(rnn_mean[:, -1,],
+                                 rnn_log_var[:, -1,])
             out = self.dense_upsample(sampled)
 
         else:
             # ordering in time here is last last
-            sampled = Sampling()(mean[:,-1,], log_var[:,-1,])
+            sampled = Sampling()(mean[:, -1,], log_var[:, -1,])
             out = self.dense_upsample(sampled)
 
         return out
@@ -710,18 +710,18 @@ class LatentSpaceModel():
             'rnn_output': LSTM_output
         }
 
-        return self.dense_upsample(LSTM_output[:,-1,])
+        return self.dense_upsample(LSTM_output[:, -1,])
 
     def RNN_res(self, inputs):
         x = self.most_recent(inputs)
         y = self.RNN(inputs)
-        return layers.Add()([x,y])
+        return layers.Add()([x, y])
 
     def most_recent(self, inputs):
         # assume 5D tensor, time dim ordered from recent to past
         self.N_lb = inputs.shape[1]
         inputs_splitted = \
-            [ops.squeeze(t,axis=1) \
+            [ops.squeeze(t, axis=1)
              for t in ops.split(inputs, self.N_lb, axis=1)]
 
         # return most recent time
@@ -755,12 +755,14 @@ class LSModelWrapper(keras.Model):
         self.rnn_loss_tracker = \
             keras.metrics.Mean(name="rnn_loss")
         self.loss_fn = keras.losses.MeanSquaredError()
-        
+
     @property
     def metrics(self):
         return [self.total_loss_tracker,
                 self.reconstruction_loss_tracker,
-                self.kl_loss_tracker]
+                self.kl_loss_tracker,
+                self.rnn_loss_tracker,
+                ]
 
     def call(self, inputs):
         enc_output, z_vars = self.encoder(inputs[0])
@@ -922,7 +924,7 @@ class Sampling(layers.Layer):
         )
         out = mean + ops.exp(0.5 * log_var) * eps
         return out
-    
+
     def get_config(self):
         config = super().get_config()
         return config

@@ -165,7 +165,7 @@ class AutoEncoder():
             'kernel_size',
             'activation_decoder',
             'regularizer'
-            ])
+        ])
 
         self.decoding_layers = Decoder(
             **decoder_dict,
@@ -173,7 +173,6 @@ class AutoEncoder():
         )
 
         decoded_state = self.decoding_layers(lspace_model_output)
-        decoded_AE_only = self.decoding_layers(encoded_outputs_0)
 
         ds_filters = self.num_feedthrough_filters\
             if self.feedthrough_only else decoded_state.shape[-1]
@@ -183,7 +182,7 @@ class AutoEncoder():
             self.num_feedthrough_filters,
             self.kernel_size,
             activation=self.activation_decoder,
-            downsample_filters = ds_filters,
+            downsample_filters=ds_filters,
             regularizer=self.regularizer,
             name='feedthrough_block'
         )
@@ -197,12 +196,6 @@ class AutoEncoder():
             downsample_filters=self.N_chan,
             regularizer=self.regularizer,
             name='output_block')
-
-        output_layer_AE_only = ConvBlock(1, self.N_chan,
-                                         self.kernel_size,
-                                         activation="sigmoid",
-                                         regularizer=self.regularizer,
-                                         name='output_layer_AE_only')
 
         if self.feedthrough_only:
             output = feedthrough_block(ft_inputs[0])
@@ -361,23 +354,22 @@ class AutoEncoder():
             if unroll_dim > 0:
                 # (re)construct lookback array
                 xk = ops.expand_dims(xk[0], axis=1)
-                xk_lb = ops.concatenate([xk, xk_lb], axis=1)\
-                    [:,:self.N_lb,]
+                xk_lb = (ops.concatenate([xk, xk_lb], axis=1)
+                         [:, :self.N_lb,])
 
         self.unrolled_model = \
-            Model(inputs=[state_input]+feedthrough,
+            Model(inputs=[state_input] + feedthrough,
                   outputs=x_out,
                   name="unrolled_model")
 
         self.log_model(self.unrolled_model, 'a')
 
-        self.loss_weights = np.ones(unroll_dim+1) # / np.arange(1,1+unroll_dim+1)
+        self.loss_weights = np.ones(unroll_dim + 1)
         self.loss_weights = self.loss_weights.tolist()
         self.loss_weights = self.loss_weights[0] \
             if len(self.loss_weights) == 1 else self.loss_weights
 
         return self.unrolled_model
-
 
 
 class Encoder():
@@ -388,10 +380,10 @@ class Encoder():
                  num_filters=32,
                  num_filters_last=8,
                  conv_layers_per_block=2,
-                 kernel_size=(3,3),
+                 kernel_size=(3, 3),
                  activation_encoder='relu',
                  regularizer=regularizers.L2(1e-5),
-                 downsample_stride=(2,2)
+                 downsample_stride=(2, 2)
                  ):
 
         self.block_list = []
@@ -418,6 +410,7 @@ class Encoder():
             self.x_skip.append(x)
         return x
 
+
 class Decoder():
     """Decoder: similar to encoder but with upsample layers
 
@@ -431,10 +424,10 @@ class Decoder():
                  num_filters=32,
                  num_filters_last=8,
                  conv_layers_per_block=2,
-                 kernel_size=(3,3),
+                 kernel_size=(3, 3),
                  activation_decoder='relu',
                  regularizer=regularizers.L2(1e-5),
-                 upsampling_size=(2,2),
+                 upsampling_size=(2, 2),
                  ):
 
         self.block_list = []
@@ -466,13 +459,11 @@ class Decoder():
         #                             name=f'final_dec_conv_layer')
         # self.block_list.append(final_layer)
 
-
     def __call__(self, inputs, **kwargs):
         x = inputs
         for block in self.block_list:
             x = block(x, **kwargs)
         return x
-
 
 
 class ConvBlock():
@@ -483,9 +474,9 @@ class ConvBlock():
     def __init__(self,
                  conv_layers_per_block,
                  num_filters=32,
-                 kernel_size=(3,3),
+                 kernel_size=(3, 3),
                  activation='relu',
-                 downsample_stride=(1,1),
+                 downsample_stride=(1, 1),
                  downsample_filters=None,
                  downsample_activation=None,
                  regularizer=regularizers.L2(1e-5),
@@ -496,31 +487,31 @@ class ConvBlock():
         self.num_filters = num_filters
         self.regularizer = regularizer
         self.activation = activation
-        if downsample_filters == None:
+        if downsample_filters is None:
             self.downsample_filters = num_filters
         else:
             self.downsample_filters = downsample_filters
-        if downsample_activation == None:
+        if downsample_activation is None:
             self.downsample_activation = activation
         else:
             self.downsample_activation = downsample_activation
 
         ctr = 0
-        for i in range(conv_layers_per_block-1):
+        for i in range(conv_layers_per_block - 1):
             ctr += 1
-            l = layers.Conv2D(num_filters,
-                              kernel_size,
-                              strides=(1,1),
-                              activation=activation,
-                              kernel_regularizer=regularizer,
-                              padding="same",
-                              name=f'{name}_l{ctr}')
+            conv_l = layers.Conv2D(num_filters,
+                                   kernel_size,
+                                   strides=(1, 1),
+                                   activation=activation,
+                                   kernel_regularizer=regularizer,
+                                   padding="same",
+                                   name=f'{name}_l{ctr}')
 
-            self.layer_list.append(l)
+            self.layer_list.append(conv_l)
 
         # final downsampling convolution
         ctr += 1
-        l = layers.Conv2D(
+        conv_l = layers.Conv2D(
             self.downsample_filters,
             kernel_size,
             strides=downsample_stride,
@@ -529,7 +520,7 @@ class ConvBlock():
             padding="same",
             name=f'{name}_l{ctr}')
 
-        self.layer_list.append(l)
+        self.layer_list.append(conv_l)
 
 
 
@@ -754,7 +745,8 @@ class LSModelWrapper(keras.Model):
             keras.metrics.Mean(name="KL_loss")
         self.rnn_loss_tracker = \
             keras.metrics.Mean(name="rnn_loss")
-        self.loss_fn = keras.losses.MeanSquaredError()
+        # self.loss_fn = keras.losses.MeanSquaredError()
+        self.loss_fn = CustomLoss(losstype='MSE')
 
     @property
     def metrics(self):
@@ -765,8 +757,14 @@ class LSModelWrapper(keras.Model):
                 ]
 
     def call(self, inputs):
+        ft_mode = (len(inputs) == 2)
         enc_output, z_vars = self.encoder(inputs[0])
-        pred = self.decoder([enc_output, inputs[1]])
+        if ft_mode:
+            input_decoder = [enc_output, inputs[1]]
+        else:
+            input_decoder = enc_output
+        pred = self.decoder(input_decoder)
+
         return pred
 
     def train_step(self, data):
@@ -1033,7 +1031,9 @@ class CustomValidation(keras.callbacks.Callback):
                  data,
                  test_inds,
                  plotmachine,
-                 pars):
+                 pars,
+                 case_study='cmems'
+                 ):
 
         super().__init__()
 
@@ -1041,6 +1041,7 @@ class CustomValidation(keras.callbacks.Callback):
         self.unroll_dim = self.pars['unroll_dim']
         self.data = data
         self.test_inds = test_inds
+        self.case_study = case_study
 
         # account for unrolling
         max_inds = self.data['HR'].shape[0]
@@ -1068,6 +1069,17 @@ class CustomValidation(keras.callbacks.Callback):
             self.predict(epoch, logs)
 
     def predict(self, epoch, logs=None):
+        if self.case_study == 'cmems':
+            self.predict_cmems(epoch, logs)
+        elif self.case_study == 'swot':
+            self.predict_swot(epoch, logs)
+        else:
+            raise ValueError("invalid case study")
+
+    def predict_swot(self, epoch, logs=None):
+        raise Exception('not implemented')
+
+    def predict_cmems(self, epoch, logs=None):
         self.predictions = np.zeros_like(self.test_data)
 
         init_ind = self.test_inds[0] - 1
@@ -1100,7 +1112,6 @@ class CustomValidation(keras.callbacks.Callback):
 
             # if ( self.pars['multihead_output'] and
             #      not self.pars['feedthrough_only'] ): xk = xk[0]
-
             if (
                     isinstance(xk, list) and
                     self.unroll_dim > 0
@@ -1123,7 +1134,9 @@ class CustomValidation(keras.callbacks.Callback):
                 pb_i.add(1)
 
             xk = np.expand_dims(xk, axis=1)
-            xk_lb = np.concatenate([xk, xk_lb], axis=1)[:,:self.lookback + 1,]
+            xk_lb = np.concatenate(
+                [xk, xk_lb], axis=1
+            )[:, :self.lookback + 1,]
 
         if self.pars['evaluate']:
             self.plotmachine.plot_prediction_error(self.test_data,

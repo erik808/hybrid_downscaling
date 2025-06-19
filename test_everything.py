@@ -17,7 +17,7 @@ def test_short_run_swot():
     exp = AE_Experiment(
         exp_name=exp_name,
         case_study='swot',
-        feedthrough_type='hybrid',
+        feedthrough_type='disabled',
         testing_mode=True)
 
     # adjust hyperparameters:
@@ -29,7 +29,7 @@ def test_short_run_swot():
         'lookback': 2,
         'noise_stddev': 0.0,
         'dropout_rate': 0.0,
-        'num_conv_blocks': 1,
+        'num_conv_blocks': 2,
         'kernel_size': (3, 3),
         'downsample_stride': (2, 2),
         'conv_layers_per_block': 1,
@@ -150,7 +150,7 @@ def test_save_load_cmems():
 
 
 if __name__=="__main__":
-    test_short_run_cmems()
-    # test_short_run_swot()
+    test_short_run_swot()
+    # test_short_run_cmems()
     # test_save_load_cmems()
     # test_feedthrough_only() ## TODO

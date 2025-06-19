@@ -192,7 +192,6 @@ class AE_Experiment():
     def build_and_run_model(self,
                             predict_only=False,
                             evaluate=True):
-
         # AE-MODEL CONFIG
         use_feedthrough = True if (self.feedthrough_type == 'hybrid' or
                                    self.feedthrough_type == 'only') else False
@@ -217,11 +216,19 @@ class AE_Experiment():
         self.setup_ranges(self.params)
 
         # input data
-        train_data_inp = self.data['HR'][self.train_range_km1,]
-        # output data
+        if self.case_study == 'cmems':
+            train_data_inp = self.data['HR'][self.train_range_km1,]
+        elif self.case_study == 'swot':
+            train_data_inp = self.data['LR'][self.train_range_k,]
+
+        # output data (truth)
         train_data_otp = self.data['HR'][self.train_range_k,]
+
         # control/feedthrough data
-        train_data_ft  = self.data['LR'][self.train_range_k,]
+        if self.case_study == 'cmems':
+            train_data_ft  = self.data['LR'][self.train_range_k,]
+        elif self.case_study == 'swot':  # not used
+            train_data_ft  = self.data['LR'][self.train_range_k,]
 
         self.postfix, self.timestamp = self.create_postfix()
         sys.stdout = Tee(self.files['log'] + f'{self.postfix}')
@@ -282,7 +289,8 @@ class AE_Experiment():
                                    'predict_only' : predict_only,
                                    'evaluate' : evaluate,
                                    'lookback' : self.hyper_params['lookback']
-                                   }
+                                   },
+                             case_study=self.case_study
                              )
 
         cdir = self.dirs['checkpoints']

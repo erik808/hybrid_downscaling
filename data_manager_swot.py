@@ -62,6 +62,9 @@ class DataManagerSWOT(DataManagerBase):
         Nt, Nlat, Nlon = data_HR.shape
         assert data_LR.shape == data_HR.shape
 
+        # remove nans in LR data only
+        data_LR = np.nan_to_num(data_LR, 0)
+
         #  We scale the data with a single scaling for all features
         scaler = CustomScaler('minmax_over_all_features')
 

@@ -63,8 +63,10 @@ class DataGenerator(keras.utils.PyDataset):
             self.x = x
         elif self.ft_type == 'only':
             self.x = [x[1]]
-        else:
+        elif self.ft_type == 'disabled':
             self.x = [x[0]]
+        else:
+            raise ValueError('invalid feedthrough type')
 
         self.y = y
 
@@ -112,5 +114,3 @@ def create_lookback(inds, data, lookback, axis=1):
         batch.append(np.stack(lb_fields, axis=axis))
 
     return batch
-
-

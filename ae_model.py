@@ -812,11 +812,12 @@ class LSModelWrapper(keras.Model):
         y_true = y[0][:, 0,]
 
         # create a mask on the fly
-        mask = ops.where(ops.isnan(y_true), 0, 1)
+        y_true = y_true.flatten()
+        y_pred = y_pred.flatten()
+        logical_mask = ops.isnan(y_true) != True
+        y_true = y_true[logical_mask]
+        y_pred = y_pred[logical_mask]
 
-        # apply mask
-        y_pred = ops.multiply(mask, y_pred)
-        y_true = ops.where(mask==0, 0, y_true)
         reconstruction_loss = self.loss_fn(y_true, y_pred)
 
         total_loss = reconstruction_loss + rnn_loss

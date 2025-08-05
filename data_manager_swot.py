@@ -76,6 +76,8 @@ class DataManagerSWOT(DataManagerBase):
                         .reshape(Nt, Nlat, Nlon)
 
         split = int(Nt * self.split_factor)
+        if split == Nt:
+            raise NotImplementedError("unit split_factor")
 
         # assemble into dicts
         data = {}
@@ -87,8 +89,7 @@ class DataManagerSWOT(DataManagerBase):
 
         params = {}
         params['train_range'] = range(0, split)
-        params['test_range'] = (range(split, Nt) if split != Nt else
-                                range(0, Nt))
+        params['test_range'] = range(split, Nt)
         params['mask'] = mask
 
         scalers = {}

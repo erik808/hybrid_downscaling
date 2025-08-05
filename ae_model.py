@@ -8,7 +8,7 @@ from keras import regularizers
 from keras.models import Model
 from keras.losses import Loss
 
-import data_utils as dm
+import data_utils
 
 
 class AutoEncoder():
@@ -1076,16 +1076,29 @@ class CustomValidation(keras.callbacks.Callback):
             raise ValueError("invalid case study")
 
     def predict_swot(self, epoch, logs=None):
+
+        if self.unroll_dim != 0:
+            raise NotImplementedError("unroll not implemented for SWOT set")
+
+        for i in range(self.N_steps):
+            xk_lb = np.expand_dims(
+                data_utils.create_lookback(
+                    self.test_inds[i], [self.data['LR']],
+                    self.lookback, axis=0)[0], axis=0)
+
+            breakpoint()
+
+
         raise Exception('not implemented')
 
     def predict_cmems(self, epoch, logs=None):
         self.predictions = np.zeros_like(self.test_data)
 
         init_ind = self.test_inds[0] - 1
-
+        
         xk_lb = np.expand_dims(
-            dm.create_lookback(init_ind, [self.data['HR']],
-                               self.lookback, axis=0)[0], axis=0)
+            data_utils.create_lookback(init_ind, [self.data['HR']],
+                                       self.lookback, axis=0)[0], axis=0)
 
         pb_i = keras.utils.Progbar(self.N_steps,
                                    stateful_metrics=['error', 'base'],
@@ -1094,9 +1107,9 @@ class CustomValidation(keras.callbacks.Callback):
 
         for i in range(self.N_steps - self.unroll_dim):
             xk_LR = [np.expand_dims(
-                dm.create_lookback(self.test_inds[i + unroll],
-                                   [self.data['LR']],
-                                   self.lookback, axis=0)[0], axis=0)
+                data_utils.create_lookback(self.test_inds[i + unroll],
+                                           [self.data['LR']],
+                                           self.lookback, axis=0)[0], axis=0)
                      for unroll in range(self.unroll_dim + 1)
                      ]
 
@@ -1109,8 +1122,6 @@ class CustomValidation(keras.callbacks.Callback):
             else:
                 xk = self.model.predict([xk_lb], verbose=0)
 
-            # if ( self.pars['multihead_output'] and
-            #      not self.pars['feedthrough_only'] ): xk = xk[0]
             if (
                     isinstance(xk, list) and
                     self.unroll_dim > 0

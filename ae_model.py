@@ -814,7 +814,7 @@ class LSModelWrapper(keras.Model):
         # create a mask on the fly
         y_true = y_true.flatten()
         y_pred = y_pred.flatten()
-        logical_mask = ops.isnan(y_true) != True
+        logical_mask = ~ops.isnan(y_true)
         y_true = y_true[logical_mask]
         y_pred = y_pred[logical_mask]
 

@@ -26,7 +26,7 @@ def test_short_run_swot():
         'future': 10,
         'epochs': 1,
         'unroll_dim': 0,
-        'lookback': 2,
+        'lookback': 0,
         'noise_stddev': 0.0,
         'dropout_rate': 0.0,
         'num_conv_blocks': 2,
@@ -151,6 +151,6 @@ def test_save_load_cmems():
 
 if __name__=="__main__":
     test_short_run_swot()
-    # test_short_run_cmems()
-    # test_save_load_cmems()
+    test_short_run_cmems()
+    test_save_load_cmems()
     # test_feedthrough_only() ## TODO

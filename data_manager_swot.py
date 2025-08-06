@@ -5,7 +5,9 @@ import xarray as xr
 import numpy as np
 
 from data_manager_base import DataManagerBase
-from tools import CustomScaler
+# from tools import CustomScaler
+from sklearn.preprocessing import MinMaxScaler
+from sklearn.preprocessing import StandardScaler
 
 
 class DataManagerSWOT(DataManagerBase):
@@ -65,15 +67,57 @@ class DataManagerSWOT(DataManagerBase):
         # remove nans in LR data only
         data_LR = np.nan_to_num(data_LR, 0)
 
-        #  We scale the data with a single scaling for all features
-        scaler = CustomScaler('minmax_over_all_features')
+        # # We scale the data with a single scaling for all features
+        # scaler = MinMaxScaler(feature_range=self.scaling_range)
+        #@ scaler = 0
 
-        data_HR = scaler.fit_transform(data_HR.reshape(Nt, -1))\
-                        .reshape(Nt, Nlat, Nlon)
-        scaler.shift = np.nan_to_num(scaler.shift, nan=0.0)
-        scaler.scale = np.nan_to_num(scaler.scale, nan=1.0)
+        scaler = StandardScaler()
+
+        scaler.fit(data_LR.reshape(Nt, -1))
         data_LR = scaler.transform(data_LR.reshape(Nt, -1))\
                         .reshape(Nt, Nlat, Nlon)
+        data_HR = scaler.transform(data_HR.reshape(Nt, -1))\
+                        .reshape(Nt, Nlat, Nlon)
+
+        scalers = {}
+        scalers['HR'] = scaler
+        scalers['LR'] = scaler
+
+        # scaler.shift = np.nan_to_num(scaler.shift, nan=0.0)
+        # scaler.scale = np.nan_to_num(scaler.scale, nan=1.0)
+        # data_LR = scaler.transform(data_LR.reshape(Nt, -1))\
+        #                 .reshape(Nt, Nlat, Nlon)
+
+        # import matplotlib.pyplot as plt
+        # plt.figure()
+        # c = plt.imshow(data_HR[0,])
+        # plt.colorbar(c)
+        # plt.pause(1)
+
+        # plt.close('all')
+        # plt.figure()
+        # c = plt.imshow(scaler.min_.reshape(Nlat,Nlon))
+        # plt.title('min')
+        # plt.colorbar(c)
+        # plt.pause(1)
+
+        # plt.figure()
+        # c = plt.imshow(scaler.scale_.reshape(Nlat,Nlon))
+        # plt.title('scale')
+        # plt.colorbar(c)
+        # plt.pause(1)
+
+        # plt.figure()
+        # c = plt.imshow(data_LR[0,])
+        # plt.colorbar(c)
+        # plt.pause(1)
+
+        # plt.figure()
+        # c = plt.imshow(data_LR[0,]-data_HR[0,])
+        # plt.colorbar(c)
+        # plt.pause(1)
+
+        # breakpoint()
 
         split = int(Nt * self.split_factor)
         if split == Nt:
@@ -92,8 +136,8 @@ class DataManagerSWOT(DataManagerBase):
         params['test_range'] = range(split, Nt)
         params['mask'] = mask
 
-        scalers = {}
-        scalers['HR'] = scaler
-        scalers['LR'] = scaler
+        # scalers = {}
+        # scalers['HR'] = scaler
+        # scalers['LR'] = scaler
 
         return data, params, scalers, {}

@@ -846,6 +846,7 @@ class LSModelWrapper(keras.Model):
         x, y = data
         y_pred, z = self.forward_pass(x)
 
+
         if RNN_hybrid:
             _, z_true = self.encoder(y)
 
@@ -870,13 +871,24 @@ class LSModelWrapper(keras.Model):
             rnn_dict = {'rnn_loss': self.rnn_loss_tracker.result()}
 
         # time ordering in y is backwards so last first
+        y_true = y[0][:, 0,]
+
+        # create a mask on the fly
+        y_true = y_true.flatten()
+        y_pred = y_pred.flatten()
+        logical_mask = ~ops.isnan(y_true)
+        y_true = y_true[logical_mask]
+        y_pred = y_pred[logical_mask]
+
+        # time ordering in y is backwards so last first
         reconstruction_loss = \
-            ops.mean(ops.square(y[0][:, 0,] - y_pred))
+            ops.mean(ops.square(y_true - y_pred))
 
         kl_loss = \
             -0.5 * (1 + z['log_var'] - ops.square(z['mean']) -
                     ops.exp(z['log_var']))
         kl_loss = ops.mean(ops.sum(kl_loss, axis=(1, 2)))
+
 
         if RNN_hybrid:
             total_loss = reconstruction_loss + kl_loss + rnn_loss
@@ -888,8 +900,7 @@ class LSModelWrapper(keras.Model):
         trainable_weights = [v for v in self.trainable_weights]
         gradients = [v.value.grad for v in trainable_weights]
 
-        with torch.no_grad():
-            self.optimizer.apply(gradients, trainable_weights)
+        with torch.no_grad():            self.optimizer.apply(gradients, trainable_weights)
 
         self.total_loss_tracker.update_state(total_loss)
         self.reconstruction_loss_tracker.update_state(reconstruction_loss)
@@ -904,6 +915,7 @@ class LSModelWrapper(keras.Model):
             out_dict.update(rnn_dict)
 
         return out_dict
+
 
 @keras.saving.register_keras_serializable(name="sampling")
 class Sampling(layers.Layer):
@@ -1031,12 +1043,14 @@ class CustomValidation(keras.callbacks.Callback):
                  test_inds,
                  plotmachine,
                  pars,
+                 scalers=None,
                  case_study='cmems'
                  ):
 
         super().__init__()
 
         self.pars = pars
+        self.scalers = scalers
         self.unroll_dim = self.pars['unroll_dim']
         self.data = data
         self.test_inds = test_inds
@@ -1076,26 +1090,88 @@ class CustomValidation(keras.callbacks.Callback):
             raise ValueError("invalid case study")
 
     def predict_swot(self, epoch, logs=None):
+        self.predictions = np.zeros_like(self.test_data)
+
+        pb_i = keras.utils.Progbar(self.N_steps,
+                                   stateful_metrics=['error', 'base'],
+                                   interval=0.5)
 
         if self.unroll_dim != 0:
             raise NotImplementedError("unroll not implemented for SWOT set")
 
+        error, base = (0, 0)
         for i in range(self.N_steps):
             xk_lb = np.expand_dims(
                 data_utils.create_lookback(
                     self.test_inds[i], [self.data['LR']],
                     self.lookback, axis=0)[0], axis=0)
+            xk = self.model.predict([xk_lb, xk_lb], verbose=0)
 
-            breakpoint()
+            self.predictions[i,] = xk
 
+            if self.pars['evaluate']:
+                xk_true = np.expand_dims(self.test_data[i,], axis=0)
 
-        raise Exception('not implemented')
+                error += (np.nansum(np.square(xk - xk_true)))
+
+                xk_ref = xk_lb[0,]
+                base += (np.nansum(np.square(xk_ref - xk_true)))
+                values = [('error', np.sqrt(error / (i + 1))),
+                          ('base', np.sqrt(base / (i + 1)))]
+                pb_i.add(1, values=values)
+            else:
+                pb_i.add(1)
+
+        import matplotlib.pyplot as plt
+
+        plt.close('all')
+        plt.figure(figsize=(15, 15))
+
+        t, x, y, nc = xk.shape
+        xk_unscaled = self.scalers['LR']\
+                          .inverse_transform(xk.reshape(t, -1))\
+                          .reshape(t, x, y, nc)
+
+        # xk_unscaled = xk
+
+        t, x, y, nc = xk_ref.shape
+        xk_ref_unscaled = self.scalers['LR']\
+                              .inverse_transform(xk_ref.reshape(t, -1))\
+                              .reshape(t, x, y, nc)
+        # xk_ref_unscaled = xk_ref
+
+        plt.subplot(2, 2, 1)
+        c = plt.imshow(xk_ref_unscaled[0, :, :, 0])
+        plt.colorbar(c)
+
+        plt.subplot(2, 2, 2)
+        c = plt.imshow(xk_unscaled[0, :, :, 0])
+
+        plt.colorbar(c)
+        plt.subplot(2, 2, 3)
+        c = plt.imshow(xk[0, :, :, 0] - xk_true[0, :, :, 0])
+        plt.colorbar(c)
+        plt.subplot(2, 2, 4)
+        c = plt.imshow(xk_ref[0, :, :, 0] - xk_true[0, :, :, 0])
+        plt.colorbar(c)
+        plt.pause(1)
+        if self.pars['evaluate']:
+            # self.plotmachine.plot_prediction_error(self.test_data,
+            #                                        self.predictions,
+            #                                        self.test_data_ft,
+            #                                        f'epoch_{epoch}')
+
+            self.final_error = np.sqrt(error / (i + 1))
+            self.final_base = np.sqrt(base / (i + 1))
+            logs['error'] = self.final_error
+            logs['base']  = self.final_base
+
 
     def predict_cmems(self, epoch, logs=None):
         self.predictions = np.zeros_like(self.test_data)
 
         init_ind = self.test_inds[0] - 1
-        
+
         xk_lb = np.expand_dims(
             data_utils.create_lookback(init_ind, [self.data['HR']],
                                        self.lookback, axis=0)[0], axis=0)

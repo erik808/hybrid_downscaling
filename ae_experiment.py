@@ -290,6 +290,7 @@ class AE_Experiment():
                                    'evaluate' : evaluate,
                                    'lookback' : self.hyper_params['lookback']
                                    },
+                             scalers=self.scalers,
                              case_study=self.case_study
                              )
 

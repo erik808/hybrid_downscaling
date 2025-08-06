@@ -17,32 +17,32 @@ def test_short_run_swot():
     exp = AE_Experiment(
         exp_name=exp_name,
         case_study='swot',
-        feedthrough_type='disabled',
+        feedthrough_type='hybrid',
         testing_mode=True)
 
     # adjust hyperparameters:
     test_pars = {
-        'history': 20,
-        'future': 10,
-        'epochs': 1,
+        'history': 'all',
+        'future': 5,
+        'epochs': 5,
+        'batch_size': 1,
         'unroll_dim': 0,
         'lookback': 0,
-        'noise_stddev': 0.0,
+        'noise_stddev': 0.2,
         'dropout_rate': 0.0,
-        'num_conv_blocks': 2,
-        'kernel_size': (3, 3),
-        'downsample_stride': (2, 2),
+        'num_conv_blocks': 1,
         'conv_layers_per_block': 1,
-        'num_filters': 16,
-        'num_filters_last': 16,
-        'batch_size': 4,
-        'latent_space_model': 'RNN',
-        'latent_space_dim': 4,
-        'num_feedthrough_filters': 16,
-        'num_feedthrough_layers': 2,
+        'num_feedthrough_filters': 8,
+        'num_feedthrough_layers': 1,
         'num_output_layers': 2,
+        'kernel_size': (3, 3),
+        'latent_space_model': 'VAE',
+        'latent_space_dim': 4,
+        'num_filters': 8,
+        'num_filters_last': 8,
         'l2_lambda': 0.0,
         'learning_rate': 0.002,
+        'downsample_stride': (2, 2),
     }
 
     exp.hyper_params.update(test_pars)

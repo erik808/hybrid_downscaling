@@ -201,7 +201,8 @@ class AutoEncoder():
             output = feedthrough_block(ft_inputs[0])
             output = output_block(output)
             inputs_full_model=[feedthrough]
-            inputs_decoder=[feedthrough]
+            lspace_model_output=state_input
+            inputs_decoder=[lspace_model_output, feedthrough]
 
         elif self.use_feedthrough:
             output = self.combine_feedthrough(
@@ -240,7 +241,6 @@ class AutoEncoder():
 
         # models are constructed
         self.needs_building = False
-
         return self.autoencoder, self.encoder, self.decoder
 
     def create_param_dict(self, params):
@@ -266,15 +266,7 @@ class AutoEncoder():
         return outputs
 
     def compiler(self, model):
-        # loss = keras.losses.\
-        #     MeanSquaredError(reduction="sum_over_batch_size",
-        #                      name="mean_squared_error")
-
-        # loss = CustomLoss(losstype='MSE')
-
-        # if self.latent_space_model == 'VAE':
         loss = None
-
         if self.optimizer == 'adam':
             optim = keras.optimizers.Adam(learning_rate=self.learning_rate)
         elif self.optimizer == 'sgd':
@@ -289,6 +281,7 @@ class AutoEncoder():
         if model is None:
             model = self
         model.summary()
+
 
     def summary(self):
 
@@ -555,7 +548,7 @@ class LatentSpaceModel():
             'units': self.latent_space_dim,
             'return_sequences': True,
             'return_state': False,
-#            'go_backwards': True,
+            # 'go_backwards': True,
         }
 
     def __call__(self, inputs):
@@ -569,6 +562,8 @@ class LatentSpaceModel():
             return self.GRU(inputs)
         elif self.model == 'LSTM':
             return self.LSTM(inputs)
+        elif self.model == 'AE':
+            return self.most_recent(inputs)
         elif self.model == 'VAE':
             return self.VAE(inputs)
         elif self.model == 'VAE+RNN':
@@ -577,7 +572,7 @@ class LatentSpaceModel():
         elif self.model == 'disabled':
             return self.most_recent(inputs)
         else:
-            raise Exception('Provide a model')
+            raise Exception('Provide a valid latent space model')
 
     def ConvLSTM(self, inputs):
         lstm_input = ops.flip(inputs, axis=1)
@@ -756,7 +751,7 @@ class LSModelWrapper(keras.Model):
                 self.rnn_loss_tracker,
                 ]
 
-    def call(self, inputs):
+    def call(self, inputs):        
         ft_mode = (len(inputs) == 2)
         enc_output, z_vars = self.encoder(inputs[0])
         if ft_mode:
@@ -779,8 +774,11 @@ class LSModelWrapper(keras.Model):
                             'LSTM',
                             'GRU']:
             return self.train_step_RNN(data)
+        elif self.model in ['AE',
+                            'disabled']:
+            return self.train_step_AE(data)
         else:
-            raise Exception('no default train_step implemented (yet)')
+            raise Exception('no valid latent space model defined')
 
     def forward_pass(self, x):
 
@@ -789,13 +787,42 @@ class LSModelWrapper(keras.Model):
             x_state, x_feed = x
         else:
             x_state = x
-
         z_enc, z_latent = self.encoder(x_state)
 
         decoder_input = [z_enc, x_feed] if ft_mode else z_enc
         y_pred = self.decoder(decoder_input)
 
         return y_pred, z_latent
+
+    def train_step_AE(self, data):
+        x, y = data
+        y_pred, z = self.forward_pass(x)
+
+        # time ordering in y is backwards so last first
+        y_true = y[0][:, 0,]
+
+        # create a mask on the fly ## FIXME: factorize
+        y_true = y_true.flatten()
+        y_pred = y_pred.flatten()
+        logical_mask = ~ops.isnan(y_true)
+        y_true = y_true[logical_mask]
+        y_pred = y_pred[logical_mask]
+
+        total_loss = self.loss_fn(y_true, y_pred)
+        total_loss.backward()
+
+        trainable_weights = [v for v in self.trainable_weights]
+        gradients = [v.value.grad for v in trainable_weights]
+
+        with torch.no_grad():
+            self.optimizer.apply(gradients, trainable_weights)
+
+        self.total_loss_tracker.update_state(total_loss)
+        out_dict = {
+            'loss': self.total_loss_tracker.result(),
+        }
+
+        return out_dict
 
     def train_step_RNN(self, data):
         x, y = data
@@ -811,7 +838,7 @@ class LSModelWrapper(keras.Model):
         # time ordering in y is backwards so last first
         y_true = y[0][:, 0,]
 
-        # create a mask on the fly
+        # create a mask on the fly ## FIXME: factorize
         y_true = y_true.flatten()
         y_pred = y_pred.flatten()
         logical_mask = ~ops.isnan(y_true)
@@ -846,7 +873,6 @@ class LSModelWrapper(keras.Model):
         x, y = data
         y_pred, z = self.forward_pass(x)
 
-
         if RNN_hybrid:
             _, z_true = self.encoder(y)
 
@@ -873,7 +899,7 @@ class LSModelWrapper(keras.Model):
         # time ordering in y is backwards so last first
         y_true = y[0][:, 0,]
 
-        # create a mask on the fly
+        # create a mask on the fly ## FIXME: factorize
         y_true = y_true.flatten()
         y_pred = y_pred.flatten()
         logical_mask = ~ops.isnan(y_true)

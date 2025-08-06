@@ -17,7 +17,7 @@ def test_short_run_swot():
     exp = AE_Experiment(
         exp_name=exp_name,
         case_study='swot',
-        feedthrough_type='hybrid',
+        feedthrough_type='only',
         testing_mode=True)
 
     # adjust hyperparameters:
@@ -36,7 +36,7 @@ def test_short_run_swot():
         'num_feedthrough_layers': 1,
         'num_output_layers': 2,
         'kernel_size': (3, 3),
-        'latent_space_model': 'VAE',
+        'latent_space_model': 'AE',
         'latent_space_dim': 4,
         'num_filters': 8,
         'num_filters_last': 8,

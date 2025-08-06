@@ -203,6 +203,8 @@ class AE_Experiment():
 
         self.unroll_dim = self.hyper_params['unroll_dim']
         self.latent_space_model = self.hyper_params['latent_space_model']
+        if feedthrough_only:
+            self.latent_space_model = 'disabled'
 
         # DATA CONFIG
         self.history = self.hyper_params['history']
@@ -308,28 +310,13 @@ class AE_Experiment():
         callbacks = [self.validation_callback,
                      model_checkpoint_callback]
 
-        # Final assembly -------------------------------------
-        if (
-                not feedthrough_only and
-                self.latent_space_model in [
-                    'VAE',
-                    'VAE+RNN',
-                    'RNN',
-                    'LSTM',
-                    'GRU',
-                ]
-        ):
-            model = LSModelWrapper(
-                encoder,
-                decoder,
-                model=self.latent_space_model
-            )
-        else:
-            # default model
-            model = autoencoder
+        model = LSModelWrapper(
+            encoder,
+            decoder,
+            model=self.latent_space_model
+        )
 
         if self.unroll_dim > 0:
-            model.summary()
             model = ae.create_unrolled_model(autoencoder,
                                              self.unroll_dim)
 

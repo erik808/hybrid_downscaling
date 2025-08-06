@@ -62,7 +62,7 @@ class DataGenerator(keras.utils.PyDataset):
         if self.ft_type == 'hybrid':
             self.x = x
         elif self.ft_type == 'only':
-            self.x = [x[1]]
+            self.x = x
         elif self.ft_type == 'disabled':
             self.x = [x[0]]
         else:

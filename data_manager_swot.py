@@ -68,10 +68,8 @@ class DataManagerSWOT(DataManagerBase):
         data_LR = np.nan_to_num(data_LR, 0)
 
         # # We scale the data with a single scaling for all features
-        # scaler = MinMaxScaler(feature_range=self.scaling_range)
+        scaler = MinMaxScaler(feature_range=self.scaling_range)
         #@ scaler = 0
-
-        scaler = StandardScaler()
 
         scaler.fit(data_LR.reshape(Nt, -1))
         data_LR = scaler.transform(data_LR.reshape(Nt, -1))\

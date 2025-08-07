@@ -20,17 +20,16 @@ class PlotMachine():
                  movie_dir=None,
                  trial_id=None):
 
-        self.figsize=figsize
-        self.output_dict=output_dict
-        self.time_array=time_array
-        self.results_dir=results_dir
-        self.movie_dir=movie_dir
-        self.cbar_shrinkf=0.5
-        self.frame_stride=4
-        self.pool_size=1
-        self.trial_id=trial_id
+        self.figsize = figsize
+        self.output_dict = output_dict
+        self.time_array = time_array
+        self.results_dir = results_dir
+        self.movie_dir = movie_dir
+        self.cbar_shrinkf = 0.5
+        self.frame_stride = 4
+        self.pool_size = 1
+        self.trial_id = trial_id
         self.dm = DataFactory()
-        os.environ["DISPLAY"] = ":0"
 
     def plot_single_frame(self, frame_id, output_dict=None):
         self.output_dict = self.output_dict \

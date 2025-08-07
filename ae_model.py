@@ -1260,3 +1260,4 @@ class CustomValidation(keras.callbacks.Callback):
             self.final_base = np.sqrt(base / (i + 1))
             logs['error'] = self.final_error
             logs['base']  = self.final_base
+        os.environ["DISPLAY"] = ":0"

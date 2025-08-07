@@ -7,6 +7,7 @@ from ae_experiment import AE_Experiment
 import tools
 reload(tools)
 
+
 # set a seed
 keras.utils.set_random_seed(123)
 exp_name = 'test_everything'
@@ -46,7 +47,7 @@ def test_short_run_swot():
     }
 
     exp.hyper_params.update(test_pars)
-    err = exp.build_and_run_model()
+    err = exp.build_and_run_model(make_plots=False)
     assert err < 30
     return exp_name
 
@@ -151,6 +152,6 @@ def test_save_load_cmems():
 
 if __name__=="__main__":
     test_short_run_swot()
-    test_short_run_cmems()
-    test_save_load_cmems()
+    # test_short_run_cmems()
+    # test_save_load_cmems()
     # test_feedthrough_only() ## TODO

@@ -191,7 +191,8 @@ class AE_Experiment():
 
     def build_and_run_model(self,
                             predict_only=False,
-                            evaluate=True):
+                            evaluate=True,
+                            make_plots=True):
         # AE-MODEL CONFIG
         use_feedthrough = True if (self.feedthrough_type == 'hybrid' or
                                    self.feedthrough_type == 'only') else False
@@ -358,8 +359,9 @@ class AE_Experiment():
         encoder.save(self.save_path_encoder)
         decoder.save(self.save_path_decoder)
 
-        self.plot_history()
-        self.plot_spectra()
+        if make_plots:
+            self.plot_history()
+            self.plot_spectra()
 
         print(f'final error: {self.validation_callback.final_error}')
         return self.validation_callback.final_error

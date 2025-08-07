@@ -833,7 +833,7 @@ class LSModelWrapper(keras.Model):
                                 z['rnn_output'])
 
         # ignore nan result
-        rnn_loss = 0 if np.isnan(rnn_loss.detach()) else rnn_loss
+        rnn_loss = 0 if ops.isnan(rnn_loss) else rnn_loss
 
         # time ordering in y is backwards so last first
         y_true = y[0][:, 0,]

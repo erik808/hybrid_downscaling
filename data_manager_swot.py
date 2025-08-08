@@ -5,7 +5,7 @@ import xarray as xr
 import numpy as np
 
 from data_manager_base import DataManagerBase
-# from tools import CustomScaler
+from tools import CustomScaler
 from sklearn.preprocessing import MinMaxScaler
 from sklearn.preprocessing import StandardScaler
 
@@ -30,7 +30,7 @@ class DataManagerSWOT(DataManagerBase):
 
             # fix time gaps
             start = np.datetime64(self.ds.time[0].data)
-            end   = np.datetime64(self.ds.time[-1].data)
+            end = np.datetime64(self.ds.time[-1].data)
             time_arr = np.arange(start, end, dtype='datetime64[D]')\
                          .astype('datetime64[ns]')
 
@@ -43,9 +43,9 @@ class DataManagerSWOT(DataManagerBase):
             time = self.ds.time
 
             print(f'writing to {self.dill_file}')
-            container = {'data_HR' : data_HR,
-                         'data_LR' : data_LR,
-                         'time' : time}
+            container = {'data_HR': data_HR,
+                         'data_LR': data_LR,
+                         'time': time}
 
             with open(self.dill_file, 'wb') as file:
                 dill.dump(container, file)
@@ -53,8 +53,8 @@ class DataManagerSWOT(DataManagerBase):
             print('Load training data from dill file')
             with open(self.dill_file, 'rb') as file:
                 data = dill.load(file)
-                data_HR = data['data_HR']
-                data_LR = data['data_LR']
+                data_HR = data['data_HR'][:, 4:-4, 2:-2]
+                data_LR = data['data_LR'][:, 4:-4, 2:-2]
                 time = data['time']
 
         # define mask
@@ -66,14 +66,18 @@ class DataManagerSWOT(DataManagerBase):
 
         # remove nans in LR data only
         data_LR = np.nan_to_num(data_LR, 0)
+        # data_HR = np.nan_to_num(data_HR, 0)
 
         # # We scale the data with a single scaling for all features
-        scaler = MinMaxScaler(feature_range=self.scaling_range)
-        #@ scaler = 0
+        # scaler = MinMaxScaler(feature_range=self.scaling_range)
+        scaler = CustomScaler(scaling_type='minmax_over_all_features')
+        # scaler = StandardScaler()
+        # scaler = 0
 
         scaler.fit(data_LR.reshape(Nt, -1))
         data_LR = scaler.transform(data_LR.reshape(Nt, -1))\
                         .reshape(Nt, Nlat, Nlon)
+
         data_HR = scaler.transform(data_HR.reshape(Nt, -1))\
                         .reshape(Nt, Nlat, Nlon)
 
@@ -81,16 +85,16 @@ class DataManagerSWOT(DataManagerBase):
         scalers['HR'] = scaler
         scalers['LR'] = scaler
 
-        # scaler.shift = np.nan_to_num(scaler.shift, nan=0.0)
-        # scaler.scale = np.nan_to_num(scaler.scale, nan=1.0)
-        # data_LR = scaler.transform(data_LR.reshape(Nt, -1))\
-        #                 .reshape(Nt, Nlat, Nlon)
-
         # import matplotlib.pyplot as plt
+        # plt.close('all')
         # plt.figure()
-        # c = plt.imshow(data_HR[0,])
-        # plt.colorbar(c)
-        # plt.pause(1)
+        # for time in range(0, 40):
+        #     c = plt.contour(data_LR[time,], clim=[0, 1])
+        #     c = plt.pcolormesh(data_HR[time,], clim=[0, 1])
+        #     plt.colorbar(c)
+        #     plt.pause(1)
+        #     plt.clf()
+
 
         # plt.close('all')
         # plt.figure()

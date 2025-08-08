@@ -77,12 +77,12 @@ class AutoEncoder():
                    self.N_lat,
                    self.N_lon,
                    self.N_chan),
-            name="full_state_input")
+            name="full_state_input")        
 
         if self.use_feedthrough:
             feedthrough = layers.Input(
                 shape=(self.N_lb, self.N_lat, self.N_lon, self.N_chan),
-                name="feedthrough_input")
+                name="feedthrough_input")            
             ft_inputs = [ops.squeeze(t, axis=1)
                          for t in ops.split(feedthrough, self.N_lb, axis=1)]
 
@@ -220,7 +220,8 @@ class AutoEncoder():
             inputs_full_model=[state_input]
             inputs_decoder=[lspace_model_output]
 
-        outputs = [masking_layer(output)]
+        # outputs = [masking_layer(output)]
+        outputs = output
 
         # Create encoder
         self.encoder = Model(
@@ -751,7 +752,7 @@ class LSModelWrapper(keras.Model):
                 self.rnn_loss_tracker,
                 ]
 
-    def call(self, inputs):        
+    def call(self, inputs):
         ft_mode = (len(inputs) == 2)
         enc_output, z_vars = self.encoder(inputs[0])
         if ft_mode:
@@ -1134,13 +1135,15 @@ class CustomValidation(keras.callbacks.Callback):
             xk = self.model.predict([xk_lb, xk_lb], verbose=0)
 
             self.predictions[i,] = xk
-
             if self.pars['evaluate']:
+                # breakpoint()
                 xk_true = np.expand_dims(self.test_data[i,], axis=0)
 
                 error += (np.nansum(np.square(xk - xk_true)))
 
-                xk_ref = xk_lb[0,]
+                xk_ref = np.expand_dims(
+                    self.data['LR'][self.test_inds[i],], axis=0)
+
                 base += (np.nansum(np.square(xk_ref - xk_true)))
                 values = [('error', np.sqrt(error / (i + 1))),
                           ('base', np.sqrt(base / (i + 1)))]
@@ -1149,9 +1152,9 @@ class CustomValidation(keras.callbacks.Callback):
                 pb_i.add(1)
 
         import matplotlib.pyplot as plt
-
         plt.close('all')
-        plt.figure(figsize=(15, 15))
+
+        plt.figure(figsize=(12, 11))
 
         t, x, y, nc = xk.shape
         xk_unscaled = self.scalers['LR']\
@@ -1169,16 +1172,18 @@ class CustomValidation(keras.callbacks.Callback):
         plt.subplot(2, 2, 1)
         c = plt.imshow(xk_ref_unscaled[0, :, :, 0])
         plt.colorbar(c)
+        plt.title('coarse')
 
         plt.subplot(2, 2, 2)
         c = plt.imshow(xk_unscaled[0, :, :, 0])
-
         plt.colorbar(c)
+        plt.title('corrected')
+
         plt.subplot(2, 2, 3)
-        c = plt.imshow(xk[0, :, :, 0] - xk_true[0, :, :, 0])
+        c = plt.imshow(xk_true[0, :, :, 0])
         plt.colorbar(c)
         plt.subplot(2, 2, 4)
-        c = plt.imshow(xk_ref[0, :, :, 0] - xk_true[0, :, :, 0])
+        c = plt.imshow(xk[0, :, :, 0])
         plt.colorbar(c)
         plt.pause(1)
         if self.pars['evaluate']:

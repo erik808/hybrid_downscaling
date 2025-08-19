@@ -220,8 +220,8 @@ class AutoEncoder():
             inputs_full_model=[state_input]
             inputs_decoder=[lspace_model_output]
 
-        # outputs = [masking_layer(output)]
-        outputs = output
+        outputs = [masking_layer(output)]
+        # outputs = output
 
         # Create encoder
         self.encoder = Model(
@@ -1154,7 +1154,7 @@ class CustomValidation(keras.callbacks.Callback):
         import matplotlib.pyplot as plt
         plt.close('all')
 
-        plt.figure(figsize=(12, 11))
+        plt.figure(figsize=(10, 10))
 
         t, x, y, nc = xk.shape
         xk_unscaled = self.scalers['LR']\

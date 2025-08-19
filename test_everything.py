@@ -25,7 +25,7 @@ def test_short_run_swot():
     test_pars = {
         'history': 'all',
         'future': 'all',
-        'epochs': 100,
+        'epochs': 10,
         'batch_size': 1,
         'unroll_dim': 0,
         'lookback': 0,

@@ -1,4 +1,4 @@
-from importlib import reload
+import importlib
 
 import sys
 import dill
@@ -14,32 +14,32 @@ import keras
 from keras import ops
 
 import data_utils
-reload(data_utils)
+importlib.reload(data_utils)
 
 from data_utils import DataFactory
 from data_utils import DataGenerator
 
 import plot_utils
-reload(plot_utils)
+importlib.reload(plot_utils)
 
 import tools
-reload(tools)
+importlib.reload(tools)
 from tools import Tee
 
 import ae_model
-reload(ae_model)
+importlib.reload(ae_model)
 
 from ae_model import CustomValidation
 from ae_model import LSModelWrapper
 from plot_utils import PlotMachine
 
 import compute_tool
-reload(compute_tool)
+importlib.reload(compute_tool)
 from ae_model import AutoEncoder
 from compute_tool import ComputeTool
 
 import plot_utils
-reload(plot_utils)
+importlib.reload(plot_utils)
 
 # -------------------------------------------------------
 
@@ -109,8 +109,8 @@ class AE_Experiment():
 
         tuning_dir = self.dirs['tuning']
         storage = f'sqlite:///{tuning_dir}/storage.db'
-        reload_tuning=True
-        timeout=60 * 60 * 4  # 6h
+        reload_tuning = True
+        timeout = 60 * 60 * 4  # 6h
 
         self.setup_search_space()
 
@@ -229,17 +229,17 @@ class AE_Experiment():
 
         # control/feedthrough data
         if self.case_study == 'cmems':
-            train_data_ft  = self.data['LR'][self.train_range_k,]
+            train_data_ft = self.data['LR'][self.train_range_k,]
         elif self.case_study == 'swot':  # not used
-            train_data_ft  = self.data['LR'][self.train_range_k,]
+            train_data_ft = self.data['LR'][self.train_range_k,]
 
         self.postfix, self.timestamp = self.create_postfix()
         sys.stdout = Tee(self.files['log'] + f'{self.postfix}')
 
         ae_model_pars = {
-            'use_feedthrough'  : use_feedthrough,
-            'feedthrough_only' : feedthrough_only,
-            'feedthrough_type' : 'multiply',
+            'use_feedthrough': use_feedthrough,
+            'feedthrough_only': feedthrough_only,
+            'feedthrough_type': 'multiply',
         }
         ae_model_pars.update(self.hyper_params)
 
@@ -264,12 +264,12 @@ class AE_Experiment():
         print('--------------------------------------------------------- ')
 
         tic = time.time()
-        dgen_args = {'ft_type' : self.feedthrough_type,
-                     'batch_size' : batch_size,
-                     'shuffle' : shuffle,
-                     'lookback' : self.hyper_params['lookback'],
-                     'unroll_dim' : self.unroll_dim,
-                     'encoder' : encoder,
+        dgen_args = {'ft_type': self.feedthrough_type,
+                     'batch_size': batch_size,
+                     'shuffle': shuffle,
+                     'lookback': self.hyper_params['lookback'],
+                     'unroll_dim': self.unroll_dim,
+                     'encoder': encoder,
                      }
 
         datagen_train = DataGenerator(
@@ -285,13 +285,13 @@ class AE_Experiment():
             CustomValidation(data=self.data,
                              test_inds=self.test_range,
                              plotmachine=plotmachine,
-                             pars={'feedthrough_only' : feedthrough_only,
-                                   'use_feedthrough' : use_feedthrough,
-                                   'multihead_output' : False,
-                                   'unroll_dim' : self.unroll_dim,
-                                   'predict_only' : predict_only,
-                                   'evaluate' : evaluate,
-                                   'lookback' : self.hyper_params['lookback']
+                             pars={'feedthrough_only': feedthrough_only,
+                                   'use_feedthrough': use_feedthrough,
+                                   'multihead_output': False,
+                                   'unroll_dim': self.unroll_dim,
+                                   'predict_only': predict_only,
+                                   'evaluate': evaluate,
+                                   'lookback': self.hyper_params['lookback']
                                    },
                              scalers=self.scalers,
                              case_study=self.case_study
@@ -338,10 +338,10 @@ class AE_Experiment():
         mdir = self.dirs['models']
         mdata_file = f'{mdir}/mdata{self.postfix}.dill'
         container = {
-            'hist' : self.hist,
-            'epochs' : epochs,
-            'batch_size' : batch_size,
-            'shuffle' : shuffle
+            'hist': self.hist,
+            'epochs': epochs,
+            'batch_size': batch_size,
+            'shuffle': shuffle
         }
 
         with open(mdata_file, 'wb') as file:
@@ -429,29 +429,32 @@ class AE_Experiment():
 
     def plot_spectra(self):
         plotmachine = PlotMachine(results_dir=self.dirs['results'],
-                                  trial_id=self.trial_id)
+                                  trial_id=self.trial_id)        
 
         data_dict = {
-            'truth'  : self.data['HR'][self.test_range,],
-            'lowres' : self.data['LR'][self.test_range,],
-            'pred'   : self.validation_callback.predictions,
-            'scaler_truth' : self.scalers['HR'],
-            'scaler_lowres' : self.scalers['LR'],
-            'time'   : self.data['time'][self.test_range,]
+            'truth': self.data['HR'][self.test_range,],
+            'lowres': self.data['LR'][self.test_range,],
+            'pred': self.validation_callback.predictions,
+            'scaler_truth': self.scalers['HR'],
+            'scaler_lowres': self.scalers['LR'],
+            'time': self.data['time'][self.test_range,]
         }
 
-        self.spec_along = \
-            plotmachine.plot_energy_spectrum(transect_name='along_flow',
-                                             data=data_dict)
+        if self.case_study == 'cmems':
+            self.spec_along = \
+                plotmachine.plot_energy_spectrum(transect_name='along_flow',
+                                                 data=data_dict)
 
-        plotmachine.plot_enstrophy_spectrum(transect_name='along_flow',
-                                            data=data_dict)
+            plotmachine.plot_enstrophy_spectrum(transect_name='along_flow',
+                                                data=data_dict)
 
-        self.spec_across = \
-            plotmachine.plot_energy_spectrum(transect_name='across_flow',
-                                             data=data_dict)
-        plotmachine.plot_enstrophy_spectrum(transect_name='across_flow',
-                                            data=data_dict)
+            self.spec_across = \
+                plotmachine.plot_energy_spectrum(transect_name='across_flow',
+                                                 data=data_dict)
+            plotmachine.plot_enstrophy_spectrum(transect_name='across_flow',
+                                                data=data_dict)
+        elif self.case_study == 'swot':
+            plotmachine.plot_spectrum(data=data_dict)
 
     def plot_history(self):
         plotmachine = PlotMachine(results_dir=self.dirs['results'],
@@ -459,7 +462,6 @@ class AE_Experiment():
         plotmachine.plot_history(self.hist)
 
     def create_movie(self):
-
         truth = self.data['HR'][self.test_range,]
         lowres = self.data['LR'][self.test_range,]
         test_time = self.data['time'][self.test_range,]
@@ -491,74 +493,74 @@ class AE_Experiment():
         def get_rolling_spec(field, window_size=4 * 12):
             return xr.DataArray(field,
                                 dims=['time', 'wavenumber'],
-                                coords={'time' : test_time})\
+                                coords={'time': test_time})\
                      .rolling(time=window_size).mean()
 
         vort_max = 20
         vort_min = -vort_max
 
         plot_instructions = {
-            'Truth' : {'values' : vort_truth_fn,
-                       'type' : '2d',
-                       'vmin' : vort_min,
-                       'vmax' : vort_max,
-                       'cmap' : 'RdBu',
-                       'cbar_label' : 'vorticity (day$^{-1}$)'},
+            'Truth': {'values': vort_truth_fn,
+                      'type': '2d',
+                      'vmin': vort_min,
+                      'vmax': vort_max,
+                      'cmap': 'RdBu',
+                      'cbar_label': 'vorticity (day$^{-1}$)'},
 
-            'Prediction' : {'values' : vort_pred_fn,
-                            'type' : '2d',
-                            'vmin' : vort_min,
-                            'vmax' : vort_max,
-                            'cmap' : 'RdBu',
-                            'cbar_label' : 'vorticity (day$^{-1}$)'},
+            'Prediction': {'values': vort_pred_fn,
+                           'type': '2d',
+                           'vmin': vort_min,
+                           'vmax': vort_max,
+                           'cmap': 'RdBu',
+                           'cbar_label': 'vorticity (day$^{-1}$)'},
 
-            'Low resolution' : {'values' : vort_lowres_fn,
-                                'type' : '2d',
-                                'vmin' : vort_min,
-                                'vmax' : vort_max,
-                                'cmap' : 'RdBu',
-                                'cbar_label' : 'vorticity (day$^{-1}$)'},
+            'Low resolution': {'values': vort_lowres_fn,
+                               'type': '2d',
+                               'vmin': vort_min,
+                               'vmax': vort_max,
+                               'cmap': 'RdBu',
+                               'cbar_label': 'vorticity (day$^{-1}$)'},
 
-            'Error' : {'values' : error_fn,
-                       'type' : '2d',
-                       'vmin' : 0,
-                       'vmax' : vort_max / 3,
-                       'cmap' : 'viridis',
-                       'cbar_label' : 'vorticity (day$^{-1}$)'},
+            'Error': {'values': error_fn,
+                      'type': '2d',
+                      'vmin': 0,
+                      'vmax': vort_max / 3,
+                      'cmap': 'viridis',
+                      'cbar_label': 'vorticity (day$^{-1}$)'},
 
 
-            'spectrum along flow' :
+            'spectrum along flow':
             {
-                'type' : '1d',
-                'values' :
-                {'HR truth' : lambda i :
-                 get_rolling_spec(self.spec_along['truth'])[i, :],
-                 'Model prediction' : lambda i :
-                 get_rolling_spec(self.spec_along['pred'])[i, :],
-                 'LR forcing' : lambda i :
-                 get_rolling_spec(self.spec_along['lowres'])[i, :]
+                'type': '1d',
+                'values':
+                {'HR truth': lambda i:
+                 get_rolling_spec(self.spec_along['truth'])[i,:],
+                 'Model prediction': lambda i:
+                 get_rolling_spec(self.spec_along['pred'])[i,:],
+                 'LR forcing': lambda i:
+                 get_rolling_spec(self.spec_along['lowres'])[i,:]
                  },
-                'ymin' : 1e-6,
-                'ymax' : 2,
-                'xmin' : 1,
-                'xmax' : 55,
+                'ymin': 1e-6,
+                'ymax': 2,
+                'xmin': 1,
+                'xmax': 55,
             },
 
-            'spectrum across flow' :
+            'spectrum across flow':
             {
-                'type' : '1d',
-                'values' :
-                {'HR truth' : lambda i :
-                 get_rolling_spec(self.spec_across['truth'])[i, :],
-                 'Model prediction' : lambda i :
-                 get_rolling_spec(self.spec_across['pred'])[i, :],
-                 'LR forcing' : lambda i :
+                'type': '1d',
+                'values':
+                {'HR truth': lambda i:
+                 get_rolling_spec(self.spec_across['truth'])[i,:],
+                 'Model prediction': lambda i:
+                 get_rolling_spec(self.spec_across['pred'])[i,:],
+                 'LR forcing': lambda i:
                  get_rolling_spec(self.spec_across['lowres'])[i, :]
                  },
-                'ymin' : 1e-6,
-                'ymax' : 2,
-                'xmin' : 1,
-                'xmax' : 55,
+                'ymin': 1e-6,
+                'ymax': 2,
+                'xmin': 1,
+                'xmax': 55,
             }
         }
 

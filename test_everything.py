@@ -23,31 +23,31 @@ def test_short_run_swot():
 
     # adjust hyperparameters:
     test_pars = {
-        'history': 'all',
+        'history': 200,
         'future': 'all',
-        'epochs': 10,
-        'batch_size': 1,
+        'epochs': 2,
+        'batch_size': 2,
         'unroll_dim': 0,
         'lookback': 0,
         'noise_stddev': 0.0,
         'dropout_rate': 0.0,
         'num_conv_blocks': 2,
-        'conv_layers_per_block': 2,
+        'conv_layers_per_block': 1,
         'num_feedthrough_filters': 32,
-        'num_feedthrough_layers': 2,
-        'num_output_layers': 2,
+        'num_feedthrough_layers': 1,
+        'num_output_layers': 1,
         'kernel_size': (3, 3),
         'latent_space_model': 'VAE',
-        'latent_space_dim': 8,
+        'latent_space_dim': 2,
         'num_filters': 32,
-        'num_filters_last': 16,
+        'num_filters_last': 32,
         'l2_lambda': 0.0,
         'learning_rate': 0.002,
         'downsample_stride': (2, 2),
     }
 
     exp.hyper_params.update(test_pars)
-    err = exp.build_and_run_model(make_plots=False)
+    err = exp.build_and_run_model(make_plots=True)
     assert err < 30
     return exp_name
 

@@ -149,8 +149,8 @@ class PlotMachine():
         postfix = self.create_postfix(add_name)
         fig_name = f'{self.results_dir}/errors{postfix}.png'
 
-        RSE_Y = np.sqrt(np.sum(np.square(X-Y),axis=(1,2,3)))
-        RSE_Z = np.sqrt(np.sum(np.square(X-Z),axis=(1,2,3)))
+        RSE_Y = np.sqrt(np.sum(np.square(X-Y), axis=(1, 2, 3)))
+        RSE_Z = np.sqrt(np.sum(np.square(X-Z), axis=(1, 2, 3)))
 
         plt.close('all')
         plt.plot(RSE_Y, label='RSE_Y')
@@ -167,19 +167,18 @@ class PlotMachine():
     def create_postfix(self, add_name=''):
 
         postfix = ''
-        if self.trial_id != None:
+        if self.trial_id is not None:
             postfix += f'_trial_{self.trial_id}'
 
-        postfix += f'_{add_name}' if len(add_name)>0 else ''
+        postfix += f'_{add_name}' if len(add_name) > 0 else ''
         timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
         postfix += f'_{timestamp}'
 
         return postfix
 
-
     def plot_enstrophy_spectrum(self,
                                 transect_name='along_flow',
-                                data = {},
+                                data={},
                                 add_coarse_data=False):
 
         # get coarse data:
@@ -187,38 +186,35 @@ class PlotMachine():
             do = self.dm.get_coarse_data(data['time'])
 
         ct = ComputeTool()
-        S_truth  = ct.compute_spectrum_along_transect(
+        S_truth = ct.compute_spectrum_along_transect(
             data['truth'],
             data['scaler_truth'],
             transect_name=transect_name,
             spectrum_type='enstrophy')
-        S_pred  = ct.compute_spectrum_along_transect(
+        S_pred = ct.compute_spectrum_along_transect(
             data['pred'],
             data['scaler_truth'],
             transect_name=transect_name,
             spectrum_type='enstrophy')
-        S_lowres  = ct.compute_spectrum_along_transect(
+        S_lowres = ct.compute_spectrum_along_transect(
             data['lowres'],
             data['scaler_lowres'],
             transect_name=transect_name,
             spectrum_type='enstrophy')
 
         if add_coarse_data:
-            S_coarse  = ct.compute_spectrum_along_transect(
+            S_coarse = ct.compute_spectrum_along_transect(
                 do,
                 None,
                 transect_name=transect_name,
                 spectrum_type='energy')
 
         # compute mean
-        S_truth_mn  = np.mean(S_truth, axis=0)
-        S_pred_mn   = np.mean(S_pred, axis=0)
+        S_truth_mn = np.mean(S_truth, axis=0)
+        S_pred_mn = np.mean(S_pred, axis=0)
         S_lowres_mn = np.mean(S_lowres, axis=0)
         if add_coarse_data:
             S_coarse_mn = np.mean(S_coarse, axis=0)
-
-        n = len(S_truth_mn)
-        kvals = np.arange(1,n+1)
 
         plt.figure()
         plt.loglog(S_truth_mn, '.-', label='HR truth')
@@ -228,7 +224,7 @@ class PlotMachine():
             plt.loglog(S_coarse_mn, '.-', label='Coarse model')
         plt.legend()
         plt.grid()
-        plt.gca().set_ylim([1e-5,1])
+        plt.gca().set_ylim([1e-5, 1])
         plt.gca().set_title(f'Mean eddy enstrophy spectrum, {transect_name}')
 
         postfix = self.create_postfix()
@@ -240,47 +236,47 @@ class PlotMachine():
 
     def plot_energy_spectrum(self,
                              transect_name='along_flow',
-                             data = {},
+                             data={},
                              add_coarse_data=False):
 
         if add_coarse_data:
             do = self.dm.get_coarse_data(data['time'])
 
         ct = ComputeTool()
-        S_truth  = ct.compute_spectrum_along_transect(
+        S_truth = ct.compute_spectrum_along_transect(
             data['truth'],
             data['scaler_truth'],
             transect_name=transect_name,
             spectrum_type='energy')
 
-        S_pred  = ct.compute_spectrum_along_transect(
+        S_pred = ct.compute_spectrum_along_transect(
             data['pred'],
             data['scaler_truth'],
             transect_name=transect_name,
             spectrum_type='energy')
 
-        S_lowres  = ct.compute_spectrum_along_transect(
+        S_lowres = ct.compute_spectrum_along_transect(
             data['lowres'],
             data['scaler_lowres'],
             transect_name=transect_name,
             spectrum_type='energy')
 
         if add_coarse_data:
-            S_coarse  = ct.compute_spectrum_along_transect(
+            S_coarse = ct.compute_spectrum_along_transect(
                 do,
                 None,
                 transect_name=transect_name,
                 spectrum_type='energy')
 
         # compute mean
-        S_truth_mn  = np.mean(S_truth, axis=0)
-        S_pred_mn   = np.mean(S_pred, axis=0)
+        S_truth_mn = np.mean(S_truth, axis=0)
+        S_pred_mn = np.mean(S_pred, axis=0)
         S_lowres_mn = np.mean(S_lowres, axis=0)
         if add_coarse_data:
             S_coarse_mn = np.mean(S_coarse, axis=0)
 
-        k_1 = np.linspace(1.7,np.ceil(len(S_truth_mn)/2), 100)
-        k_2 = np.linspace(7,len(S_truth_mn), 100)
+        k_1 = np.linspace(1.7, np.ceil(len(S_truth_mn)/2), 100)
+        k_2 = np.linspace(7, len(S_truth_mn), 100)
 
         offset_1 = 1e1*np.max(S_truth_mn) if transect_name == 'along_flow'\
             else 1e0*np.max(S_truth_mn)
@@ -288,25 +284,53 @@ class PlotMachine():
             else 1e1*np.max(S_truth_mn)
 
         plt.figure()
-        plt.loglog(S_truth_mn, '.-' , label='HR truth')
-        plt.loglog(S_pred_mn, '.-'  , label='Model prediction')
+        plt.loglog(S_truth_mn, '.-', label='HR truth')
+        plt.loglog(S_pred_mn, '.-', label='Model prediction')
         plt.loglog(S_lowres_mn, '.-', label='LR forcing/control')
         if add_coarse_data:
             plt.loglog(S_coarse_mn, '.-', label='Coarse model')
         plt.loglog(k_1, offset_1 * k_1**(-5/3), '--', label='k^-5/3')
         plt.loglog(k_2, offset_2 * k_2**(-3), ':', label='k^-3')
         plt.legend()
-        plt.gca().set_ylim([1e-7,1])
-        plt.gca().set_title(f'Mean eddy kinetic energy spectrum, {transect_name}')
+        plt.gca().set_ylim([1e-7, 1])
+        plt.gca().set_title(
+            f'Mean eddy kinetic energy spectrum, {transect_name}'
+        )
         plt.grid()
 
         postfix = self.create_postfix()
-        fig_name = f'{self.results_dir}/energy_spectrum_{transect_name}{postfix}.png'
+        fig_name = (f'{self.results_dir}/energy_spectrum_{transect_name}'
+                    f'{postfix}.png'
+                    )
         print(fig_name)
         plt.tight_layout()
         plt.savefig(fig_name)
         # plt.pause(1)
 
-        return {'truth' : S_truth,
-                'lowres' : S_lowres,
-                'pred' : S_pred}
+        return {'truth': S_truth,
+                'lowres': S_lowres,
+                'pred': S_pred}
+
+    def plot_spectrum(self, data={}):
+        print('this is a test')
+
+        hrfield = data['truth'][0,].squeeze()
+        plt.close('all')
+        plt.imshow(hrfield)
+        plt.pause(1)
+
+        uhat = np.fft.fft2(hrfield)
+        plt.close('all')
+        im = plt.pcolormesh(np.abs(uhat))
+        plt.pause(1)
+
+        from transectpicker.transectpicker import TransectPicker
+        import xarray as xr
+        
+        # tpicker = TransectPicker(im, hrfield)
+        # plt.show()
+        
+        swot_duacs_fname = ('data/subset_merge_swot_duacs_1y.nc')
+        ds = xr.open_dataset(swot_duacs_fname)
+        
+        breakpoint()

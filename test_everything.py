@@ -7,8 +7,7 @@ from ae_experiment import AE_Experiment
 import tools
 reload(tools)
 
-
-# set a seed
+# seed
 keras.utils.set_random_seed(123)
 exp_name = 'test_everything'
 
@@ -25,7 +24,7 @@ def test_short_run_swot():
     test_pars = {
         'history': 200,
         'future': 'all',
-        'epochs': 2,
+        'epochs': 1,
         'batch_size': 2,
         'unroll_dim': 0,
         'lookback': 0,

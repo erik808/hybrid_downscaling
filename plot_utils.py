@@ -321,16 +321,7 @@ class PlotMachine():
 
         uhat = np.fft.fft2(hrfield)
         plt.close('all')
-        im = plt.pcolormesh(np.abs(uhat))
+        plt.pcolormesh(np.abs(uhat))
         plt.pause(1)
 
-        from transectpicker.transectpicker import TransectPicker
-        import xarray as xr
-        
-        # tpicker = TransectPicker(im, hrfield)
-        # plt.show()
-        
-        swot_duacs_fname = ('data/subset_merge_swot_duacs_1y.nc')
-        ds = xr.open_dataset(swot_duacs_fname)
-        
         breakpoint()

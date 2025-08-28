@@ -319,9 +319,4 @@ class PlotMachine():
         plt.imshow(hrfield)
         plt.pause(1)
 
-        uhat = np.fft.fft2(hrfield)
-        plt.close('all')
-        plt.pcolormesh(np.abs(uhat))
-        plt.pause(1)
-
         breakpoint()

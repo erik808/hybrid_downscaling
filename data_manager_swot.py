@@ -3,7 +3,7 @@ import tools
 import torch
 import xarray as xr
 import numpy as np
-from plot_utils import generate_transect
+import plot_utils
 
 from data_manager_base import DataManagerBase
 from tools import CustomScaler
@@ -36,9 +36,18 @@ class DataManagerSWOT(DataManagerBase):
                          .astype('datetime64[ns]')
 
             print('interpolating...')
+            self.ds.load()
             self.ds = self.ds.interp(time=time_arr,
                                      method='linear')
             print('interpolating... done')
+
+            print('generate transects')
+            # TODO find performance bug
+            for t in range(np.shape(self.ds.ssha)[0]):
+                field = self.ds.ssha[t,]
+                print(t)
+                start, end = plot_utils.generate_transect(field, x_res=5)
+
             data_HR = self.ds.ssha.data
             data_LR = self.ds.sla.data
             time = self.ds.time

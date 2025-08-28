@@ -317,7 +317,7 @@ class PlotMachine():
         breakpoint()
 
 
-def generate_transect(field):
+def generate_transect(field, x_res=10):
     """Tries to find a straight line through as much non-nan values in
      <field> as possible.
 
@@ -328,7 +328,7 @@ def generate_transect(field):
     ny, nx = field.shape
 
     # try a number of preset start_x values
-    start_x_range = np.arange(nx, step=int(nx / 10))
+    start_x_range = np.arange(nx, step=int(nx / x_res))
 
     # get a list of non-nan indices
     indices = np.where(~np.isnan(field))
@@ -369,9 +369,15 @@ def generate_transect(field):
                 maxlen = len(line_values)
                 best_endpoint = end
                 best_startpoint = start
+                print(maxlen)
 
     # finalize
     end = best_endpoint
     start = best_startpoint
+
+    # TODO find 
+    # rr, cc = line(start[0], start[1], end[0], end[1])
+    # mask = np.zeros_like(field)
+    # plt.imshow(
 
     return start, end

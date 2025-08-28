@@ -3,6 +3,7 @@ import tools
 import torch
 import xarray as xr
 import numpy as np
+from plot_utils import generate_transect
 
 from data_manager_base import DataManagerBase
 from tools import CustomScaler

@@ -4,6 +4,7 @@ import numpy as np
 import os
 from multiprocess import Pool
 from importlib import reload
+from skimage.draw import line
 import data_utils
 reload(data_utils)
 from data_utils import DataFactory
@@ -149,8 +150,8 @@ class PlotMachine():
         postfix = self.create_postfix(add_name)
         fig_name = f'{self.results_dir}/errors{postfix}.png'
 
-        RSE_Y = np.sqrt(np.sum(np.square(X-Y), axis=(1, 2, 3)))
-        RSE_Z = np.sqrt(np.sum(np.square(X-Z), axis=(1, 2, 3)))
+        RSE_Y = np.sqrt(np.sum(np.square(X - Y), axis=(1, 2, 3)))
+        RSE_Z = np.sqrt(np.sum(np.square(X - Z), axis=(1, 2, 3)))
 
         plt.close('all')
         plt.plot(RSE_Y, label='RSE_Y')
@@ -275,13 +276,13 @@ class PlotMachine():
         if add_coarse_data:
             S_coarse_mn = np.mean(S_coarse, axis=0)
 
-        k_1 = np.linspace(1.7, np.ceil(len(S_truth_mn)/2), 100)
+        k_1 = np.linspace(1.7, np.ceil(len(S_truth_mn) / 2), 100)
         k_2 = np.linspace(7, len(S_truth_mn), 100)
 
-        offset_1 = 1e1*np.max(S_truth_mn) if transect_name == 'along_flow'\
-            else 1e0*np.max(S_truth_mn)
-        offset_2 = 2e2*np.max(S_truth_mn) if transect_name == 'along_flow'\
-            else 1e1*np.max(S_truth_mn)
+        offset_1 = 1e1 * np.max(S_truth_mn) if transect_name == 'along_flow'\
+            else 1e0 * np.max(S_truth_mn)
+        offset_2 = 2e2 * np.max(S_truth_mn) if transect_name == 'along_flow'\
+            else 1e1 * np.max(S_truth_mn)
 
         plt.figure()
         plt.loglog(S_truth_mn, '.-', label='HR truth')
@@ -289,7 +290,7 @@ class PlotMachine():
         plt.loglog(S_lowres_mn, '.-', label='LR forcing/control')
         if add_coarse_data:
             plt.loglog(S_coarse_mn, '.-', label='Coarse model')
-        plt.loglog(k_1, offset_1 * k_1**(-5/3), '--', label='k^-5/3')
+        plt.loglog(k_1, offset_1 * k_1**(-5 / 3), '--', label='k^-5/3')
         plt.loglog(k_2, offset_2 * k_2**(-3), ':', label='k^-3')
         plt.legend()
         plt.gca().set_ylim([1e-7, 1])
@@ -313,65 +314,64 @@ class PlotMachine():
 
     def plot_spectrum(self, data={}):
         print('this is a test')
+        breakpoint()
 
-        from skimage.draw import line
 
-        # ### FIXME associated optimal transects should be created
-        # ### during data generation
-        time = 50
-        hrfield = data['truth'][time,].squeeze()
-        plt.close('all')
-        plt.imshow(hrfield)
-        plt.pause(1)
+def generate_transect(field):
+    """Tries to find a straight line through as much non-nan values in
+     <field> as possible.
 
-        ny, nx = hrfield.shape
+     Returns start and end indices.
 
-        line_values = 1
+    """
 
-        # try a number of preset start_x values
-        start_x_range = np.arange(nx, step=int(nx / 10))
+    ny, nx = field.shape
 
-        # get a list of all non-nan indices
-        indices = np.where(~np.isnan(hrfield))
-        maxlen = 0
-        best_startpoint = []
-        best_endpoint = []
+    # try a number of preset start_x values
+    start_x_range = np.arange(nx, step=int(nx / 10))
 
-        for start_x in start_x_range:
-            nonnans = np.where(~np.isnan(hrfield[:, start_x]))[0]
-            if len(nonnans) < 5:
+    # get a list of non-nan indices
+    indices = np.where(~np.isnan(field))
+
+    maxlen = 0
+    best_startpoint = []
+    best_endpoint = []
+
+    # iterate over selected start_x
+    for start_x in start_x_range:
+        # nonnan indices in column
+        nonnans = np.where(~np.isnan(field[:, start_x]))[0]
+
+        # discard narrow columns
+        if len(nonnans) < 5:
+            continue
+
+        # get the starting point halfway the first chunk of nonnans
+        diff = nonnans[1:] - nonnans[:-1]
+        ind = np.where(diff > 1)
+        if len(ind[0]) > 0:
+            nonnans = nonnans[:ind[0][0] + 1]
+        pad = int(np.round(len(nonnans) / 2))
+        start_y = nonnans[pad]
+
+        # full start index
+        start = [start_x, start_y]
+
+        # iterate over all non-nans and find longest line
+        for i, j in zip(indices[0], indices[1]):
+            end = [j, i]
+            rr, cc = line(start[0], start[1], end[0], end[1])
+            line_values = field[cc, rr]
+
+            if np.any(np.isnan(line_values)):
                 continue
+            elif len(line_values) > maxlen:
+                maxlen = len(line_values)
+                best_endpoint = end
+                best_startpoint = start
 
-            # get the starting point halfway the first chunk of
-            # nonnans
-            diff = nonnans[1:] - nonnans[:-1]
-            ind = np.where(diff > 1)
-            if len(ind[0]) > 0:
-                nonnans = nonnans[:ind[0][0] + 1]
-            pad = int(np.round(len(nonnans) / 2))
+    # finalize
+    end = best_endpoint
+    start = best_startpoint
 
-            start_y = nonnans[pad]
-            start = [start_x, start_y]
-
-            # iterate over all non-nans
-            for i, j in zip(indices[0], indices[1]):
-                end = [j, i]
-                rr, cc = line(start[0], start[1], end[0], end[1])
-                line_values = hrfield[cc, rr]
-
-                if np.any(np.isnan(line_values)):
-                    continue
-                elif len(line_values) > maxlen:
-                    maxlen = len(line_values)
-                    best_endpoint = end
-                    best_startpoint = start
-                    print(maxlen)
-
-        end = best_endpoint
-        start = best_startpoint
-        rr, cc = line(start[0], start[1], end[0], end[1])
-        mask = np.zeros_like(hrfield)
-        mask[cc, rr] = 1
-        line_values = hrfield[cc, rr]
-        plt.imshow(mask, alpha=0.5)
-        plt.pause(1)
+    return start, end

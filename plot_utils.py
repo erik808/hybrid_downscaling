@@ -314,9 +314,64 @@ class PlotMachine():
     def plot_spectrum(self, data={}):
         print('this is a test')
 
-        hrfield = data['truth'][0,].squeeze()
+        from skimage.draw import line
+
+        # ### FIXME associated optimal transects should be created
+        # ### during data generation
+        time = 50
+        hrfield = data['truth'][time,].squeeze()
         plt.close('all')
         plt.imshow(hrfield)
         plt.pause(1)
 
-        breakpoint()
+        ny, nx = hrfield.shape
+
+        line_values = 1
+
+        # try a number of preset start_x values
+        start_x_range = np.arange(nx, step=int(nx / 10))
+
+        # get a list of all non-nan indices
+        indices = np.where(~np.isnan(hrfield))
+        maxlen = 0
+        best_startpoint = []
+        best_endpoint = []
+
+        for start_x in start_x_range:
+            nonnans = np.where(~np.isnan(hrfield[:, start_x]))[0]
+            if len(nonnans) < 5:
+                continue
+
+            # get the starting point halfway the first chunk of
+            # nonnans
+            diff = nonnans[1:] - nonnans[:-1]
+            ind = np.where(diff > 1)
+            if len(ind[0]) > 0:
+                nonnans = nonnans[:ind[0][0] + 1]
+            pad = int(np.round(len(nonnans) / 2))
+
+            start_y = nonnans[pad]
+            start = [start_x, start_y]
+
+            # iterate over all non-nans
+            for i, j in zip(indices[0], indices[1]):
+                end = [j, i]
+                rr, cc = line(start[0], start[1], end[0], end[1])
+                line_values = hrfield[cc, rr]
+
+                if np.any(np.isnan(line_values)):
+                    continue
+                elif len(line_values) > maxlen:
+                    maxlen = len(line_values)
+                    best_endpoint = end
+                    best_startpoint = start
+                    print(maxlen)
+
+        end = best_endpoint
+        start = best_startpoint
+        rr, cc = line(start[0], start[1], end[0], end[1])
+        mask = np.zeros_like(hrfield)
+        mask[cc, rr] = 1
+        line_values = hrfield[cc, rr]
+        plt.imshow(mask, alpha=0.5)
+        plt.pause(1)

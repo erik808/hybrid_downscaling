@@ -25,7 +25,7 @@ def test_short_run_swot():
         'history': 100,
         'future': 'all',
         'epochs': 1,
-        'batch_size': 2,
+        'batch_size': 4,
         'unroll_dim': 0,
         'lookback': 0,
         'noise_stddev': 0.0,

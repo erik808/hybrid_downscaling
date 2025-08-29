@@ -4,6 +4,7 @@ import numpy as np
 import sys
 from datetime import datetime
 import importlib
+import xesmf as xe
 
 
 class CustomScaler():
@@ -48,7 +49,7 @@ class CustomScaler():
             raise Exception('scaler not fitted')
         return (data / self.scale) + self.shift
 
-    
+
 class Tee:
     """ Used to redirect and duplicate output """
 
@@ -118,3 +119,46 @@ def load_config(obj, config_name):
 
     for (key, value) in config_vars.items():
         setattr(obj, key, value)
+
+
+def build_grid(lat_arr, lon_arr):
+
+    Nlat = lat_arr.shape[0]
+    Nlon = lon_arr.shape[0]
+
+    lat_grid = np.tile(lat_arr, (Nlon, 1)).T
+    lon_grid = np.tile(lon_arr, (Nlat, 1))
+
+    grid = {}
+    grid['N'] = Nlat
+    grid['M'] = Nlon
+    grid['lat'] = np.ascontiguousarray(lat_grid)
+    grid['lon'] = np.ascontiguousarray(lon_grid)
+
+    return grid
+
+
+def regrid_to_transect(grid_orig,
+                       lon_start,
+                       lon_end,
+                       lat_start,
+                       lat_end,
+                       resolution=1e2):
+
+    resolution = int(resolution)
+    lat_arr = np.linspace(lat_start, lat_end, resolution)
+    lon_arr = np.linspace(lon_start, lon_end, resolution)
+
+    grid_upscale = {}
+    grid_upscale['N'] = resolution
+    grid_upscale['M'] = resolution
+    lat_mat = np.tile(lat_arr, (resolution, 1)).T
+    lon_mat = np.tile(lon_arr, (resolution, 1))
+    grid_upscale['lat'] = np.ascontiguousarray(lat_mat)
+    grid_upscale['lon'] = np.ascontiguousarray(lon_mat)
+    # grid_upscale['mask'] = np.identity(resolution)
+
+    interp_to_transect = xe.Regridder(grid_orig, grid_upscale,
+                                      method="bilinear",
+                                      extrap_method="inverse_dist")
+    return interp_to_transect

@@ -2,6 +2,7 @@ from datetime import datetime
 import matplotlib.pyplot as plt
 import numpy as np
 import os
+import tools
 from multiprocess import Pool
 from importlib import reload
 from skimage.draw import line
@@ -312,28 +313,120 @@ class PlotMachine():
                 'lowres': S_lowres,
                 'pred': S_pred}
 
-    def plot_spectrum(self, data={}):
+    def plot_swot_spectrum(self, data={}):
+        """Compute spectrum along a transect. To avoid aliasing problems we
+        regrid the field to a grid with a diagonal that matches the
+        transect.
+
+        """
         print('this is a test')
+
+        index = 0
+
+        index_global = data['test_range'][index]
+        start = data['transects']['start'][index_global]
+        end = data['transects']['end'][index_global]
+        length = data['transects']['length'][index_global]
+
+        grid_orig = data['grid']
+        lons = grid_orig['lon'][0, :]
+        lats = grid_orig['lat'][:, 0]
+
+        transect = {
+            'lon_start': lons[start[0]],
+            'lon_end': lons[end[0]],
+            'lat_start': lats[start[1]],
+            'lat_end': lats[end[1]]
+        }
+
+        regridder = tools.regrid_to_transect(grid_orig,
+                                             resolution=length,
+                                             **transect)
+
+        field = data['truth'][index,].squeeze()
+
+        # unscale
+        x, y = field.shape
+        field = data['scaler_lowres']\
+            .inverse_transform(field.reshape(1, -1))\
+            .reshape(x, y)
+
+        plt.close('all')
+        plt.ion()
+        field_tr = regridder(np.ascontiguousarray(field))
+        line_values_regr = np.diag(field_tr)
+        nanmask = ~np.isnan(line_values_regr)
+        x = np.arange(len(nanmask))
+        line_values_regr = np.interp(x, x[nanmask], line_values_regr[nanmask])
+
+        plt.figure()
+        rr, cc = line(start[0], start[1], end[0], end[1])
+        line_values = field[cc, rr]
+        # remove mean
+        line_values = line_values - np.mean(line_values)
+        line_values_regr = line_values_regr - np.mean(line_values_regr)
+        
+        reload(compute_tool)
+        n = len(line_values)
+        x = np.linspace(0, 1, n)
+        tpr = compute_tool.tpr_fun(x, offset=0.1, steepness=3e1)
+        line_values_tpr = line_values_regr * tpr
+        
+        plt.figure()
+        plt.plot(tpr)
+        plt.plot(line_values_tpr)
+        plt.pause(1)
+        
+        spec = np.abs(np.fft.rfft(line_values)) ** 2
+        spec_regr = np.abs(np.fft.rfft(line_values_regr)) ** 2
+        spec_tpr = np.abs(np.fft.rfft(line_values_tpr)) ** 2
+        
+
+        plt.figure(figsize=(10,10))
+        plt.subplot(3,1,1)
+        plt.loglog(spec)
+        plt.gca().set_ylim([1e-5,1e2])
+        plt.grid()
+        plt.subplot(3,1,2)
+        plt.loglog(spec_regr)
+        plt.gca().set_ylim([1e-5,1e2])
+        plt.grid()
+        plt.subplot(3,1,3)
+        plt.loglog(spec_tpr)
+        plt.gca().set_ylim([1e-5,1e2])
+        plt.grid()
+
+        plt.pause(1)
+
+
+
+        plt.figure()
+        plt.pcolormesh(field_tr)
+        mask = np.zeros_like(field_tr)
+        mask[range(length), range(length)]=1
+        plt.pcolormesh(mask, alpha=0.4)
+        plt.pause(1)
+
         breakpoint()
 
 
-def generate_transect(field, x_res=10):
+def generate_transect(field, x_res=10, early_stop=250):
     """Tries to find a straight line through as much non-nan values in
      <field> as possible.
 
      Returns start and end indices.
 
     """
-
     ny, nx = field.shape
 
     # try a number of preset start_x values
-    start_x_range = np.arange(nx, step=int(nx / x_res))
+    start_x_range = np.arange(1, int(nx / 2),
+                              step=int(nx / x_res / 2))
 
     # get a list of non-nan indices
     indices = np.where(~np.isnan(field))
 
-    maxlen = 0
+    length = 0
     best_startpoint = []
     best_endpoint = []
 
@@ -356,28 +449,35 @@ def generate_transect(field, x_res=10):
 
         # full start index
         start = [start_x, start_y]
-
         # iterate over all non-nans and find longest line
         for i, j in zip(indices[0], indices[1]):
             end = [j, i]
             rr, cc = line(start[0], start[1], end[0], end[1])
             line_values = field[cc, rr]
 
-            if np.any(np.isnan(line_values)):
+            # check line + neighbourhood for nans
+            try:
+                line_extended = np.concatenate([line_values,
+                                                field[cc - 1, rr],
+                                                field[cc + 1, rr],
+                                                field[cc, rr - 1],
+                                                field[cc, rr + 1]])
+            except IndexError:
                 continue
-            elif len(line_values) > maxlen:
-                maxlen = len(line_values)
+
+            if np.any(np.isnan(line_extended)):
+                continue
+            elif len(line_values) > length:
+                length = len(line_values)
                 best_endpoint = end
                 best_startpoint = start
-                print(maxlen)
+
+        if length > early_stop:
+            break
 
     # finalize
+    print(f'length transect: {length}')
     end = best_endpoint
     start = best_startpoint
 
-    # TODO find 
-    # rr, cc = line(start[0], start[1], end[0], end[1])
-    # mask = np.zeros_like(field)
-    # plt.imshow(
-
-    return start, end
+    return start, end, length

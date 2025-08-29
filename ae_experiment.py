@@ -11,7 +11,6 @@ import optuna
 import xarray as xr
 import numpy as np
 import keras
-from keras import ops
 
 import data_utils
 importlib.reload(data_utils)
@@ -393,43 +392,9 @@ class AE_Experiment():
                                     params['test_range'].stop)
         self.test_range = full_test_range[:self.future,]
 
-    def my_loss(self, y_true, y_pred):
-
-        # usage:
-        # autoencoder = \
-        #     keras.models.load_model(self.load_path_autoencoder,
-        #                             compile=False)
-        # autoencoder.compile(loss=self.my_loss)
-
-        y_pred = ops.convert_to_tensor(y_pred)
-        y_true = ops.convert_to_tensor(y_true, dtype=y_pred.dtype)
-
-        def compute_2d_energy_spectrum(tensor):
-            im = ops.zeros_like(tensor[..., 0])  # imaginary part
-            s_u = ops.fft2((tensor[..., 0], im))
-            s_v = ops.fft2((tensor[..., 1], im))
-            u = ops.square(ops.sqrt(ops.square(s_u[0]) +
-                                    ops.square(s_u[1])))
-            v = ops.square(ops.sqrt(ops.square(s_v[0]) +
-                                    ops.square(s_v[1])))
-            E = (u + v) / 2
-            E = E / ops.max(E)
-
-            return E
-
-        s_true = compute_2d_energy_spectrum(y_true)
-        s_pred = compute_2d_energy_spectrum(y_pred)
-
-        epsilon = 1e-10
-        bias=0.0
-        first_log = ops.log(ops.maximum(s_true, epsilon) + bias)
-        second_log = ops.log(ops.maximum(s_pred, epsilon) + bias)
-        out = ops.mean(ops.square(first_log - second_log), axis=(1, 2))
-        return out
-
     def plot_spectra(self):
         plotmachine = PlotMachine(results_dir=self.dirs['results'],
-                                  trial_id=self.trial_id)        
+                                  trial_id=self.trial_id)
 
         data_dict = {
             'truth': self.data['HR'][self.test_range,],
@@ -453,8 +418,12 @@ class AE_Experiment():
                                                  data=data_dict)
             plotmachine.plot_enstrophy_spectrum(transect_name='across_flow',
                                                 data=data_dict)
+
         elif self.case_study == 'swot':
-            plotmachine.plot_spectrum(data=data_dict)
+            data_dict['transects'] = self.data['transects']
+            data_dict['grid'] = self.data['grid']
+            data_dict['test_range'] = self.test_range
+            plotmachine.plot_swot_spectrum(data=data_dict)
 
     def plot_history(self):
         plotmachine = PlotMachine(results_dir=self.dirs['results'],
@@ -534,11 +503,11 @@ class AE_Experiment():
                 'type': '1d',
                 'values':
                 {'HR truth': lambda i:
-                 get_rolling_spec(self.spec_along['truth'])[i,:],
+                 get_rolling_spec(self.spec_along['truth'])[i, :],
                  'Model prediction': lambda i:
-                 get_rolling_spec(self.spec_along['pred'])[i,:],
+                 get_rolling_spec(self.spec_along['pred'])[i, :],
                  'LR forcing': lambda i:
-                 get_rolling_spec(self.spec_along['lowres'])[i,:]
+                 get_rolling_spec(self.spec_along['lowres'])[i, :]
                  },
                 'ymin': 1e-6,
                 'ymax': 2,
@@ -551,9 +520,9 @@ class AE_Experiment():
                 'type': '1d',
                 'values':
                 {'HR truth': lambda i:
-                 get_rolling_spec(self.spec_across['truth'])[i,:],
+                 get_rolling_spec(self.spec_across['truth'])[i, :],
                  'Model prediction': lambda i:
-                 get_rolling_spec(self.spec_across['pred'])[i,:],
+                 get_rolling_spec(self.spec_across['pred'])[i, :],
                  'LR forcing': lambda i:
                  get_rolling_spec(self.spec_across['lowres'])[i, :]
                  },

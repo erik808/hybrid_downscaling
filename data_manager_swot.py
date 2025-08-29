@@ -25,28 +25,39 @@ class DataManagerSWOT(DataManagerBase):
 
     def create_training_data(self):
 
-        if self.compute_data:
-            print('Create training data')
-            self.ds = xr.open_dataset(self.swot_duacs_fname)
+        self.ds = xr.open_dataset(self.swot_duacs_fname)
 
-            # fix time gaps
+        if self.compute_data:
+
+            # Cropping ? # [:, 4:-4, 2:-2] ?
+
+            print('Create training data')
+            # interpolate time gaps
+            print('interpolating...')
             start = np.datetime64(self.ds.time[0].data)
             end = np.datetime64(self.ds.time[-1].data)
             time_arr = np.arange(start, end, dtype='datetime64[D]')\
                          .astype('datetime64[ns]')
-
-            print('interpolating...')
             self.ds.load()
             self.ds = self.ds.interp(time=time_arr,
                                      method='linear')
             print('interpolating... done')
 
             print('generate transects')
-            # TODO find performance bug
-            for t in range(np.shape(self.ds.ssha)[0]):
-                field = self.ds.ssha[t,]
-                print(t)
-                start, end = plot_utils.generate_transect(field, x_res=5)
+            transects = {}
+            transects['start'] = []
+            transects['end'] = []
+            transects['length'] = []
+
+            Nt = np.shape(self.ds.ssha)[0]
+            for t in range(Nt):
+                field = self.ds.ssha[t,].data
+                print(f'time {t} | {Nt}')
+                start, end, length = \
+                    plot_utils.generate_transect(field, x_res=10)
+                transects['start'].append(start)
+                transects['end'].append(end)
+                transects['length'].append(length)
 
             data_HR = self.ds.ssha.data
             data_LR = self.ds.sla.data
@@ -55,6 +66,7 @@ class DataManagerSWOT(DataManagerBase):
             print(f'writing to {self.dill_file}')
             container = {'data_HR': data_HR,
                          'data_LR': data_LR,
+                         'transects': transects,
                          'time': time}
 
             with open(self.dill_file, 'wb') as file:
@@ -63,8 +75,9 @@ class DataManagerSWOT(DataManagerBase):
             print('Load training data from dill file')
             with open(self.dill_file, 'rb') as file:
                 data = dill.load(file)
-                data_HR = data['data_HR'][:, 4:-4, 2:-2]
-                data_LR = data['data_LR'][:, 4:-4, 2:-2]
+                data_HR = data['data_HR']
+                data_LR = data['data_LR']
+                transects = data['transects']
                 time = data['time']
 
         # define mask
@@ -95,42 +108,6 @@ class DataManagerSWOT(DataManagerBase):
         scalers['HR'] = scaler
         scalers['LR'] = scaler
 
-        # import matplotlib.pyplot as plt
-        # plt.close('all')
-        # plt.figure()
-        # for time in range(0, 40):
-        #     c = plt.contour(data_LR[time,], clim=[0, 1])
-        #     c = plt.pcolormesh(data_HR[time,], clim=[0, 1])
-        #     plt.colorbar(c)
-        #     plt.pause(1)
-        #     plt.clf()
-
-
-        # plt.close('all')
-        # plt.figure()
-        # c = plt.imshow(scaler.min_.reshape(Nlat,Nlon))
-        # plt.title('min')
-        # plt.colorbar(c)
-        # plt.pause(1)
-
-        # plt.figure()
-        # c = plt.imshow(scaler.scale_.reshape(Nlat,Nlon))
-        # plt.title('scale')
-        # plt.colorbar(c)
-        # plt.pause(1)
-
-        # plt.figure()
-        # c = plt.imshow(data_LR[0,])
-        # plt.colorbar(c)
-        # plt.pause(1)
-
-        # plt.figure()
-        # c = plt.imshow(data_LR[0,]-data_HR[0,])
-        # plt.colorbar(c)
-        # plt.pause(1)
-
-        # breakpoint()
-
         split = int(Nt * self.split_factor)
         if split == Nt:
             raise NotImplementedError("unit split_factor")
@@ -142,14 +119,16 @@ class DataManagerSWOT(DataManagerBase):
         data['HR'] = data_HR.reshape(*data_HR.shape, 1)
         data['LR'] = data_LR.reshape(*data_LR.shape, 1)
         data['time'] = time
+        data['transects'] = transects
+        lat_arr = self.ds.lat.data
+        lon_arr = self.ds.lon.data
+        data['lat'] = lat_arr
+        data['lon'] = lon_arr
+        data['grid'] = tools.build_grid(lat_arr, lon_arr)
 
         params = {}
         params['train_range'] = range(0, split)
         params['test_range'] = range(split, Nt)
         params['mask'] = mask
-
-        # scalers = {}
-        # scalers['HR'] = scaler
-        # scalers['LR'] = scaler
 
         return data, params, scalers, {}

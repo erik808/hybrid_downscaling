@@ -52,15 +52,8 @@ class DataManagerCMEMS(DataManagerBase):
             lat_arr = mask.latitude
             lon_arr = mask.longitude
 
-        Nlat = lat_arr.shape[0]
-        Nlon = lon_arr.shape[0]
-        lat_grid = np.tile(lat_arr, (Nlon, 1)).T
-        lon_grid = np.tile(lon_arr, (Nlat, 1))
-        grid = {}
-        grid['N'] = Nlat
-        grid['M'] = Nlon
-        grid['lat'] = np.ascontiguousarray(lat_grid)
-        grid['lon'] = np.ascontiguousarray(lon_grid)
+        grid = tools.build_grid(lat_arr, lon_arr)
+
         if len(mask) > 0:
             grid['mask'] = mask
         return grid
@@ -76,33 +69,18 @@ class DataManagerCMEMS(DataManagerBase):
 
         lons = grid_orig['lon'][0, :]
         lats = grid_orig['lat'][:, 0]
-        dlon = float((lons[1:] - lons[:-1]).mean())
-        dlat = float((lats[1:] - lats[:-1]).mean())
-        grid_aspect = dlon / dlat
-        print(f' grid aspect ratio: {grid_aspect}')
 
-        lon_start = lons[tpicker.x_trans[0]]
-        lon_end   = lons[tpicker.x_trans[-1]]
-        lat_start = lats[tpicker.y_trans[0]]
-        lat_end   = lats[tpicker.y_trans[-1]]
+        transect = {
+            'lon_start': lons[tpicker.x_trans[0]],
+            'lon_end': lons[tpicker.x_trans[-1]],
+            'lat_start': lats[tpicker.y_trans[0]],
+            'lat_end': lats[tpicker.y_trans[-1]]
+        }
 
-        resolution = int(resolution)
-        lat_arr = np.linspace(lat_start, lat_end, resolution)
-        lon_arr = np.linspace(lon_start, lon_end, resolution)
+        return tools.regrid_to_transect(grid_orig,
+                                        resolution=resolution,
+                                        **transect)
 
-        grid_upscale = {}
-        grid_upscale['N'] = resolution
-        grid_upscale['M'] = resolution
-        lat_mat = np.tile(lat_arr, (resolution, 1)).T
-        lon_mat = np.tile(lon_arr, (resolution, 1))
-        grid_upscale['lat'] = np.ascontiguousarray(lat_mat)
-        grid_upscale['lon'] = np.ascontiguousarray(lon_mat)
-        grid_upscale['mask'] = np.identity(resolution)
-
-        interp_to_transect = xe.Regridder(grid_orig, grid_upscale,
-                                          method="bilinear",
-                                          extrap_method="inverse_dist")
-        return interp_to_transect
 
     def create_regridders(self):
         print('Create regridders')

@@ -67,8 +67,8 @@ class ComputeTool():
         # taper the boundaries
         n = data.shape[1]
         x = np.linspace(0, 1, n)
-        tpr = (1 + np.tanh((x - 0.1) * 3e1)) / 2
-        tpr = tpr + np.flip(tpr) - 1
+        tpr = tpr_fun(x, offset=0.1, steepness=3e1)
+
         if data.ndim == 3:
             data = (data.transpose(2, 0, 1) * tpr)\
                 .transpose(1, 2, 0)
@@ -215,3 +215,9 @@ class ComputeTool():
         print(f'writing to {dill_file}')
         with open(dill_file, 'wb') as file:
             dill.dump(container, file)
+
+
+def tpr_fun(x, offset=0.1, steepness=3e1):
+    tpr = (1 + np.tanh((x - offset) * steepness)) / 2
+    tpr = tpr + np.flip(tpr) - 1
+    return tpr

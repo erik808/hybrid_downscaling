@@ -77,12 +77,12 @@ class AutoEncoder():
                    self.N_lat,
                    self.N_lon,
                    self.N_chan),
-            name="full_state_input")        
+            name="full_state_input")
 
         if self.use_feedthrough:
             feedthrough = layers.Input(
                 shape=(self.N_lb, self.N_lat, self.N_lon, self.N_chan),
-                name="feedthrough_input")            
+                name="feedthrough_input")
             ft_inputs = [ops.squeeze(t, axis=1)
                          for t in ops.split(feedthrough, self.N_lb, axis=1)]
 
@@ -840,6 +840,10 @@ class LSModelWrapper(keras.Model):
         y_true = y[0][:, 0,]
 
         # create a mask on the fly ## FIXME: factorize
+        #   ## FIXME FIXME
+        crop = 10
+        y_true = y_true[:, crop:-crop, crop:-crop, :]
+        y_pred = y_pred[:, crop:-crop, crop:-crop, :]
         y_true = y_true.flatten()
         y_pred = y_pred.flatten()
         logical_mask = ~ops.isnan(y_true)
@@ -901,11 +905,20 @@ class LSModelWrapper(keras.Model):
         y_true = y[0][:, 0,]
 
         # create a mask on the fly ## FIXME: factorize
+        
+        crop = 10
+        y_true = y_true[:, crop:-crop, crop:-crop, :]
+        y_pred = y_pred[:, crop:-crop, crop:-crop, :]
+
         y_true = y_true.flatten()
         y_pred = y_pred.flatten()
         logical_mask = ~ops.isnan(y_true)
         y_true = y_true[logical_mask]
         y_pred = y_pred[logical_mask]
+
+        #  ## FIXME the loss can be artifically high because of the
+        #  ## boundaries. Crop the error.  !! Factorize the masked
+        #  ## loss first 
 
         # time ordering in y is backwards so last first
         reconstruction_loss = \
@@ -915,7 +928,6 @@ class LSModelWrapper(keras.Model):
             -0.5 * (1 + z['log_var'] - ops.square(z['mean']) -
                     ops.exp(z['log_var']))
         kl_loss = ops.mean(ops.sum(kl_loss, axis=(1, 2)))
-
 
         if RNN_hybrid:
             total_loss = reconstruction_loss + kl_loss + rnn_loss
@@ -927,7 +939,8 @@ class LSModelWrapper(keras.Model):
         trainable_weights = [v for v in self.trainable_weights]
         gradients = [v.value.grad for v in trainable_weights]
 
-        with torch.no_grad():            self.optimizer.apply(gradients, trainable_weights)
+        with torch.no_grad():
+            self.optimizer.apply(gradients, trainable_weights)
 
         self.total_loss_tracker.update_state(total_loss)
         self.reconstruction_loss_tracker.update_state(reconstruction_loss)
@@ -1126,6 +1139,9 @@ class CustomValidation(keras.callbacks.Callback):
         if self.unroll_dim != 0:
             raise NotImplementedError("unroll not implemented for SWOT set")
 
+        def crop(field):
+            return field[:, 10:-10, 10:-10, :]
+
         error, base = (0, 0)
         for i in range(self.N_steps):
             xk_lb = np.expand_dims(
@@ -1139,12 +1155,13 @@ class CustomValidation(keras.callbacks.Callback):
                 # breakpoint()
                 xk_true = np.expand_dims(self.test_data[i,], axis=0)
 
-                error += (np.nansum(np.square(xk - xk_true)))
+                error += (np.nansum(np.square(crop(xk - xk_true))))
 
                 xk_ref = np.expand_dims(
                     self.data['LR'][self.test_inds[i],], axis=0)
 
-                base += (np.nansum(np.square(xk_ref - xk_true)))
+                base += (np.nansum(np.square(crop(xk_ref - xk_true))))
+
                 values = [('error', np.sqrt(error / (i + 1))),
                           ('base', np.sqrt(base / (i + 1)))]
                 pb_i.add(1, values=values)
@@ -1179,11 +1196,15 @@ class CustomValidation(keras.callbacks.Callback):
         plt.colorbar(c)
         plt.title('corrected')
 
+        errorfield = np.square(crop(xk - xk_true))
+        print(np.nanmax(error))
+
         plt.subplot(2, 2, 3)
         c = plt.imshow(xk_true[0, :, :, 0])
         plt.colorbar(c)
         plt.subplot(2, 2, 4)
-        c = plt.imshow(xk[0, :, :, 0])
+        c = plt.imshow(errorfield[0, :, :, 0])
+        plt.title('error')
         plt.colorbar(c)
         plt.pause(1)
         if self.pars['evaluate']:

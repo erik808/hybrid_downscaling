@@ -6,6 +6,7 @@ import tools
 from multiprocess import Pool
 from importlib import reload
 from skimage.draw import line
+from scipy.stats import binned_statistic
 import data_utils
 reload(data_utils)
 from data_utils import DataFactory
@@ -307,11 +308,17 @@ class PlotMachine():
         print(fig_name)
         plt.tight_layout()
         plt.savefig(fig_name)
-        # plt.pause(1)
 
         return {'truth': S_truth,
                 'lowres': S_lowres,
                 'pred': S_pred}
+
+    def unscale2D(self, field, scaler):
+        x, y = field.shape
+        field = scaler\
+            .inverse_transform(field.reshape(1, -1))\
+            .reshape(x, y)
+        return field
 
     def plot_swot_spectrum(self, data={}):
         """Compute spectrum along a transect. To avoid aliasing problems we
@@ -319,95 +326,116 @@ class PlotMachine():
         transect.
 
         """
-        print('this is a test')
+        print("Plotting SWOT spectra and more")
 
-        index = 0
-
-        index_global = data['test_range'][index]
-        start = data['transects']['start'][index_global]
-        end = data['transects']['end'][index_global]
-        length = data['transects']['length'][index_global]
-
+        # get the grid
         grid_orig = data['grid']
         lons = grid_orig['lon'][0, :]
         lats = grid_orig['lat'][:, 0]
 
-        transect = {
-            'lon_start': lons[start[0]],
-            'lon_end': lons[end[0]],
-            'lat_start': lats[start[1]],
-            'lat_end': lats[end[1]]
-        }
+        test_range = data['test_range']
+        N_test = len(test_range)
+        N_plots = 5
+        field_indexes = np.arange(0, N_test, np.ceil(N_test / N_plots))\
+            .astype(int)
 
-        regridder = tools.regrid_to_transect(grid_orig,
-                                             resolution=length,
-                                             **transect)
-
-        field = data['truth'][index,].squeeze()
-
-        # unscale
-        x, y = field.shape
-        field = data['scaler_lowres']\
-            .inverse_transform(field.reshape(1, -1))\
-            .reshape(x, y)
+        def regrid_and_interp(field, regridder):
+            field_regr = regridder(np.ascontiguousarray(field))
+            line_values = np.diag(field_regr)
+            nanmask = ~np.isnan(line_values)
+            x = np.arange(len(nanmask))
+            line_values = np.interp(x, x[nanmask], line_values[nanmask])
+            return line_values
 
         plt.close('all')
-        plt.ion()
-        field_tr = regridder(np.ascontiguousarray(field))
-        line_values_regr = np.diag(field_tr)
-        nanmask = ~np.isnan(line_values_regr)
-        x = np.arange(len(nanmask))
-        line_values_regr = np.interp(x, x[nanmask], line_values_regr[nanmask])
+        plt.figure(figsize=self.figsize)
+        for plot_i, index in enumerate(field_indexes):
 
-        plt.figure()
-        rr, cc = line(start[0], start[1], end[0], end[1])
-        line_values = field[cc, rr]
-        # remove mean
-        line_values = line_values - np.mean(line_values)
-        line_values_regr = line_values_regr - np.mean(line_values_regr)
-        
-        reload(compute_tool)
-        n = len(line_values)
-        x = np.linspace(0, 1, n)
-        tpr = compute_tool.tpr_fun(x, offset=0.1, steepness=3e1)
-        line_values_tpr = line_values_regr * tpr
-        
-        plt.figure()
-        plt.plot(tpr)
-        plt.plot(line_values_tpr)
+            index_global = test_range[index]
+            start = data['transects']['start'][index_global]
+            end = data['transects']['end'][index_global]
+            length = data['transects']['length'][index_global]
+
+            transect = {
+                'lon_start': lons[start[0]],
+                'lon_end': lons[end[0]],
+                'lat_start': lats[start[1]],
+                'lat_end': lats[end[1]]
+            }
+
+            regridder = tools.regrid_to_transect(grid_orig,
+                                                 resolution=length,
+                                                 **transect)
+
+            scaler = data['scaler_lowres']
+            # HR: high-res SWOT
+            HR_field = self.unscale2D(data['truth'][index,].squeeze(), scaler)
+            # LR: low-res original
+            LR_field = self.unscale2D(data['lowres'][index,].squeeze(), scaler)
+            # PR: predicted reconstruction
+            PR_field = self.unscale2D(data['pred'][index,].squeeze(), scaler)
+
+            HR_values = regrid_and_interp(HR_field, regridder)
+            LR_values = regrid_and_interp(LR_field, regridder)
+            PR_values = regrid_and_interp(PR_field, regridder)
+
+            HR_k, HR_A, _ = line_power_spectrum(HR_values)
+            LR_k, LR_A, _ = line_power_spectrum(LR_values)
+            PR_k, PR_A, _ = line_power_spectrum(PR_values)
+
+            ax1 = plt.subplot(3, N_plots, plot_i + 1)
+            ax1.loglog(HR_k, HR_A, 'k-', label='HR')
+            ax1.loglog(LR_k, LR_A, label='LR')
+            ax1.loglog(PR_k, PR_A, label='PR')
+            ax1.loglog(HR_k[10:-30], 1e3 * HR_k[10:-30]**(-5 / 3),
+                       '--', label='k^-5/3')
+            ax1.loglog(HR_k[10:-30], 1e4 * HR_k[10:-30]**(-3),
+                       '--', label='k^-3')
+
+            ax1.grid(True, which="both", linestyle='--',
+                     linewidth=0.5, alpha=0.7)
+            ax1.legend()
+            ax1.set_title(f"{np.datetime64(data['time'][index].data, 'D')}")
+
+            ax2 = plt.subplot(3, N_plots, N_plots + plot_i + 1)
+            ax2.pcolormesh(LR_field)
+            ax2.pcolormesh(HR_field)
+            ax2.invert_yaxis()
+            rr, cc = line(start[0], start[1], end[0], end[1])
+            ax2.plot(rr, cc, 'r--', linewidth=2)
+            ax2.axis('off')
+
+            ax3 = plt.subplot(3, N_plots, 2 * N_plots + plot_i + 1)
+            ax3.pcolormesh(PR_field)
+            # ax3.plot(rr, cc, 'r--', linewidth=2)
+            ax3.axis('off')
+            ax3.invert_yaxis()
+            ax3.set_title('predicted')
+
+        postfix = self.create_postfix()
+        fig_name = (f'{self.results_dir}/spectra_swot'
+                    f'{postfix}.png'
+                    )
+
+        print(fig_name)
         plt.pause(1)
-        
-        spec = np.abs(np.fft.rfft(line_values)) ** 2
-        spec_regr = np.abs(np.fft.rfft(line_values_regr)) ** 2
-        spec_tpr = np.abs(np.fft.rfft(line_values_tpr)) ** 2
-        
-
-        plt.figure(figsize=(10,10))
-        plt.subplot(3,1,1)
-        plt.loglog(spec)
-        plt.gca().set_ylim([1e-5,1e2])
-        plt.grid()
-        plt.subplot(3,1,2)
-        plt.loglog(spec_regr)
-        plt.gca().set_ylim([1e-5,1e2])
-        plt.grid()
-        plt.subplot(3,1,3)
-        plt.loglog(spec_tpr)
-        plt.gca().set_ylim([1e-5,1e2])
-        plt.grid()
-
-        plt.pause(1)
+        plt.savefig(fig_name, bbox_inches='tight')
 
 
+def line_power_spectrum(line_values):
 
-        plt.figure()
-        plt.pcolormesh(field_tr)
-        mask = np.zeros_like(field_tr)
-        mask[range(length), range(length)]=1
-        plt.pcolormesh(mask, alpha=0.4)
-        plt.pause(1)
+    fourier_line = np.fft.fft(line_values)
+    power_spectrum = np.abs(fourier_line) ** 2
 
-        breakpoint()
+    n = len(line_values)
+    kfreq = np.fft.fftfreq(n) * n
+    kfreq = np.abs(kfreq)
+
+    kbins = np.arange(0.5, n / 2, 1.)
+    kvals = 0.5 * (kbins[1:] + kbins[:-1])
+    Abins, _, _ = binned_statistic(kfreq, power_spectrum,
+                                   statistic="mean", bins=kbins)
+    return kvals, Abins, line_values
 
 
 def generate_transect(field, x_res=10, early_stop=250):

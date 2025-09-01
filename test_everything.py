@@ -61,7 +61,7 @@ def test_short_run_cmems():
 
     # adjust hyperparameters:
     test_pars = {
-        'history': 200,
+        'history': 100,
         'future': 100,
         'epochs': 1,
         'unroll_dim': 0,

@@ -384,9 +384,9 @@ class PlotMachine():
             PR_k, PR_A, _ = line_power_spectrum(PR_values)
 
             ax1 = plt.subplot(3, N_plots, plot_i + 1)
-            ax1.loglog(HR_k, HR_A, 'k-', label='HR')
-            ax1.loglog(LR_k, LR_A, label='LR')
-            ax1.loglog(PR_k, PR_A, label='PR')
+            ax1.loglog(HR_k, HR_A, 'k-', label='HR: high-res SWOT')
+            ax1.loglog(LR_k, LR_A, label='LR: low-res original')
+            ax1.loglog(PR_k, PR_A, label='PR: predicted')
             ax1.loglog(HR_k[10:-30], 1e3 * HR_k[10:-30]**(-5 / 3),
                        '--', label='k^-5/3')
             ax1.loglog(HR_k[10:-30], 1e4 * HR_k[10:-30]**(-3),
@@ -394,12 +394,16 @@ class PlotMachine():
 
             ax1.grid(True, which="both", linestyle='--',
                      linewidth=0.5, alpha=0.7)
-            ax1.legend()
+            if plot_i == 0:
+                ax1.legend()
             ax1.set_title(f"{np.datetime64(data['time'][index].data, 'D')}")
 
             ax2 = plt.subplot(3, N_plots, N_plots + plot_i + 1)
             ax2.pcolormesh(LR_field)
             ax2.pcolormesh(HR_field)
+            ax2.contour(np.isnan(HR_field),
+                        levels=1, colors='k',
+                        linewidths=0.4)
             ax2.invert_yaxis()
             rr, cc = line(start[0], start[1], end[0], end[1])
             ax2.plot(rr, cc, 'r--', linewidth=2)

@@ -22,7 +22,7 @@ def test_short_run_swot():
 
     # adjust hyperparameters:
     test_pars = {
-        'history': 100,
+        'history': 10,
         'future': 'all',
         'epochs': 1,
         'batch_size': 4,
@@ -61,7 +61,7 @@ def test_short_run_cmems():
 
     # adjust hyperparameters:
     test_pars = {
-        'history': 100,
+        'history': 200,
         'future': 100,
         'epochs': 1,
         'unroll_dim': 0,

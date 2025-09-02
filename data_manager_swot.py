@@ -84,25 +84,28 @@ class DataManagerSWOT(DataManagerBase):
         mask = np.where(np.isnan(data_LR[0,]), 0, 1)
         mask = torch.tensor(mask)[None, :, :, None]
 
-        Nt, Nlat, Nlon = data_HR.shape
+        Nt = data_HR.shape[0]
+        original_config=True
+        if ~original_config:
+            data_LR = np.stack([data_LR, data_HR], axis=-1)
+            data_HR = np.stack([data_HR, data_HR], axis=-1)
+
         assert data_LR.shape == data_HR.shape
 
-        # remove nans in LR data only
-        data_LR = np.nan_to_num(data_LR, 0)
-        # data_HR = np.nan_to_num(data_HR, 0)
 
         # # We scale the data with a single scaling for all features
         scaler = MinMaxScaler(feature_range=self.scaling_range)
         # scaler = CustomScaler(scaling_type='minmax_over_all_features')
+        # scaler = CustomScaler(scaling_type='disabled')
         # scaler = StandardScaler()
-        # scaler = 0
 
-        scaler.fit(data_LR.reshape(Nt, -1))
-        data_LR = scaler.transform(data_LR.reshape(Nt, -1))\
-                        .reshape(Nt, Nlat, Nlon)
+        shpe = data_LR.shape
+        scaler.fit(data_LR.reshape(shpe[0], -1))
+        data_LR = scaler.transform(data_LR.reshape(shpe[0], -1))\
+                        .reshape(shpe)
 
-        data_HR = scaler.transform(data_HR.reshape(Nt, -1))\
-                        .reshape(Nt, Nlat, Nlon)
+        data_HR = scaler.transform(data_HR.reshape(shpe[0], -1))\
+                        .reshape(shpe)
 
         scalers = {}
         scalers['HR'] = scaler
@@ -112,12 +115,20 @@ class DataManagerSWOT(DataManagerBase):
         if split == Nt:
             raise NotImplementedError("unit split_factor")
 
+        # remove nans in LR data only
+        data_LR = np.nan_to_num(data_LR, 0)
+
         # assemble into dicts
         data = {}
 
         # add channel dimension
-        data['HR'] = data_HR.reshape(*data_HR.shape, 1)
-        data['LR'] = data_LR.reshape(*data_LR.shape, 1)
+        if original_config:
+            data['HR'] = data_HR.reshape(*data_HR.shape, 1)
+            data['LR'] = data_LR.reshape(*data_LR.shape, 1)
+        else:
+            data['LR'] = data_LR
+            data['HR'] = data_HR
+
         data['time'] = time
         data['transects'] = transects
         lat_arr = self.ds.lat.data

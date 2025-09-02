@@ -898,6 +898,9 @@ class LSModelWrapper(keras.Model):
                 )
 
             rnn_loss = rnn_loss_mean + rnn_loss_var
+            # ignore nan result
+            rnn_loss = 0 if ops.isnan(rnn_loss) else rnn_loss
+
             self.rnn_loss_tracker.update_state(rnn_loss)
             rnn_dict = {'rnn_loss': self.rnn_loss_tracker.result()}
 
@@ -1148,6 +1151,12 @@ class CustomValidation(keras.callbacks.Callback):
                 data_utils.create_lookback(
                     self.test_inds[i], [self.data['LR']],
                     self.lookback, axis=0)[0], axis=0)
+
+            # get rid of truth
+            xk_lb = np.stack([
+                xk_lb[:, :, :, :, 0],
+                xk_lb[:, :, :, :, 0]
+            ], axis=-1)
             xk = self.model.predict([xk_lb, xk_lb], verbose=0)
 
             self.predictions[i,] = xk

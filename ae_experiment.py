@@ -242,6 +242,8 @@ class AE_Experiment():
         }
         ae_model_pars.update(self.hyper_params)
 
+        breakpoint()
+        
         ae = AutoEncoder(
             test_vec=self.data['HR'][0, :, :, :],
             mask=self.params['mask'],

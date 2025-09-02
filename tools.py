@@ -9,7 +9,7 @@ import xesmf as xe
 
 class CustomScaler():
 
-    def __init__(self, scaling_type='minmax_per_feature'):
+    def __init__(self, scaling_type='disabled'):
         self.scaling_type = scaling_type
         self.shift = None
         self.scale = None
@@ -32,6 +32,10 @@ class CustomScaler():
         elif self.scaling_type == 'minmax_over_all_features':
             self.scale = 1.0 / (np.nanmax(data) - np.nanmin(data))
             self.shift = np.nanmin(data)
+
+        elif self.scaling_type == 'disabled':
+            self.shift = 0.0
+            self.scale = 1.0
 
         self.fitted = True
 

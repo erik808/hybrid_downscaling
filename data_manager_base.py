@@ -6,7 +6,7 @@ from abc import ABC, abstractmethod
 class DataManagerBase(ABC):
 
     @abstractmethod
-    def __init__(self, testing_mode):
+    def __init__(self):
         pass
 
     @abstractmethod

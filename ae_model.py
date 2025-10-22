@@ -283,7 +283,6 @@ class AutoEncoder():
             model = self
         model.summary()
 
-
     def summary(self):
 
         if self.needs_building:

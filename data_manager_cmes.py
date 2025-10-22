@@ -81,7 +81,6 @@ class DataManagerCMEMS(DataManagerBase):
                                         resolution=resolution,
                                         **transect)
 
-
     def create_regridders(self):
         print('Create regridders')
         bt_HR = xr.open_dataset(self.HR_bathy_file)

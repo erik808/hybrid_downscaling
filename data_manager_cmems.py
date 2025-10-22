@@ -12,10 +12,5 @@ class DataManagerCMEMS(DataManagerBase):
         pass
 
 
-
-
-
-
-
-dmgr_cmems = DataManagerCMEMS()       
+dmgr_cmems = DataManagerCMEMS()
 print(dir(dmgr_cmems))

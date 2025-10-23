@@ -1,7 +1,4 @@
 import copernicusmarine as cm
-import xarray as xr
-import numpy as np
-import matplotlib.pyplot as plt
 
 # 3d box for open boundary in the Channel
 box_Channel = {}
@@ -21,11 +18,12 @@ box_NwCC['max_lat'] = 58.7
 box_NwCC['min_dep'] = 0.4940253794193268
 box_NwCC['max_dep'] = 643.5668334960938
 
-time_start = "2023-01-01T00:00:00"
-time_end = "2023-12-31T23:00:00"
+time_start = "2022-12-01T00:00:00"
+time_end = "2025-09-30T23:00:00"
 
-fetch = 'coords'
+fetch = 'uv'
 print(f'fetch {fetch}')
+
 
 def fetch_wrapper(box, **kwargs):
     out = cm.subset(
@@ -72,7 +70,7 @@ elif fetch == 'bathy':
                         variables=variables,
                         start_datetime=time_start,
                         end_datetime=time_end)
-    
+
 elif fetch == 'coords':
     ds_id = "cmems_mod_nws_phy_anfc_0.027deg-3D_static"
     dataset_part="coords"

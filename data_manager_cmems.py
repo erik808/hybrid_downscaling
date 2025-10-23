@@ -12,5 +12,23 @@ class DataManagerCMEMS(DataManagerBase):
         pass
 
 
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+    
+
 dmgr_cmems = DataManagerCMEMS()
 print(dir(dmgr_cmems))
+
+dmgr_cmems.coords_file

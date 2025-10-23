@@ -1,3 +1,5 @@
+import re
+import pandas as pd
 import glob
 import os
 import numpy as np
@@ -166,3 +168,29 @@ def regrid_to_transect(grid_orig,
                                       method="bilinear",
                                       extrap_method="inverse_dist")
     return interp_to_transect
+
+
+
+def apply_time_range(globstr, time_range):
+    files = sorted(glob.glob(globstr))
+    matches = [re.search(r'\/[0-9].*.nc', f).group()
+               for f in files]
+    matches = [pd.to_datetime(m[1:-3]) for m in matches]
+
+    start = pd.to_datetime(time_range.start)
+    end = pd.to_datetime(time_range.stop)
+
+    keep_files = []
+    for f, m in zip(files, matches):
+        if m >= start and m <= end:
+            keep_files.append(f)
+
+    return keep_files
+
+
+def check_time_overlap(ds, time_range):
+    start = pd.to_datetime(time_range.start)
+    end = pd.to_datetime(time_range.stop)
+    time_min, time_max = ds.time[0].values, ds.time[-1].values
+    overlap = (time_max >= start) and (time_min <= end)
+    return overlap

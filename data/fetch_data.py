@@ -33,12 +33,6 @@ def fetch_wrapper(box, **kwargs):
         maximum_latitude=box['max_lat'],
         minimum_depth=box['min_dep'],
         maximum_depth=box['max_dep'],
-        force_download=True,
-        netcdf_compression_enabled=True,
-        # output_filename="data.nc",
-        overwrite_output_data=True,
-        overwrite_metadata_cache=False,
-        netcdf_compression_level=0,
         **kwargs
     )
     return out

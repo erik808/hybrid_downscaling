@@ -11,7 +11,7 @@ class DataManagerCMEMS(DataManagerBase):
     def create_training_data(self):
         pass
 
-    def load_uv_data(self):        
+    def load_uv_data(self):
         print(self.uv_data_files)
 
 
@@ -21,13 +21,6 @@ class DataManagerCMEMS(DataManagerBase):
 
 
 
-
-
-
-
-
-
-    
 
 dmgr_cmems = DataManagerCMEMS()
 print(dir(dmgr_cmems))

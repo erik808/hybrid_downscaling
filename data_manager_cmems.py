@@ -30,17 +30,23 @@ class DataManagerCMEMS(DataManagerBase):
         self.mask = self.crop(xr.open_dataset(self.bathy_file).mask)
         self.grid_HR = tools.build_grid(self.mask.latitude,
                                         self.mask.longitude)
-        breakpoint()
-        self.grid_LR = tools.build_grid(self.mask.latitude,
-                                        self.mask.longitude)
+
+        # TODO Create coarse grid
+        # breakpoint()
+        # self.grid_LR = tools.build_grid(self.mask.latitude,
+        #                                 self.mask.longitude)
 
     def create_coarse_uv_data(self):
         breakpoint()
+        uo_filtered = ndf.gaussian_filter(self.uv_ds.uo.data,
+                                          sigma=self.sigma)
+        vo_filtered = ndf.gaussian_filter(self.uv_ds.vo.data,
+                                          sigma=self.sigma)
         # - apply gaussian filter
         # - apply downsampling
         # - store results
 
-        pass  # # todo
+        pass  # # TODO
 
     def uv_preprocess(self, ds):
         """ select datavars and cropping """
@@ -59,3 +65,4 @@ class DataManagerCMEMS(DataManagerBase):
 dmgr_cmems = DataManagerCMEMS()
 dmgr_cmems.load_uv_data()
 dmgr_cmems.load_grid()
+dmgr_cmems.create_coarse_uv_data()

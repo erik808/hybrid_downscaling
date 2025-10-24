@@ -144,6 +144,34 @@ def build_grid(lat_arr, lon_arr):
     return grid
 
 
+def create_coarse_grid(
+        lats_HR,
+        lons_HR,
+        coarsening_factor,
+):
+
+    N_lat = len(lats_HR)
+    N_lon = len(lons_HR)
+    lat_start, lat_end = lats_HR[[0, -1]]
+    lon_start, lon_end = lons_HR[[0, -1]]
+    dlat = np.diff(lats_HR[[0, 1]])[0]
+    dlon = np.diff(lons_HR[[0, 1]])[0]
+
+    lats_LR = np.linspace(
+        lat_start + dlat / 2,
+        lat_end - dlat / 2,
+        int(N_lat / coarsening_factor))
+
+    lons_LR = np.linspace(
+        lon_start + dlon / 2,
+        lon_end - dlon / 2,
+        int(N_lon / coarsening_factor))
+
+    grid_LR = build_grid(lats_LR, lons_LR)
+
+    return grid_LR
+
+
 def regrid_to_transect(grid_orig,
                        lon_start,
                        lon_end,
@@ -168,7 +196,6 @@ def regrid_to_transect(grid_orig,
                                       method="bilinear",
                                       extrap_method="inverse_dist")
     return interp_to_transect
-
 
 
 def apply_time_range(globstr, time_range):

@@ -1,8 +1,10 @@
 import dask
+import numpy as np
 import dask_image.ndfilters as ndf
 import tools
 import importlib
 import xarray as xr
+from dask.diagnostics import ProgressBar
 from scipy.ndimage import gaussian_filter
 from data_manager_base import DataManagerBase
 
@@ -31,17 +33,46 @@ class DataManagerCMEMS(DataManagerBase):
         self.grid_HR = tools.build_grid(self.mask.latitude,
                                         self.mask.longitude)
 
-        # TODO Create coarse grid
-        # breakpoint()
+        self.grid_LR = create_coarse_grid(self.mask.latitude,
+                                          self.mask.longitude,
+                                          self.coarsening_factor)
+        import matplotlib.pyplot as plt
+        plt.figure()
+        plt.pcolormesh(self.grid_LR['lat']+self.grid_LR['lon'])
+        plt.pause(1)
+        plt.figure()
+        plt.pcolormesh(self.grid_HR['lat']+self.grid_HR['lon'])
+        plt.pause(1)
+        
+        breakpoint()
         # self.grid_LR = tools.build_grid(self.mask.latitude,
         #                                 self.mask.longitude)
 
     def create_coarse_uv_data(self):
+        uo_filtered = ndf.gaussian_filter(
+            self.uv_ds.uo.fillna(0.0).data,
+            sigma=self.sigma)
+
+        vo_filtered = ndf.gaussian_filter(
+            self.uv_ds.vo.fillna(0.0).data,
+            sigma=self.sigma)
+
+        import matplotlib.pyplot as plt
+        plt.close('all')
+        plt.figure()
+        a = plt.pcolormesh(uo_filtered[0,], vmin=-1, vmax=1)
+
+        plt.colorbar(a)
+        plt.figure()
+        a = plt.pcolormesh(self.uv_ds.uo.data[0,], vmin=-1, vmax=1)
+        plt.colorbar(a)
+
+        plt.figure()
+        a = plt.pcolormesh(self.mask.data[0,])
+        plt.pause(1)
+
         breakpoint()
-        uo_filtered = ndf.gaussian_filter(self.uv_ds.uo.data,
-                                          sigma=self.sigma)
-        vo_filtered = ndf.gaussian_filter(self.uv_ds.vo.data,
-                                          sigma=self.sigma)
+
         # - apply gaussian filter
         # - apply downsampling
         # - store results

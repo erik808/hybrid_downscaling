@@ -4,7 +4,8 @@
 compute_data = False
 scaling_range = (0, 1)
 split_factor = 4 / 5
-time_range = slice('2023-01-01', '2024-12-31')
+# time_range = slice('2023-01-01', '2024-12-31')
+time_range = slice('2023-01-01', '2023-03-31')
 
 # important directories and files
 data_dir = 'data'
@@ -23,6 +24,7 @@ coords_file =  \
 lat_crop = slice(3, -2)
 lon_crop = slice(0, -1)
 
-# method to 'destroy' small scales in both space and time
-coarsening_method = 'gaussian_filter'
+# Coarsening
+# parameters for Gaussian filter
 sigma = [1, 1.5, 1.5]
+coarsening_factor = 8

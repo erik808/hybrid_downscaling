@@ -33,20 +33,9 @@ class DataManagerCMEMS(DataManagerBase):
         self.grid_HR = tools.build_grid(self.mask.latitude,
                                         self.mask.longitude)
 
-        self.grid_LR = create_coarse_grid(self.mask.latitude,
-                                          self.mask.longitude,
-                                          self.coarsening_factor)
-        import matplotlib.pyplot as plt
-        plt.figure()
-        plt.pcolormesh(self.grid_LR['lat']+self.grid_LR['lon'])
-        plt.pause(1)
-        plt.figure()
-        plt.pcolormesh(self.grid_HR['lat']+self.grid_HR['lon'])
-        plt.pause(1)
-        
-        breakpoint()
-        # self.grid_LR = tools.build_grid(self.mask.latitude,
-        #                                 self.mask.longitude)
+        self.grid_LR = tools.create_coarse_grid(self.mask.latitude,
+                                                self.mask.longitude,
+                                                self.coarsening_factor)
 
     def create_coarse_uv_data(self):
         uo_filtered = ndf.gaussian_filter(

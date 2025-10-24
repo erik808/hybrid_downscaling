@@ -27,4 +27,4 @@ lon_crop = slice(0, -1)
 # Coarsening
 # parameters for Gaussian filter
 sigma = [1, 1.5, 1.5]
-coarsening_factor = 8
+coarsening_factor = 4

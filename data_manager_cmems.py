@@ -1,11 +1,8 @@
-import dask
-import numpy as np
 import dask_image.ndfilters as ndf
 import tools
+import xesmf as xe
 import importlib
 import xarray as xr
-from dask.diagnostics import ProgressBar
-from scipy.ndimage import gaussian_filter
 from data_manager_base import DataManagerBase
 
 importlib.reload(tools)
@@ -26,7 +23,14 @@ class DataManagerCMEMS(DataManagerBase):
             tools.apply_time_range(self.uv_data_files, self.time_range)
         self.uv_ds = xr.open_mfdataset(self.uv_data_files,
                                        parallel=False,
-                                       preprocess=self.uv_preprocess)
+                                       preprocess=self.uv_preprocess,
+                                       )
+
+        self.uv_ds = self.uv_ds.chunk({
+            'time': 192,
+            'latitude': -1,
+            'longitude': -1,
+        })
 
     def load_grid(self):
         self.mask = self.crop(xr.open_dataset(self.bathy_file).mask)
@@ -37,6 +41,10 @@ class DataManagerCMEMS(DataManagerBase):
                                                 self.mask.longitude,
                                                 self.coarsening_factor)
 
+        self.regridder = xe.Regridder(self.grid_HR, self.grid_LR,
+                                      "bilinear",
+                                      extrap_method="inverse_dist")
+
     def create_coarse_uv_data(self):
         uo_filtered = ndf.gaussian_filter(
             self.uv_ds.uo.fillna(0.0).data,
@@ -46,27 +54,23 @@ class DataManagerCMEMS(DataManagerBase):
             self.uv_ds.vo.fillna(0.0).data,
             sigma=self.sigma)
 
-        import matplotlib.pyplot as plt
-        plt.close('all')
-        plt.figure()
-        a = plt.pcolormesh(uo_filtered[0,], vmin=-1, vmax=1)
+        uo_LR = self.regridder(uo_filtered)
+        vo_LR = self.regridder(vo_filtered)
 
-        plt.colorbar(a)
-        plt.figure()
-        a = plt.pcolormesh(self.uv_ds.uo.data[0,], vmin=-1, vmax=1)
-        plt.colorbar(a)
+        da_list = [
+            xr.DataArray(data,
+                         dims=['time', 'latitude', 'longitude'],
+                         coords={'time': self.uv_ds.time,
+                                 'latitude': self.grid_LR['lat'][..., 0],
+                                 'longitude': self.grid_LR['lon'][0,],
+                                 },
+                         name=name,
+                         )
+            for data, name in zip([uo_LR, vo_LR], ['uo', 'vo'])]
 
-        plt.figure()
-        a = plt.pcolormesh(self.mask.data[0,])
-        plt.pause(1)
+        self.uv_ds_LR = xr.merge(da_list)
 
-        breakpoint()
-
-        # - apply gaussian filter
-        # - apply downsampling
-        # - store results
-
-        pass  # # TODO
+        tools.ds_to_netcdf(self.uv_ds_LR, self.coarse_data_files)
 
     def uv_preprocess(self, ds):
         """ select datavars and cropping """
@@ -86,3 +90,6 @@ dmgr_cmems = DataManagerCMEMS()
 dmgr_cmems.load_uv_data()
 dmgr_cmems.load_grid()
 dmgr_cmems.create_coarse_uv_data()
+
+# with ProgressBar():
+#     dmgr_cmems.uv_ds_LR.compute()

@@ -1,3 +1,4 @@
+import xarray as xr
 import re
 import pandas as pd
 import glob
@@ -7,6 +8,7 @@ import sys
 from datetime import datetime
 import importlib
 import xesmf as xe
+from dask.diagnostics import ProgressBar
 
 
 class CustomScaler():
@@ -221,3 +223,22 @@ def check_time_overlap(ds, time_range):
     time_min, time_max = ds.time[0].values, ds.time[-1].values
     overlap = (time_max >= start) and (time_min <= end)
     return overlap
+
+
+def ds_to_netcdf(ds, path):
+    """ splits a ds up in monthly files and saves to <path>"""
+    datasets = []
+    keys = []
+    # def export_coarse_data(ds):
+    for year_key, ds_year in ds.groupby('time.year'):
+        for month_key, ds_month in ds_year.groupby('time.month'):
+            keys.append([year_key, month_key])
+            datasets.append(ds_month)
+
+    paths = [f"{path}/{y:04d}-{m:02d}.nc" for y, m in keys]
+    options = {"zlib": True, "complevel": 5}
+
+    encoding = {var : options for var in list(ds.keys())}
+
+    with ProgressBar():
+        xr.save_mfdataset(datasets, paths, encoding=encoding)

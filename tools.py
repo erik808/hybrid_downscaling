@@ -225,8 +225,32 @@ def check_time_overlap(ds, time_range):
     return overlap
 
 
-def ds_to_netcdf(ds, path):
+def ds_to_netcdf(ds, path, prefix=""):
     """ splits a ds up in monthly files and saves to <path>"""
+
+    keys, datasets = nested_groupby(ds)
+    paths = [f"{path}/{prefix}{y:04d}-{m:02d}.nc" for y, m in keys]
+    options = {"zlib": True, "complevel": 5}
+
+    keys, datasets = nested_groupby(ds)
+    paths = coarse_data_paths(ds, path, prefix, keys=keys)
+
+    encoding = {var : options for var in list(ds.keys())}
+
+    with ProgressBar():
+        xr.save_mfdataset(datasets, paths, encoding=encoding)
+
+    return paths
+
+
+def coarse_data_paths(ds, path, prefix="", keys=None):
+    if keys is None:
+        keys, _ = nested_groupby(ds)
+    paths = [f"{path}/{prefix}{y:04d}-{m:02d}.nc" for y, m in keys]
+    return paths
+
+
+def nested_groupby(ds):
     datasets = []
     keys = []
     # def export_coarse_data(ds):
@@ -235,10 +259,4 @@ def ds_to_netcdf(ds, path):
             keys.append([year_key, month_key])
             datasets.append(ds_month)
 
-    paths = [f"{path}/{y:04d}-{m:02d}.nc" for y, m in keys]
-    options = {"zlib": True, "complevel": 5}
-
-    encoding = {var : options for var in list(ds.keys())}
-
-    with ProgressBar():
-        xr.save_mfdataset(datasets, paths, encoding=encoding)
+    return keys, datasets

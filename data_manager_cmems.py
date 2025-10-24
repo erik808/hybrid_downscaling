@@ -1,3 +1,5 @@
+import numpy as np
+import os
 import dask_image.ndfilters as ndf
 import tools
 import xesmf as xe
@@ -17,16 +19,17 @@ class DataManagerCMEMS(DataManagerBase):
     def create_training_data(self):
         pass
 
-    def load_uv_data(self):
+    def load_HR_data(self):
         # restrict to chosen time range
-        self.uv_data_files = \
-            tools.apply_time_range(self.uv_data_files, self.time_range)
-        self.uv_ds = xr.open_mfdataset(self.uv_data_files,
-                                       parallel=False,
-                                       preprocess=self.uv_preprocess,
+        self.data_files = \
+            tools.apply_time_range(self.data_files, self.time_range)
+
+        self.ds_HR = xr.open_mfdataset(self.data_files,
+                                       parallel=True,
+                                       preprocess=self.preprocess,
                                        )
 
-        self.uv_ds = self.uv_ds.chunk({
+        self.ds_HR = self.ds_HR.chunk({
             'time': 192,
             'latitude': -1,
             'longitude': -1,
@@ -41,40 +44,62 @@ class DataManagerCMEMS(DataManagerBase):
                                                 self.mask.longitude,
                                                 self.coarsening_factor)
 
-        self.regridder = xe.Regridder(self.grid_HR, self.grid_LR,
+        self.regridder = xe.Regridder(self.grid_HR,
+                                      self.grid_LR,
                                       "bilinear",
                                       extrap_method="inverse_dist")
 
-    def create_coarse_uv_data(self):
-        uo_filtered = ndf.gaussian_filter(
-            self.uv_ds.uo.fillna(0.0).data,
-            sigma=self.sigma)
+    def load_LR_data(self, force_rebuild=False):
 
-        vo_filtered = ndf.gaussian_filter(
-            self.uv_ds.vo.fillna(0.0).data,
-            sigma=self.sigma)
+        paths = tools.coarse_data_paths(self.ds_HR,
+                                        path=self.coarse_data_files,
+                                        prefix=self.coarse_data_prefix,
+                                        )
 
-        uo_LR = self.regridder(uo_filtered)
-        vo_LR = self.regridder(vo_filtered)
+        if not force_rebuild and np.all([os.path.exists(p) for p in paths]):
+            print('Loading coarse data')
+
+            self.ds_LR = xr.open_mfdataset(paths,
+                                           parallel=True,
+                                           preprocess=self.preprocess,
+                                           )
+        else:
+            print('Create and export coarse data')
+            self.ds_LR = self.create_LR_data(export=True)
+
+    def create_LR_data(self, export=True):
+
+        data_LR = []
+        for key in self.data_vars:
+            filtered = ndf.gaussian_filter(
+                self.ds_HR[key].fillna(0.0).data,
+                sigma=self.sigma)
+            data_LR.append(self.regridder(filtered))
 
         da_list = [
             xr.DataArray(data,
                          dims=['time', 'latitude', 'longitude'],
-                         coords={'time': self.uv_ds.time,
+                         coords={'time': self.ds_HR.time,
                                  'latitude': self.grid_LR['lat'][..., 0],
                                  'longitude': self.grid_LR['lon'][0,],
                                  },
                          name=name,
+                         attrs=self.ds_HR[name].attrs,
                          )
-            for data, name in zip([uo_LR, vo_LR], ['uo', 'vo'])]
+            for data, name in zip(data_LR, self.data_vars)]
 
-        self.uv_ds_LR = xr.merge(da_list)
+        self.ds_LR = xr.merge(da_list)
 
-        tools.ds_to_netcdf(self.uv_ds_LR, self.coarse_data_files)
+        if export:
+            tools.ds_to_netcdf(self.ds_LR,
+                               path=self.coarse_data_files,
+                               prefix=self.coarse_data_prefix,
+                               )
+        return self.ds_HR_LR
 
-    def uv_preprocess(self, ds):
+    def preprocess(self, ds):
         """ select datavars and cropping """
-        ds_out = ds[['uo', 'vo']]
+        ds_out = ds[self.data_vars]
         ds_out = ds_out.isel(
             latitude=self.lat_crop,
             longitude=self.lon_crop,
@@ -87,9 +112,6 @@ class DataManagerCMEMS(DataManagerBase):
 
 
 dmgr_cmems = DataManagerCMEMS()
-dmgr_cmems.load_uv_data()
+dmgr_cmems.load_HR_data()
 dmgr_cmems.load_grid()
-dmgr_cmems.create_coarse_uv_data()
-
-# with ProgressBar():
-#     dmgr_cmems.uv_ds_LR.compute()
+dmgr_cmems.load_LR_data()

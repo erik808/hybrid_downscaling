@@ -18,16 +18,28 @@ class DataManagerCMEMS(DataManagerBase):
         super().__init__()
         tools.load_config(self, config_name='data_config_cmems')
         self.load_grid()
+
         try:
             self.load_scalers()
         except Exception as e:
             print('No scalers available', e)
+
+        # create_training_data needs to be called
+        self.ready = False
 
     def create_training_data(self):
         print('prepare HR data')
         self.load_HR_data()
         print('prepare LR data')
         self.load_LR_data()
+        self.create_ranges()
+        self.ready = True
+
+    def create_ranges(self):
+        T = len(self.ds_LR.time)
+        self.split_index = int(self.split_factor * T)
+        self.train_range = slice(0, self.split_index)
+        self.test_range = slice(self.split_index, T)
 
     def load_HR_data(self):
         # restrict to chosen time range

@@ -1,5 +1,6 @@
 import numpy as np
 import os
+import dill
 import dask_image.ndfilters as ndf
 import tools
 import xesmf as xe
@@ -104,28 +105,19 @@ class DataManagerCMEMS(DataManagerBase):
                                )
         return self.ds_HR_LR
 
-    def create_scalers(self):
+    def create_scalers(self, export=True):
 
         scalers = {}
         scalers['HR'] = tools.create_scaler(self.ds_HR,
                                             self.scaling_range)
         scalers['LR'] = tools.create_scaler(self.ds_LR,
                                             self.scaling_range)
-        breakpoint()
 
-        # da = self.ds_LR.to_array().transpose('time',
-        #                                      'latitude',
-        #                                      'longitude',
-        #                                      'variable')[0,].data.compute()
+        if export:
+            with open(self.scalers_file, 'wb') as file:
+                dill.dump(scalers, file)
 
-        # da_sc = scaler.transform(da.reshape(1, -1)).reshape(da.shape)
-
-        # import matplotlib.pyplot as plt
-        # plt.close('all')
-        # plt.figure()
-        # a = plt.imshow(da_sc[..., 1])
-        # plt.colorbar(a)
-        # plt.pause(1)
+        return scalers
 
     def preprocess(self, ds):
         """ select datavars and cropping """

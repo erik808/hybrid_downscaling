@@ -1,5 +1,6 @@
 import numpy as np
 import keras
+import tools
 import data_manager_cmes
 import data_manager_swot
 from importlib import reload
@@ -89,8 +90,8 @@ class DataGenerator(keras.utils.PyDataset):
         low  = index * self.batch_size
         high = np.min([low + self.batch_size, self.n])
         inds = self.indices[low:high]
-        batch_x = create_lookback(inds, self.x, self.lookback)
-        batch_y = create_lookback(inds, self.y, self.lookback)
+        batch_x = tools.create_lookback(inds, self.x, self.lookback)
+        batch_y = tools.create_lookback(inds, self.y, self.lookback)
         # batch_y = [y[inds,] for y in self.y]
         return (batch_x, batch_y)
 
@@ -102,15 +103,3 @@ class DataGenerator(keras.utils.PyDataset):
         self.__do_shuffle()
 
 
-def create_lookback(inds, data, lookback, axis=1):
-    batch = list()
-
-    for var in data:
-        lb_fields = list()  # lookback fields
-        for lb in range(lookback + 1):
-            lb_field = var[inds - lb,]
-            lb_fields.append(lb_field)
-
-        batch.append(np.stack(lb_fields, axis=axis))
-
-    return batch

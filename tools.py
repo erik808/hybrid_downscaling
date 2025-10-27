@@ -297,3 +297,17 @@ def create_scaler(ds, scaling_range):
         scaler.partial_fit(chunk)
 
     return scaler
+
+
+def create_lookback(inds, data, lookback, axis=1):
+    batch = list()
+
+    for var in data:
+        lb_fields = list()  # lookback fields
+        for lb in range(lookback + 1):
+            lb_field = var[inds - lb,]
+            lb_fields.append(lb_field)
+
+        batch.append(np.stack(lb_fields, axis=axis))
+
+    return batch

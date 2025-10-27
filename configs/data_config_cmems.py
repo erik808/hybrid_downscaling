@@ -21,8 +21,6 @@ bathy_file = \
 coords_file =  \
     (f'{data_dir}/cmems_mod_nws_phy_anfc_0.027deg-3D_'
      f'static_e1t-e2t-e3t_4.22E-7.78E_56.81N-58.69N_0.49-643.57m.nc')
-scalers_file =  \
-    (f'{data_dir}/scalers.dill')
 
 # keys to use
 data_vars = ['uo', 'vo', 'zos']
@@ -38,3 +36,8 @@ coarsening_factor = 4
 coarse_data_prefix = \
     (f"data_LR_r{coarsening_factor}_sigm"
      f"{str(sigma).replace(', ','_')}_")
+
+# scalers
+scalers_file =  \
+    (f'{data_dir}/scalers_{time_range.start}_{time_range.stop}_'
+     f'{coarse_data_prefix}.dill')

@@ -17,9 +17,17 @@ class DataManagerCMEMS(DataManagerBase):
     def __init__(self):
         super().__init__()
         tools.load_config(self, config_name='data_config_cmems')
+        self.load_grid()
+        try:
+            self.load_scalers()
+        except Exception as e:
+            print('No scalers available', e)
 
     def create_training_data(self):
-        pass
+        print('prepare HR data')
+        self.load_HR_data()
+        print('prepare LR data')
+        self.load_LR_data()
 
     def load_HR_data(self):
         # restrict to chosen time range
@@ -28,7 +36,10 @@ class DataManagerCMEMS(DataManagerBase):
 
         self.ds_HR = xr.open_mfdataset(self.data_files,
                                        parallel=True,
+                                       combine="nested",
+                                       concat_dim="time",
                                        preprocess=self.preprocess,
+                                       chunks={},
                                        )
 
         self.ds_HR = self.ds_HR.chunk({
@@ -59,8 +70,6 @@ class DataManagerCMEMS(DataManagerBase):
                                         )
 
         if not force_rebuild and np.all([os.path.exists(p) for p in paths]):
-            print('Loading coarse data')
-
             self.ds_LR = xr.open_mfdataset(paths,
                                            parallel=True,
                                            )
@@ -106,7 +115,7 @@ class DataManagerCMEMS(DataManagerBase):
         return self.ds_HR_LR
 
     def create_scalers(self, export=True):
-
+        """for the HR set (2 years) this should take about 5 minutes"""
         scalers = {}
         scalers['HR'] = tools.create_scaler(self.ds_HR,
                                             self.scaling_range)
@@ -118,6 +127,11 @@ class DataManagerCMEMS(DataManagerBase):
                 dill.dump(scalers, file)
 
         return scalers
+
+    def load_scalers(self):
+        with open(self.scalers_file, 'rb') as file:
+            self.scalers = dill.load(file)
+        return self.scalers
 
     def preprocess(self, ds):
         """ select datavars and cropping """
@@ -131,10 +145,3 @@ class DataManagerCMEMS(DataManagerBase):
     def crop(self, input_field):
         """crop fields to 64 x 128 (assuming we're getting 69 x 129)"""
         return input_field[..., self.lat_crop, self.lon_crop]
-
-
-dmgr_cmems = DataManagerCMEMS()
-dmgr_cmems.load_HR_data()
-dmgr_cmems.load_grid()
-dmgr_cmems.load_LR_data(force_rebuild=False)
-dmgr_cmems.create_scalers()

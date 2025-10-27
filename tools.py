@@ -1,4 +1,5 @@
 import xarray as xr
+import keras
 import re
 import pandas as pd
 import glob
@@ -9,6 +10,7 @@ from datetime import datetime
 import importlib
 import xesmf as xe
 from dask.diagnostics import ProgressBar
+from sklearn.preprocessing import MinMaxScaler
 
 
 class CustomScaler():
@@ -260,3 +262,38 @@ def nested_groupby(ds):
             datasets.append(ds_month)
 
     return keys, datasets
+
+
+def create_scaler(ds, scaling_range):
+    """we do a partial fit per chunk to avoid loading everything in memory
+
+    """
+
+    da = ds.to_array()
+    scaler = MinMaxScaler(feature_range=scaling_range)
+
+    # make sure only time is chunked
+    N_vars = len(da.variable)
+    da = da.chunk({'variable': N_vars})
+
+    # correct ordering
+    da = da.transpose('time',
+                      'latitude',
+                      'longitude',
+                      'variable')
+
+    # here we do not want nans
+    da = da.fillna(0.0)
+
+    print('Create chunks')
+    chunks = da.data.to_delayed().ravel()
+
+    pb_i = keras.utils.Progbar(len(chunks), interval=0.5)
+    print('Creating scaler')
+    for chunk in chunks:
+        pb_i.add(1)
+        chunk = chunk.compute()
+        chunk = chunk.reshape(chunk.shape[0], -1)
+        scaler.partial_fit(chunk)
+
+    return scaler

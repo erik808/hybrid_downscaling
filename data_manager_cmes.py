@@ -356,7 +356,7 @@ class DataManagerCMEMS(DataManagerBase):
         # create a torch mask
         params['mask'] = torch.tensor(da_mask.values)[None, :, :, None]
 
-        # do the assembling into channels here
+        # do the assembling into channels here  ## -> to datagenerator
         data_HR = np.stack([da_HR['uo'].values,
                             da_HR['vo'].values], axis=3)
         data_LR = np.stack([da_LR['uo'].values,

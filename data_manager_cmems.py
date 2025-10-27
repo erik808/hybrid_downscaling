@@ -5,6 +5,7 @@ import tools
 import xesmf as xe
 import importlib
 import xarray as xr
+
 from data_manager_base import DataManagerBase
 
 importlib.reload(tools)
@@ -30,7 +31,7 @@ class DataManagerCMEMS(DataManagerBase):
                                        )
 
         self.ds_HR = self.ds_HR.chunk({
-            'time': 192,
+            'time': 4 * 24 * 14,
             'latitude': -1,
             'longitude': -1,
         })
@@ -61,7 +62,6 @@ class DataManagerCMEMS(DataManagerBase):
 
             self.ds_LR = xr.open_mfdataset(paths,
                                            parallel=True,
-                                           preprocess=self.preprocess,
                                            )
         else:
             print('Create and export coarse data')
@@ -90,12 +90,42 @@ class DataManagerCMEMS(DataManagerBase):
 
         self.ds_LR = xr.merge(da_list)
 
+        # chunk only in time
+        self.ds_LR = self.ds_LR.chunk({
+            'time': 2976,
+            'latitude': -1,
+            'longitude': -1,
+        })
+
         if export:
             tools.ds_to_netcdf(self.ds_LR,
                                path=self.coarse_data_files,
                                prefix=self.coarse_data_prefix,
                                )
         return self.ds_HR_LR
+
+    def create_scalers(self):
+
+        scalers = {}
+        scalers['HR'] = tools.create_scaler(self.ds_HR,
+                                            self.scaling_range)
+        scalers['LR'] = tools.create_scaler(self.ds_LR,
+                                            self.scaling_range)
+        breakpoint()
+
+        # da = self.ds_LR.to_array().transpose('time',
+        #                                      'latitude',
+        #                                      'longitude',
+        #                                      'variable')[0,].data.compute()
+
+        # da_sc = scaler.transform(da.reshape(1, -1)).reshape(da.shape)
+
+        # import matplotlib.pyplot as plt
+        # plt.close('all')
+        # plt.figure()
+        # a = plt.imshow(da_sc[..., 1])
+        # plt.colorbar(a)
+        # plt.pause(1)
 
     def preprocess(self, ds):
         """ select datavars and cropping """
@@ -114,4 +144,5 @@ class DataManagerCMEMS(DataManagerBase):
 dmgr_cmems = DataManagerCMEMS()
 dmgr_cmems.load_HR_data()
 dmgr_cmems.load_grid()
-dmgr_cmems.load_LR_data()
+dmgr_cmems.load_LR_data(force_rebuild=False)
+dmgr_cmems.create_scalers()

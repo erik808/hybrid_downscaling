@@ -101,5 +101,3 @@ class DataGenerator(keras.utils.PyDataset):
 
     def on_epoch_end(self):
         self.__do_shuffle()
-
-

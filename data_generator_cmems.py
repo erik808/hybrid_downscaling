@@ -74,8 +74,6 @@ class DataGeneratorCMEMS(keras.utils.PyDataset):
 
     def create_batch(self, inds, ds, lookback, scaler, axis=1):
 
-        print('create batch')
-        tic = tm.time()
         # create indices including lookback
         lb_inds = np.stack([inds - i for i in range(lookback)], -1)
 
@@ -115,9 +113,6 @@ class DataGeneratorCMEMS(keras.utils.PyDataset):
 
         time = ds.time[lb_inds.flatten()].data.reshape(lb_inds.shape)
 
-        toc = tm.time()
-        print(f'create batch done {toc-tic}')
-
         return darr_stacked.rechunk(darr_stacked.shape), time
 
     def __do_shuffle(self):
@@ -135,7 +130,10 @@ dgen_cmems = DataGeneratorCMEMS(dm=dmgr_cmems,
                                 batch_size=4,
                                 lookback=4,
                                 mode='train',
-                                shuffle=True)
+                                shuffle=True,
+                                use_multiprocessing=True,
+                                workers=4,
+                                max_queue_size=10)
 
 bx, by = dgen_cmems.__getitem__(0)
 bx, by = dgen_cmems.__getitem__(1)

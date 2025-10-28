@@ -11,10 +11,10 @@ box_Channel['max_dep'] = 155.85072326660156
 
 # box for the Norwegian coastal current test area
 box_NwCC = {}
-box_NwCC['min_lon'] = 4.22
-box_NwCC['max_lon'] = 7.78
-box_NwCC['min_lat'] = 56.81
-box_NwCC['max_lat'] = 58.69
+box_NwCC['min_lon'] = 4.2
+box_NwCC['max_lon'] = 7.8
+box_NwCC['min_lat'] = 56.8
+box_NwCC['max_lat'] = 58.7
 box_NwCC['min_dep'] = 0.4940253794193268
 box_NwCC['max_dep'] = 643.5668334960938
 
@@ -23,7 +23,6 @@ time_end = "2025-09-30T23:00:00"
 
 fetch = 'bathy'
 print(f'fetch {fetch}')
-
 
 def fetch_wrapper(box, **kwargs):
     out = cm.subset(

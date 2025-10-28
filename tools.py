@@ -204,19 +204,22 @@ def regrid_to_transect(grid_orig,
 
 def apply_time_range(globstr, time_range):
     files = sorted(glob.glob(globstr))
-    matches = [re.search(r'\/[0-9].*.nc', f).group()
-               for f in files]
-    matches = [pd.to_datetime(m[1:-3]) for m in matches]
+    if len(files) == 1:
+        return globstr
+    else:
+        matches = [re.search(r'\/[0-9].*.nc', f).group()
+                   for f in files]
+        matches = [pd.to_datetime(m[1:-3]) for m in matches]
 
-    start = pd.to_datetime(time_range.start)
-    end = pd.to_datetime(time_range.stop)
+        start = pd.to_datetime(time_range.start)
+        end = pd.to_datetime(time_range.stop)
 
-    keep_files = []
-    for f, m in zip(files, matches):
-        if m >= start and m <= end:
-            keep_files.append(f)
+        keep_files = []
+        for f, m in zip(files, matches):
+            if m >= start and m <= end:
+                keep_files.append(f)
 
-    return keep_files
+        return keep_files
 
 
 def check_time_overlap(ds, time_range):

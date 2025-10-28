@@ -1,4 +1,3 @@
-import numpy as np
 import os
 import dill
 import dask_image.ndfilters as ndf
@@ -6,7 +5,7 @@ import tools
 import xesmf as xe
 import importlib
 import xarray as xr
-
+from dask.diagnostics import ProgressBar
 from data_manager_base import DataManagerBase
 
 importlib.reload(tools)
@@ -27,11 +26,11 @@ class DataManagerCMEMS(DataManagerBase):
         # create_training_data needs to be called
         self.ready = False
 
-    def create_training_data(self):
-        print('prepare HR data')
+    def create_training_data(self, force_rebuild=False):
+        print('load HR data')
         self.load_HR_data()
-        print('prepare LR data')
-        self.load_LR_data()
+        print('load LR data')
+        self.load_LR_data(force_rebuild=force_rebuild)
         self.create_ranges()
         self.ready = True
 
@@ -42,23 +41,9 @@ class DataManagerCMEMS(DataManagerBase):
         self.test_range = slice(self.split_index, T)
 
     def load_HR_data(self):
-        # restrict to chosen time range
-        self.data_files = \
-            tools.apply_time_range(self.data_files, self.time_range)
-
-        self.ds_HR = xr.open_mfdataset(self.data_files,
-                                       parallel=True,
-                                       combine="nested",
-                                       concat_dim="time",
-                                       preprocess=self.preprocess,
-                                       chunks={},
-                                       )
-
-        self.ds_HR = self.ds_HR.chunk({
-            'time': 4 * 24 * 14,
-            'latitude': -1,
-            'longitude': -1,
-        })
+        self.ds_HR = xr.open_zarr(self.data_files,
+                                  consolidated=True)
+        self.ds_HR = self.process_ds(self.ds_HR)
 
     def load_grid(self):
         self.mask = self.crop(xr.open_dataset(self.bathy_file).mask)
@@ -76,15 +61,9 @@ class DataManagerCMEMS(DataManagerBase):
 
     def load_LR_data(self, force_rebuild=False):
 
-        paths = tools.coarse_data_paths(self.ds_HR,
-                                        path=self.coarse_data_files,
-                                        prefix=self.coarse_data_prefix,
-                                        )
-
-        if not force_rebuild and np.all([os.path.exists(p) for p in paths]):
-            self.ds_LR = xr.open_mfdataset(paths,
-                                           parallel=True,
-                                           )
+        path = self.coarse_data_file
+        if not force_rebuild and os.path.exists(path):
+            self.ds_LR = xr.open_zarr(path)
         else:
             print('Create and export coarse data')
             self.ds_LR = self.create_LR_data(export=True)
@@ -114,17 +93,20 @@ class DataManagerCMEMS(DataManagerBase):
 
         # chunk only in time
         self.ds_LR = self.ds_LR.chunk({
-            'time': 2976,
+            'time': 64,
             'latitude': -1,
             'longitude': -1,
         })
 
         if export:
-            tools.ds_to_netcdf(self.ds_LR,
-                               path=self.coarse_data_files,
-                               prefix=self.coarse_data_prefix,
-                               )
-        return self.ds_HR_LR
+            encoding = {var: {"compressor": None}
+                        for var in self.ds_LR.data_vars}
+            with ProgressBar():
+                self.ds_LR.to_zarr(self.coarse_data_file,
+                                   encoding=encoding,
+                                   mode='w')
+
+        return self.ds_LR
 
     def create_scalers(self, export=True):
         """for the HR set (2 years) this should take about 5 minutes"""
@@ -145,13 +127,14 @@ class DataManagerCMEMS(DataManagerBase):
             self.scalers = dill.load(file)
         return self.scalers
 
-    def preprocess(self, ds):
+    def process_ds(self, ds):
         """ select datavars and cropping """
         ds_out = ds[self.data_vars]
         ds_out = ds_out.isel(
             latitude=self.lat_crop,
             longitude=self.lon_crop,
         )
+        ds_out = ds_out.sel(time=self.time_range)
         return ds_out
 
     def crop(self, input_field):

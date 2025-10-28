@@ -16,8 +16,17 @@ cmd = f'mkdir -p {basename}'
 print(cmd)
 os.system(cmd)
 
-ds = xr.open_dataset(filename, chunks={'time': 288})  # 3 days
-ds.to_zarr(f'{basename}/data.zarr')
+ds = xr.open_dataset(filename, chunks={'time': 32,
+                                       'latitude': -1,
+                                       'longitude': -1,
+                                       })
+
+encoding = {var: {"compressor": None} for var in ds.data_vars}
+with ProgressBar():
+    ds.to_zarr(f'{basename}/data.zarr',
+               mode='w',
+               encoding=encoding,
+               consolidated=True)
 
 # def nested_groupby(ds):
 #     datasets = []

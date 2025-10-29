@@ -17,11 +17,7 @@ class DataManagerCMEMS(DataManagerBase):
         super().__init__()
         tools.load_config(self, config_name='data_config_cmems')
         self.load_grid()
-
-        try:
-            self.load_scalers()
-        except Exception as e:
-            print('No scalers available', e)
+        self.load_scalers()
 
         # create_training_data needs to be called
         self.ready = False
@@ -123,8 +119,12 @@ class DataManagerCMEMS(DataManagerBase):
         return scalers
 
     def load_scalers(self):
-        with open(self.scalers_file, 'rb') as file:
-            self.scalers = dill.load(file)
+        self.scalers = None
+        try:
+            with open(self.scalers_file, 'rb') as file:
+                self.scalers = dill.load(file)
+        except Exception as e:
+            print('No scalers available', e)
         return self.scalers
 
     def process_ds(self, ds):

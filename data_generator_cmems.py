@@ -1,7 +1,6 @@
 import dask.array as da
 import data_manager_cmems
 import importlib
-import time as tm
 import keras
 import numpy as np
 
@@ -92,6 +91,7 @@ class DataGeneratorCMEMS(keras.utils.PyDataset):
                               'longitude',
                               'variable').data
 
+        # apply scaling
         darr_shape = darr.shape
         darr = darr.reshape(darr_shape[0], -1)
         darr = scaler.transform(darr).reshape(darr_shape)
@@ -121,20 +121,3 @@ class DataGeneratorCMEMS(keras.utils.PyDataset):
 
     def on_epoch_end(self):
         self.__do_shuffle()
-
-
-dmgr_cmems = data_manager_cmems.DataManagerCMEMS()
-dmgr_cmems.create_training_data(force_rebuild=False)
-
-dgen_cmems = DataGeneratorCMEMS(dm=dmgr_cmems,
-                                batch_size=4,
-                                lookback=4,
-                                mode='train',
-                                shuffle=True,
-                                use_multiprocessing=True,
-                                workers=4,
-                                max_queue_size=10)
-
-bx, by = dgen_cmems.__getitem__(0)
-bx, by = dgen_cmems.__getitem__(1)
-bx, by = dgen_cmems.__getitem__(2)

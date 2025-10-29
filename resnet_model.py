@@ -1,14 +1,9 @@
+import torch
 import keras
 from keras import layers
 from keras import ops
 import tools
 import numpy as np
-import importlib
-import data_manager_cmems
-import data_generator_cmems
-
-importlib.reload(data_manager_cmems)
-importlib.reload(data_generator_cmems)
 
 
 class ResNet(keras.Model):
@@ -35,7 +30,20 @@ class ResNet(keras.Model):
             np.asarray(grid_HR_shape) / np.asarray(grid_LR_shape)
         assert coarsening[0] == coarsening[1], "unequal lat/lon coarsening"
         self.coarsening_factor = coarsening[0]
+
         self.sub_pixel_blocks = int(np.log2(self.coarsening_factor))
+
+        self.compiler = keras.optimizers.Adam(
+            learning_rate=self.learning_rate)
+
+        self.loss_fn = keras.losses.MeanSquaredError()
+        self.loss_tracker = keras.metrics.Mean(name="loss")
+
+    @property
+    def metrics(self):
+        return [
+            self.loss_tracker,
+        ]
 
     def build_model(self):
         inputs, outputs = self.builder()
@@ -47,11 +55,37 @@ class ResNet(keras.Model):
         self.build(self.test_x)
         return self.model
 
+    def summary(self):
+        return self.model.summary()
+
     def call(self, inputs, training=True):
         return self.model(inputs, training=training)
 
     def train_step(self, data, training=True):
-        pass
+        x, y = data
+        mask = x['meta']['mask'][0,]
+        rows, cols = ops.where(mask==1)
+        if training:
+            self.zero_grad()
+        z = self({'LR_data': x['LR_data']}, training=training)
+        y = y['HR_data'][:, 0, rows, cols, :]
+        z = z[:, rows, cols, :]
+        loss = self.loss_fn(z, y)
+
+        if training:
+            loss.backward()
+            trainable_weights = [v for v in self.trainable_weights]
+            gradients = [v.value.grad for v in trainable_weights]
+
+            # update weights
+            with torch.no_grad():
+                self.optimizer.apply(gradients, trainable_weights)
+
+        for metric in self.metrics:
+            if metric.name == "loss":
+                metric.update_state(loss)
+
+        return {m.name: m.result() for m in self.metrics}
 
     def test_step(self, data):
         return self.train_step(data, training=False)
@@ -66,30 +100,25 @@ class ResNet(keras.Model):
             ops.split(
                 inputs, self.input_shape[0], axis=1)[0])
 
-        x  = layers.Conv2D(filters=64,
-                           kernel_size=9,
-                           padding='same',
-                           activation=None,
-                           )(input_k)
+        y = InputTransform(filters=64,
+                           kernel_size=9)(input_k)
 
-        y = layers.PReLU()(x)
-        # skip = y  # todo
+        # TODO # skip = y
 
         for rs_block in range(self.residual_blocks):
-            y = self.residual_block(
-                y,
+            y = ResidualBlock(
                 filters=64,
                 kernel_size=3,
-            )
+            )(y)
 
         # TODO # missing here: Conv - BN - Add
 
         for sp_block in range(self.sub_pixel_blocks):
-            y = self.sub_pixel_convolution(
-                y,
+            y = SubPixelConv(
                 filters_out=64,
-                scale=2
-            )
+                kernel_size=3,
+                scale=2,
+            )(y)
 
         outputs = layers.Conv2D(filters=3,
                                 kernel_size=9,
@@ -100,59 +129,107 @@ class ResNet(keras.Model):
                                 activation='sigmoid',
                                 )(y)
 
-        breakpoint()
+        # TODO # masking?
+
         return inputs, outputs
 
-    def residual_block(self, inputs, filters, kernel_size):
-        # a residual block (Ledig et al. 2017)
+
+class InputTransform(layers.Layer):
+    def __init__(
+            self,
+            filters,
+            kernel_size,
+            **kwargs,
+    ):
+        super().__init__(**kwargs)
+        self.filters = filters
+        self.kernel_size = kernel_size
+
+    def build(self, input_shape):
+        self.conv = layers.Conv2D(filters=self.filters,
+                                  kernel_size=self.kernel_size,
+                                  padding='same',
+                                  activation=None,
+                                  )
+        self.actv = layers.PReLU()
+
+    def call(self, inputs):
+        x = self.conv(inputs)
+        return self.actv(x)
+
+
+class ResidualBlock(layers.Layer):
+    """ a residual block (Ledig et al. 2017) """
+    def __init__(
+            self,
+            filters,
+            kernel_size,
+            **kwargs,
+    ):
+        super().__init__(**kwargs)
+        self.filters = filters
+        self.kernel_size = kernel_size
+
+    def build(self, input_shape):
+        self.conv2d_1 = layers.Conv2D(filters=self.filters,
+                                      kernel_size=self.kernel_size,
+                                      padding='same',
+                                      activation=None,
+                                      )
+        self.BN_1 = layers.BatchNormalization()
+        self.actv_1 = layers.PReLU()
+        self.conv2d_2 = layers.Conv2D(filters=self.filters,
+                                      kernel_size=self.kernel_size,
+                                      padding='same',
+                                      activation=None,
+                                      )
+        self.BN_2 = layers.BatchNormalization()
+        self.actv_2 = layers.PReLU()
+        self.add = layers.Add()
+
+    def call(self, inputs):
         skip = inputs
-        x0 = layers.Conv2D(filters=filters,
-                           kernel_size=kernel_size,
-                           padding='same',
-                           activation=None,
-                           )(inputs)
+        x = self.conv2d_1(inputs)
+        x = self.BN_1(x)
+        x = self.actv_1(x)
+        x = self.conv2d_2(x)
+        x = self.BN_2(x)
+        x = self.actv_2(x)
+        return self.add([x, skip])
 
-        x1 = layers.BatchNormalization()(x0)
-        x2 = layers.PReLU()(x1)
-        x3 = layers.Conv2D(filters=filters,
-                           kernel_size=kernel_size,
-                           padding='same',
-                           activation=None,
-                           )(x2)
 
-        x4 = layers.BatchNormalization()(x3)
-        x5 = layers.PReLU()(x4)
-        return layers.Add()([x5, skip])
+class SubPixelConv(layers.Layer):
+    """ pixel shuffling block (Shi et al. 2016) """
+    def __init__(
+            self,
+            filters_out,
+            kernel_size,
+            scale,
+            **kwargs,
+    ):
+        super().__init__(**kwargs)
+        self.filters_out = filters_out
+        self.kernel_size = kernel_size
+        self.scale = scale
 
-    def sub_pixel_convolution(self, inputs, filters_out=64, scale=2):
-        # pixel shuffling block (Shi et al. 2016)
-        s0 = layers.Conv2D(
-            filters=filters_out * scale**2,
-            kernel_size=3,
+    def build(self, input_shape):
+        self.conv2d = layers.Conv2D(
+            filters=self.filters_out * self.scale**2,
+            kernel_size=self.kernel_size,
             padding='same',
             activation=None,
-        )(inputs)
+        )
+        _, M, N, C = input_shape
+        self.reshape1 = layers.Reshape(
+            (M, N, self.scale, self.scale, self.filters_out))
+        self.permute = layers.Permute((1, 3, 2, 4, 5))
+        self.reshape2 = layers.Reshape(
+            (M * self.scale, N * self.scale, self.filters_out))
+        self.actv = layers.PReLU()
 
-        _, M, N, C = s0.shape
-        s1 = layers.Reshape((M, N, scale, scale, filters_out))(s0)
-        s2 = layers.Permute((1, 3, 2, 4, 5))(s1)
-        s3 = layers.Reshape((M * scale, N * scale, filters_out))(s2)
-        out = layers.PReLU()(s3)
-        return out
-
-
-dmgr_cmems = data_manager_cmems.DataManagerCMEMS()
-dmgr_cmems.create_training_data(force_rebuild=False)
-
-dgen_cmems = data_generator_cmems.DataGeneratorCMEMS(
-    dm=dmgr_cmems,
-    batch_size=4,
-    lookback=4,
-    mode='train',
-    shuffle=True,
-    # use_multiprocessing=True,
-    # workers=4,
-    # max_queue_size=10,
-)
-resnet = ResNet(dgen_cmems)
-resnet.build_model()
+    def call(self, inputs):
+        s = self.conv2d(inputs)
+        s = self.reshape1(s)
+        s = self.permute(s)
+        s = self.reshape2(s)
+        return self.actv(s)

@@ -20,10 +20,14 @@ class DataGeneratorCMEMS(keras.utils.PyDataset):
         super().__init__(**kwargs)
         self.dm = dm
         assert self.dm.ready, "data manager not ready"
+
         self.mode = mode
+        assert mode == 'train' or mode == 'test', "invalid mode"
+
         self.batch_size = batch_size
         self.lookback = lookback
         assert lookback > 1, "lookback needs to be greater than 1"
+
         self.shuffle = shuffle
 
         self.create_indices()
@@ -61,11 +65,14 @@ class DataGeneratorCMEMS(keras.utils.PyDataset):
 
         batch_x = {'LR_data': LR_data,
                    'HR_data': HR_data,
-                   'meta' : {'time': time,
-                             'mask': self.dm.mask,
-                             'grid_HR': self.dm.grid_HR,
-                             'grid_LR': self.dm.grid_LR,
-                             'vars': list(self.dm.ds_HR.data_vars)},
+                   'meta' : {
+                       # 'time':
+                       # time.astype("datetime64[s]").astype(np.float32),
+                       'mask': self.dm.mask,
+                       'grid_HR': self.dm.grid_HR,
+                       'grid_LR': self.dm.grid_LR,
+                       # 'vars': list(self.dm.ds_HR.data_vars),
+                   },
                    }
 
         batch_y = {'HR_data': HR_data}

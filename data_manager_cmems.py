@@ -42,7 +42,9 @@ class DataManagerCMEMS(DataManagerBase):
         self.ds_HR = self.process_ds(self.ds_HR)
 
     def load_grid(self):
+        # 3d mask
         self.mask = self.crop(xr.open_dataset(self.bathy_file).mask)
+
         self.grid_HR = tools.build_grid(self.mask.latitude,
                                         self.mask.longitude)
 

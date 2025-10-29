@@ -13,7 +13,7 @@ class DataGeneratorCMEMS(keras.utils.PyDataset):
             dm,
             mode: str = 'train',  # 'train' or 'test'
             batch_size: int = 4,
-            lookback: int = 2,
+            lookback: int = 1,
             shuffle: bool = False,
             **kwargs
     ):
@@ -26,7 +26,7 @@ class DataGeneratorCMEMS(keras.utils.PyDataset):
 
         self.batch_size = batch_size
         self.lookback = lookback
-        assert lookback > 1, "lookback needs to be greater than 1"
+        assert lookback > 0, "lookback needs to be greater than 0"
 
         self.shuffle = shuffle
 

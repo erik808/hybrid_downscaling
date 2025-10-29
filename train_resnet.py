@@ -10,36 +10,14 @@ importlib.reload(resnet_model)
 dmgr_cmems = data_manager_cmems.DataManagerCMEMS()
 dmgr_cmems.create_training_data(force_rebuild=False)
 
-dgen_train = data_generator_cmems.DataGeneratorCMEMS(
-    dm=dmgr_cmems,
-    batch_size=4,
-    lookback=4,
-    mode='train',
-    shuffle=True,
-    # use_multiprocessing=True,
-    # workers=4,
-    # max_queue_size=10,
-)
-
-dgen_test = data_generator_cmems.DataGeneratorCMEMS(
-    dm=dmgr_cmems,
-    batch_size=4,
-    lookback=4,
-    mode='test',
-    shuffle=True,
-    # use_multiprocessing=True,
-    # workers=4,
-    # max_queue_size=10,
-)
-
 dgen_args = {
     'dm': dmgr_cmems,
     'batch_size': 4,
-    'lookback': 4,
+    'lookback': 1,
     'shuffle': True,
     'use_multiprocessing': True,
-    'workers': 8,
-    'max_queue_size': 50,
+    'workers': 4,
+    'max_queue_size': 10,
 }
 
 

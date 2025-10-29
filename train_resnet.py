@@ -38,8 +38,8 @@ dgen_args = {
     'lookback': 4,
     'shuffle': True,
     'use_multiprocessing': True,
-    'workers': 16,
-    'max_queue_size': 20,
+    'workers': 8,
+    'max_queue_size': 50,
 }
 
 

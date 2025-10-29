@@ -2,10 +2,12 @@ import importlib
 import data_manager_cmems
 import data_generator_cmems
 import resnet_model
+import callbacks
 
 importlib.reload(data_manager_cmems)
 importlib.reload(data_generator_cmems)
 importlib.reload(resnet_model)
+importlib.reload(callbacks)
 
 dmgr_cmems = data_manager_cmems.DataManagerCMEMS()
 dmgr_cmems.create_training_data(force_rebuild=False)
@@ -36,8 +38,14 @@ resnet.build_model()
 resnet.summary()
 resnet.compile(resnet.compiler)
 
+analysis_callback = callbacks.Analysis(data=dgen_test,
+                                       output_path='plots')
+
 hist = resnet.fit(
     x=dgen_train,
-    epochs=1,
+    epochs=10,
     validation_data=dgen_test,
+    callbacks=[
+        analysis_callback,
+    ]
 )

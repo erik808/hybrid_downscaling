@@ -31,6 +31,14 @@ class ResNet(keras.Model):
         assert coarsening[0] == coarsening[1], "unequal lat/lon coarsening"
         self.coarsening_factor = coarsening[0]
 
+        # get mask
+        self.mask = \
+            ops.convert_to_tensor(self.test_x['meta']['mask'][0,])
+        self.mask_rows, self.mask_cols = ops.where(self.mask==1)
+
+        self.mask = ops.tile(ops.expand_dims(self.mask, -1),
+                             self.num_vars)
+
         self.sub_pixel_blocks = int(np.log2(self.coarsening_factor))
 
         self.compiler = keras.optimizers.Adam(
@@ -63,13 +71,12 @@ class ResNet(keras.Model):
 
     def train_step(self, data, training=True):
         x, y = data
-        mask = x['meta']['mask'][0,]
-        rows, cols = ops.where(mask==1)
         if training:
             self.zero_grad()
+
         z = self({'LR_data': x['LR_data']}, training=training)
-        y = y['HR_data'][:, 0, rows, cols, :]
-        z = z[:, rows, cols, :]
+        y = y['HR_data'][:, 0, self.mask_rows, self.mask_cols, :]
+        z = z[:, self.mask_rows, self.mask_cols, :]
         loss = self.loss_fn(z, y)
 
         if training:
@@ -98,24 +105,36 @@ class ResNet(keras.Model):
         # take only the first (newest/current) lookback (axis=1)
         input_k = ops.squeeze(
             ops.split(
-                inputs, self.input_shape[0], axis=1)[0])
+                inputs,
+                self.input_shape[0],
+                axis=1)[0],
+            axis=1)  # squeeze only axis=1 to support batch_size=1
 
-        y = InputTransform(filters=64,
+        y = InputTransform(filters=self.num_filters,
                            kernel_size=9)(input_k)
 
-        # TODO # skip = y
+        skip = y
 
+        # residual blocks
         for rs_block in range(self.residual_blocks):
             y = ResidualBlock(
-                filters=64,
+                filters=self.num_filters,
                 kernel_size=3,
             )(y)
 
-        # TODO # missing here: Conv - BN - Add
+        # Conv - BN - Add
+        y = layers.Conv2D(filters=self.num_filters,
+                          kernel_size=3,
+                          padding='same',
+                          activation=None,
+                          )(y)
+        y = layers.BatchNormalization()(y)
+        y = layers.Add()([y, skip])
 
+        # subpixel convolutions
         for sp_block in range(self.sub_pixel_blocks):
             y = SubPixelConv(
-                filters_out=64,
+                filters_out=self.num_filters,
                 kernel_size=3,
                 scale=2,
             )(y)
@@ -129,7 +148,8 @@ class ResNet(keras.Model):
                                 activation='sigmoid',
                                 )(y)
 
-        # TODO # masking?
+        # masking
+        outputs = ops.multiply(outputs, self.mask)
 
         return inputs, outputs
 

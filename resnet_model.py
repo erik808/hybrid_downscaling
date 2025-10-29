@@ -73,32 +73,49 @@ class ResNet(keras.Model):
                            )(input_k)
 
         y = layers.PReLU()(x)
+        # skip = y  # todo
 
         for rs_block in range(self.residual_blocks):
-            y = self.residual_block(y)
+            y = self.residual_block(
+                y,
+                filters=64,
+                kernel_size=3,
+            )
 
         # TODO # missing here: Conv - BN - Add
 
         for sp_block in range(self.sub_pixel_blocks):
-            y = self.sub_pixel_convolution(y, scale=2)
+            y = self.sub_pixel_convolution(
+                y,
+                filters_out=64,
+                scale=2
+            )
+
+        outputs = layers.Conv2D(filters=3,
+                                kernel_size=9,
+                                padding='same',
+                                # Different output activations should
+                                # be tested. Output values need to be
+                                # mapped to [0,1].
+                                activation='sigmoid',
+                                )(y)
 
         breakpoint()
+        return inputs, outputs
 
-        return inputs, []
-
-    def residual_block(self, inputs):
+    def residual_block(self, inputs, filters, kernel_size):
         # a residual block (Ledig et al. 2017)
         skip = inputs
-        x0 = layers.Conv2D(filters=64,
-                           kernel_size=3,
+        x0 = layers.Conv2D(filters=filters,
+                           kernel_size=kernel_size,
                            padding='same',
                            activation=None,
                            )(inputs)
 
         x1 = layers.BatchNormalization()(x0)
         x2 = layers.PReLU()(x1)
-        x3 = layers.Conv2D(filters=64,
-                           kernel_size=3,
+        x3 = layers.Conv2D(filters=filters,
+                           kernel_size=kernel_size,
                            padding='same',
                            activation=None,
                            )(x2)
@@ -107,19 +124,19 @@ class ResNet(keras.Model):
         x5 = layers.PReLU()(x4)
         return layers.Add()([x5, skip])
 
-    def sub_pixel_convolution(self, inputs, scale=2):
+    def sub_pixel_convolution(self, inputs, filters_out=64, scale=2):
         # pixel shuffling block (Shi et al. 2016)
         s0 = layers.Conv2D(
-            filters=self.num_vars * scale**2,
+            filters=filters_out * scale**2,
             kernel_size=3,
             padding='same',
             activation=None,
         )(inputs)
 
         _, M, N, C = s0.shape
-        s1 = layers.Reshape((M, N, scale, scale, self.num_vars))(s0)
+        s1 = layers.Reshape((M, N, scale, scale, filters_out))(s0)
         s2 = layers.Permute((1, 3, 2, 4, 5))(s1)
-        s3 = layers.Reshape((M * scale, N * scale, self.num_vars))(s2)
+        s3 = layers.Reshape((M * scale, N * scale, filters_out))(s2)
         out = layers.PReLU()(s3)
         return out
 

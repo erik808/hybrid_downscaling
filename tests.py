@@ -1,7 +1,8 @@
+import numpy as np
 import importlib
+import time
 import data_manager_cmems
 import data_generator_cmems
-import time
 
 importlib.reload(data_manager_cmems)
 importlib.reload(data_generator_cmems)
@@ -23,9 +24,13 @@ def test_data_generator():
     )
 
     tic = time.time()
-    bx, by = dgen_cmems.__getitem__(0)
-    bx, by = dgen_cmems.__getitem__(1)
-    bx, by = dgen_cmems.__getitem__(2)
+    for i in range(20):
+        idx = np.random.randint(dgen_cmems.__len__())
+        bx, by = dgen_cmems.__getitem__(idx)
     toc = time.time()
     elapsed = toc - tic
     print(elapsed)
+    assert elapsed < 2
+
+
+test_data_generator()

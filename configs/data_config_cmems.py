@@ -23,7 +23,7 @@ coords_file =  \
     (f'{data_dir}/cmems_mod_nws_phy_anfc_0.027deg-3D_'
      f'static_e1t-e2t-e3t_4.22E-7.78E_56.81N-58.69N_0.49-643.57m.nc')
 
-# keys to use
+# keys to use from cmems dataset
 data_vars = ['uo', 'vo', 'zos']
 
 # cropping of 2d fields
@@ -33,7 +33,9 @@ lon_crop = slice(0, -1)
 # Coarsening
 # parameters for Gaussian filter
 sigma = [1, 1.5, 1.5]
+# coarsening factor for latitude and longitude
 coarsening_factor = 4
+# file manip
 coarse_data_prefix = \
     (f"data_LR_r{coarsening_factor}_sigm"
      f"{str(sigma).replace(', ','_')}_")
@@ -41,7 +43,7 @@ coarse_data_file = \
     (f'{coarse_data_folder}/'
      f'{coarse_data_prefix}data.zarr')
 
-# scalers
+# scalers for both coarse and HR data
 scalers_file =  \
     (f'{data_dir}/scalers_{time_range.start}_{time_range.stop}_'
      f'{coarse_data_prefix}.dill')

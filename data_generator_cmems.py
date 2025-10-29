@@ -65,7 +65,8 @@ class DataGeneratorCMEMS(keras.utils.PyDataset):
                              'mask': self.dm.mask,
                              'grid_HR': self.dm.grid_HR,
                              'grid_LR': self.dm.grid_LR,
-                             'vars': list(self.dm.ds_HR.data_vars)}}
+                             'vars': list(self.dm.ds_HR.data_vars)},
+                   }
 
         batch_y = {'HR_data': HR_data}
 
@@ -96,7 +97,7 @@ class DataGeneratorCMEMS(keras.utils.PyDataset):
         darr = darr.reshape(darr_shape[0], -1)
         darr = scaler.transform(darr).reshape(darr_shape)
 
-        # testing -> move to unittest
+        # testing -> move this to a unittest
         # test = da.zeros_like(da_HR)
         # for i in range(test.shape[0]):
         #     test[i,] = i
@@ -106,14 +107,16 @@ class DataGeneratorCMEMS(keras.utils.PyDataset):
         #      for i in range(self.lookback)],
         #     axis=1)
 
+        # stack the lookback in axis=1, lookback is backward in time
         darr_stacked = da.stack(
             [darr[lb_inds_mapped[..., i],]
              for i in range(lookback)],
-            axis=1)
+            axis=1).compute()
 
+        # get a corresponding time array
         time = ds.time[lb_inds.flatten()].data.reshape(lb_inds.shape)
 
-        return darr_stacked.rechunk(darr_stacked.shape), time
+        return darr_stacked, time
 
     def __do_shuffle(self):
         if self.shuffle:

@@ -6,16 +6,22 @@ import xesmf as xe
 import importlib
 import xarray as xr
 from dask.diagnostics import ProgressBar
-from data_manager_base import DataManagerBase
+import data_manager_base
 
 importlib.reload(tools)
+importlib.reload(data_manager_base)
 
 
-class DataManagerCMEMS(DataManagerBase):
+class DataManagerCMEMS(data_manager_base.DataManagerBase):
+    """ Managing input and output """
 
-    def __init__(self):
+    def __init__(
+            self,
+            experiment_id="test"):
         super().__init__()
         tools.load_config(self, config_name='data_config_cmems')
+        self.dirs, self.files = self.setup_directories(
+            experiment_id=experiment_id)
         self.load_grid()
         self.load_scalers()
 

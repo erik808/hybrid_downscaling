@@ -4,35 +4,40 @@ import numpy as np
 import os
 import tools
 from multiprocess import Pool
-from importlib import reload
+import importlib
 from skimage.draw import line
 from scipy.stats import binned_statistic
 import data_utils
-reload(data_utils)
-from data_utils import DataFactory
 import compute_tool
-reload(compute_tool)
-from compute_tool import ComputeTool
+
+importlib.reload(data_utils)
+importlib.reload(compute_tool)
 
 
 class PlotMachine():
-    def __init__(self, figsize=(16, 8),
+    def __init__(self,
+                 dirs,
                  output_dict={},
                  time_array=None,
-                 results_dir=None,
-                 movie_dir=None,
-                 trial_id=None):
+                 trial_id=None,
+                 figsize=(16, 8),
+                 ):
 
+        self.dirs = dirs
         self.figsize = figsize
         self.output_dict = output_dict
         self.time_array = time_array
-        self.results_dir = results_dir
-        self.movie_dir = movie_dir
         self.cbar_shrinkf = 0.5
         self.frame_stride = 4
         self.pool_size = 1
         self.trial_id = trial_id
-        self.dm = DataFactory()
+        self.ct = compute_tool.ComputeTool()
+
+    def plot_reconstructions(self, plot_dict):
+        plt.figure(figsize=self.figsize)
+        postfix = self.create_postfix()
+        print(postfix)
+        pass
 
     def plot_single_frame(self, frame_id, output_dict=None):
         self.output_dict = self.output_dict \
@@ -182,49 +187,33 @@ class PlotMachine():
     def plot_enstrophy_spectrum(self,
                                 transect_name='along_flow',
                                 data={},
-                                add_coarse_data=False):
+                                ):
 
-        # get coarse data:
-        if add_coarse_data:
-            do = self.dm.get_coarse_data(data['time'])
-
-        ct = ComputeTool()
-        S_truth = ct.compute_spectrum_along_transect(
+        S_truth = self.ct.compute_spectrum_along_transect(
             data['truth'],
             data['scaler_truth'],
             transect_name=transect_name,
             spectrum_type='enstrophy')
-        S_pred = ct.compute_spectrum_along_transect(
+        S_pred = self.ct.compute_spectrum_along_transect(
             data['pred'],
             data['scaler_truth'],
             transect_name=transect_name,
             spectrum_type='enstrophy')
-        S_lowres = ct.compute_spectrum_along_transect(
+        S_lowres = self.ct.compute_spectrum_along_transect(
             data['lowres'],
             data['scaler_lowres'],
             transect_name=transect_name,
             spectrum_type='enstrophy')
 
-        if add_coarse_data:
-            S_coarse = ct.compute_spectrum_along_transect(
-                do,
-                None,
-                transect_name=transect_name,
-                spectrum_type='energy')
-
         # compute mean
         S_truth_mn = np.mean(S_truth, axis=0)
         S_pred_mn = np.mean(S_pred, axis=0)
         S_lowres_mn = np.mean(S_lowres, axis=0)
-        if add_coarse_data:
-            S_coarse_mn = np.mean(S_coarse, axis=0)
 
         plt.figure()
         plt.loglog(S_truth_mn, '.-', label='HR truth')
         plt.loglog(S_pred_mn, '.-', label='Model prediction')
         plt.loglog(S_lowres_mn, '.-', label='LR forcing/control')
-        if add_coarse_data:
-            plt.loglog(S_coarse_mn, '.-', label='Coarse model')
         plt.legend()
         plt.grid()
         plt.gca().set_ylim([1e-5, 1])
@@ -240,43 +229,30 @@ class PlotMachine():
     def plot_energy_spectrum(self,
                              transect_name='along_flow',
                              data={},
-                             add_coarse_data=False):
+                             ):
 
-        if add_coarse_data:
-            do = self.dm.get_coarse_data(data['time'])
-
-        ct = ComputeTool()
-        S_truth = ct.compute_spectrum_along_transect(
+        S_truth = self.ct.compute_spectrum_along_transect(
             data['truth'],
             data['scaler_truth'],
             transect_name=transect_name,
             spectrum_type='energy')
 
-        S_pred = ct.compute_spectrum_along_transect(
+        S_pred = self.ct.compute_spectrum_along_transect(
             data['pred'],
             data['scaler_truth'],
             transect_name=transect_name,
             spectrum_type='energy')
 
-        S_lowres = ct.compute_spectrum_along_transect(
+        S_lowres = self.ct.compute_spectrum_along_transect(
             data['lowres'],
             data['scaler_lowres'],
             transect_name=transect_name,
             spectrum_type='energy')
 
-        if add_coarse_data:
-            S_coarse = ct.compute_spectrum_along_transect(
-                do,
-                None,
-                transect_name=transect_name,
-                spectrum_type='energy')
-
         # compute mean
         S_truth_mn = np.mean(S_truth, axis=0)
         S_pred_mn = np.mean(S_pred, axis=0)
         S_lowres_mn = np.mean(S_lowres, axis=0)
-        if add_coarse_data:
-            S_coarse_mn = np.mean(S_coarse, axis=0)
 
         k_1 = np.linspace(1.7, np.ceil(len(S_truth_mn) / 2), 100)
         k_2 = np.linspace(7, len(S_truth_mn), 100)
@@ -290,8 +266,6 @@ class PlotMachine():
         plt.loglog(S_truth_mn, '.-', label='HR truth')
         plt.loglog(S_pred_mn, '.-', label='Model prediction')
         plt.loglog(S_lowres_mn, '.-', label='LR forcing/control')
-        if add_coarse_data:
-            plt.loglog(S_coarse_mn, '.-', label='Coarse model')
         plt.loglog(k_1, offset_1 * k_1**(-5 / 3), '--', label='k^-5/3')
         plt.loglog(k_2, offset_2 * k_2**(-3), ':', label='k^-3')
         plt.legend()

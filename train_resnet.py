@@ -38,12 +38,11 @@ resnet.build_model()
 resnet.summary()
 resnet.compile(resnet.compiler)
 
-analysis_callback = callbacks.Analysis(data=dgen_test,
-                                       output_path='plots')
+analysis_callback = callbacks.Analysis(data=dgen_test)
 
 hist = resnet.fit(
     x=dgen_train,
-    epochs=10,
+    epochs=2,
     validation_data=dgen_test,
     callbacks=[
         analysis_callback,

@@ -5,6 +5,6 @@ learning_rate = 1e-4
 residual_blocks = 6
 
 # standard number of filters
-num_filters = 64
+num_filters = 2
 
 # number of necessary upsampling blocks is inferred from LR and HR grids

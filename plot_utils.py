@@ -34,10 +34,29 @@ class PlotMachine():
         self.ct = compute_tool.ComputeTool()
 
     def plot_reconstructions(self, plot_dict):
-        plt.figure(figsize=self.figsize)
-        postfix = self.create_postfix()
-        print(postfix)
-        pass
+        metadata = plot_dict['meta']
+        plot_dict.pop('meta', None)
+        postfix = \
+            self.create_postfix(add_name=f"epoch{metadata['epoch']}")
+        fig_name = f"{self.dirs['results']}/reconstructions{postfix}.png"
+
+        num_plots = len(plot_dict.keys())
+        M, N = 2, 3
+        while M * N < num_plots:
+            M += 1
+
+        plt.figure(figsize=(N * 5, M * 3))
+        for i, (key, item) in enumerate(plot_dict.items()):
+            plt.subplot(M, N, i + 1)
+            a = plt.pcolormesh(item['data'],
+                               vmin=item['vmin'],
+                               vmax=item['vmax'],
+                               )
+            plt.colorbar(a)
+            plt.gca().set_title(key)
+
+        print(f'saving to {fig_name}')
+        plt.savefig(fig_name, bbox_inches='tight')
 
     def plot_single_frame(self, frame_id, output_dict=None):
         self.output_dict = self.output_dict \
@@ -396,7 +415,6 @@ class PlotMachine():
                     )
 
         print(fig_name)
-        plt.pause(1)
         plt.savefig(fig_name, bbox_inches='tight')
 
 

@@ -1,5 +1,6 @@
 import numpy as np
 import os
+import tools
 import matplotlib.pyplot as plt
 import importlib
 import data_utils
@@ -24,7 +25,7 @@ class ComputeTool():
         self.e1 = self.grid.e1t.data  # in m
         self.e2 = self.grid.e2t.data  # in m
         self.tdim = 60 * 60 * 24  # seconds to days
-        
+
         self.transect_regridder = 'none'
 
     def construct_regridder(self, transect_name):
@@ -40,8 +41,26 @@ class ComputeTool():
 
                 transect_res=len(tpicker.x_trans)
                 self.regridder = \
-                    self.dm.regrid_to_transect(tpicker,
-                                               resolution=transect_res)
+                    self.regrid_to_transect(tpicker,
+                                            resolution=transect_res)
+
+    def regrid_to_transect(self, tpicker, resolution=1e2):
+
+        print('Create transect regridder')
+        grid_HR = self.dm.grid_HR
+
+        lons = grid_HR['lon'][0, :]
+        lats = grid_HR['lat'][:, 0]
+
+        transect = {
+            'lon_start': lons[tpicker.x_trans[0]],
+            'lon_end': lons[tpicker.x_trans[-1]],
+            'lat_start': lats[tpicker.y_trans[0]],
+            'lat_end': lats[tpicker.y_trans[-1]]
+        }
+        return tools.regrid_to_transect(grid_HR,
+                                        resolution=resolution,
+                                        **transect)
 
     def compute_spectrum_along_transect(
             self,
@@ -82,9 +101,14 @@ class ComputeTool():
     def compute_energy_spectrum(self, data):
         """ normalized energy spectrum
         """
+        # take only u and v
+        data = data[..., :2]
         data = (data.transpose(1, 0, 2) - np.mean(data, axis=1))\
             .transpose(1, 0, 2)  # remove spatial average
-        data = data - np.mean(data, axis=0)  # remove time average
+
+        # remove time average
+        if data.shape[0] > 1:
+            data = data - np.mean(data, axis=0)
 
         data = self.taper_data(data)
         H = np.fft.rfft(data, axis=1)
@@ -95,8 +119,13 @@ class ComputeTool():
     def compute_enstrophy_spectrum(self, data):
         """ normalized enstrophy spectrum
         """
-        data = (data.T - np.mean(data, axis=1)).T  # remove spatial average
-        data = data - np.mean(data, axis=0)  # remove time average
+
+        # remove spatial average
+        data = (data.T - np.mean(data, axis=1)).T
+
+        # remove time average
+        if data.shape[0] > 1:
+            data = data - np.mean(data, axis=0)
 
         data = self.taper_data(data)
         H = np.fft.rfft(data, axis=1)

@@ -25,6 +25,7 @@ class PlotMachine():
 
         self.dm = dm
         self.dirs = dm.dirs
+        self.results_dir = self.dirs['results']
         self.figsize = figsize
         self.output_dict = output_dict
         self.time_array = time_array
@@ -58,7 +59,7 @@ class PlotMachine():
             plt.colorbar(a)
             plt.gca().set_title(key)
 
-        print(f'saving to {fig_name}')
+        print(f'\nsaving to {fig_name}')
         plt.savefig(fig_name, bbox_inches='tight')
 
     def plot_single_frame(self, frame_id, output_dict=None):
@@ -207,8 +208,9 @@ class PlotMachine():
         return postfix
 
     def plot_enstrophy_spectrum(self,
+                                data,
+                                epoch,
                                 transect_name='along_flow',
-                                data={},
                                 ):
 
         S_truth = self.ct.compute_spectrum_along_transect(
@@ -250,6 +252,7 @@ class PlotMachine():
 
     def plot_energy_spectrum(self,
                              data,
+                             epoch,
                              transect_name='along_flow',
                              ):
 
@@ -298,9 +301,11 @@ class PlotMachine():
         plt.grid()
 
         postfix = self.create_postfix()
-        fig_name = (f'{self.results_dir}/energy_spectrum_{transect_name}'
-                    f'{postfix}.png'
-                    )
+        fig_name = \
+            (f'{self.results_dir}/'
+             f'energy_spectrum_epoch{epoch}_{transect_name}'
+             f'{postfix}.png'
+             )
         print(fig_name)
         plt.tight_layout()
         plt.savefig(fig_name)

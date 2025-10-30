@@ -42,7 +42,7 @@ analysis_callback = callbacks.Analysis(data=dgen_test)
 
 hist = resnet.fit(
     x=dgen_train,
-    epochs=2,
+    epochs=10,
     validation_data=dgen_test,
     callbacks=[
         analysis_callback,

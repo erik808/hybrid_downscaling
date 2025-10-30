@@ -1,13 +1,13 @@
 import numpy as np
 import os
 import matplotlib.pyplot as plt
-from importlib import reload
+import importlib
 import data_utils
-reload(data_utils)
-from data_utils import DataFactory
 import dill
 
 from transectpicker.transectpicker import TransectPicker
+
+importlib.reload(data_utils)
 
 
 class ComputeTool():
@@ -16,19 +16,16 @@ class ComputeTool():
 
     """
 
-    def __init__(self,
-                 case_study='cmems'):
-
-        self.case_study = case_study
-
-        if self.case_study == 'cmems':
-            self.dm = DataFactory(case_study=self.case_study)
-            self.grid, self.binary_mask = self.dm.get_grid()
-            self.mask = np.where(self.binary_mask==0, np.nan, 1)
-            self.e1 = self.grid.e1t.data  # in m
-            self.e2 = self.grid.e2t.data  # in m
-            self.tdim = 60 * 60 * 24  # seconds to days
-            self.transect_regridder = 'none'
+    def __init__(self, dm):
+        self.dm = dm
+        self.grid = self.dm.load_coords()
+        self.binary_mask = self.dm.mask[0,]
+        self.mask = np.where(self.binary_mask==0, np.nan, 1)
+        self.e1 = self.grid.e1t.data  # in m
+        self.e2 = self.grid.e2t.data  # in m
+        self.tdim = 60 * 60 * 24  # seconds to days
+        
+        self.transect_regridder = 'none'
 
     def construct_regridder(self, transect_name):
 
@@ -46,10 +43,13 @@ class ComputeTool():
                     self.dm.regrid_to_transect(tpicker,
                                                resolution=transect_res)
 
-    def compute_spectrum_along_transect(self, data, scaler=None,
-                                        transect_name='along_flow',
-                                        spectrum_type='energy'):
-
+    def compute_spectrum_along_transect(
+            self,
+            data,
+            scaler=None,
+            transect_name='along_flow',
+            spectrum_type='energy',
+    ):
         self.construct_regridder(transect_name)
 
         if spectrum_type == 'energy':

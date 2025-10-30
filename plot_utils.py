@@ -16,14 +16,15 @@ importlib.reload(compute_tool)
 
 class PlotMachine():
     def __init__(self,
-                 dirs,
+                 dm,
                  output_dict={},
                  time_array=None,
                  trial_id=None,
                  figsize=(16, 8),
                  ):
 
-        self.dirs = dirs
+        self.dm = dm
+        self.dirs = dm.dirs
         self.figsize = figsize
         self.output_dict = output_dict
         self.time_array = time_array
@@ -31,7 +32,9 @@ class PlotMachine():
         self.frame_stride = 4
         self.pool_size = 1
         self.trial_id = trial_id
-        self.ct = compute_tool.ComputeTool()
+
+        # create compute tool object
+        self.ct = compute_tool.ComputeTool(dm=self.dm)
 
     def plot_reconstructions(self, plot_dict):
         metadata = plot_dict['meta']
@@ -41,11 +44,11 @@ class PlotMachine():
         fig_name = f"{self.dirs['results']}/reconstructions{postfix}.png"
 
         num_plots = len(plot_dict.keys())
-        M, N = 2, 3
+        M, N = metadata['subplot_shape']
         while M * N < num_plots:
             M += 1
 
-        plt.figure(figsize=(N * 5, M * 3))
+        plt.figure(figsize=(N * 7, M * 4))
         for i, (key, item) in enumerate(plot_dict.items()):
             plt.subplot(M, N, i + 1)
             a = plt.pcolormesh(item['data'],
@@ -246,8 +249,8 @@ class PlotMachine():
         plt.savefig(fig_name)
 
     def plot_energy_spectrum(self,
+                             data,
                              transect_name='along_flow',
-                             data={},
                              ):
 
         S_truth = self.ct.compute_spectrum_along_transect(

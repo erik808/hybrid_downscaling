@@ -53,10 +53,21 @@ class DataManagerCMEMS(data_manager_base.DataManagerBase):
                                                 self.mask.longitude,
                                                 self.coarsening_factor)
 
-        self.regridder = xe.Regridder(self.grid_HR,
-                                      self.grid_LR,
-                                      "bilinear",
-                                      extrap_method="inverse_dist")
+        self.bilin_downsampler = xe.Regridder(self.grid_HR,
+                                              self.grid_LR,
+                                              "bilinear",
+                                              extrap_method="inverse_dist")
+
+        self.bilin_upsampler = xe.Regridder(self.grid_LR,
+                                            self.grid_HR,
+                                            "bilinear",
+                                            extrap_method="inverse_dist")
+
+    def load_coords(self):
+        coords = xr.open_dataset(self.coords_file)
+        l_ = [self.crop(coords[var]) for var in coords]
+        coords = xr.merge(l_)
+        return coords
 
     def load_HR_data(self):
         self.ds_HR = xr.open_zarr(self.data_files,
@@ -82,7 +93,7 @@ class DataManagerCMEMS(data_manager_base.DataManagerBase):
             filtered = ndf.gaussian_filter(
                 self.ds_HR[key].fillna(0.0).data,
                 sigma=self.sigma)
-            data_LR.append(self.regridder(filtered))
+            data_LR.append(self.bilin_downsampler(filtered))
 
         da_list = [
             xr.DataArray(data,

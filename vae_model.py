@@ -1,3 +1,4 @@
+import numpy as np
 import keras
 from keras import layers
 from keras import ops
@@ -20,6 +21,9 @@ class VAE(base_model.BaseModel):
         # weight on KL loss
         self.beta = 1e-7
 
+        # weight on reconstruction
+        self.gamma = 1
+
         self.loss_fn = keras.losses.MeanSquaredError()
 
         self.compiler = keras.optimizers.Adam(
@@ -27,16 +31,46 @@ class VAE(base_model.BaseModel):
 
         self.loss_fn = keras.losses.MeanSquaredError()
         self.loss_tracker = keras.metrics.Mean(name="loss")
+        self.re_loss_tracker = keras.metrics.Mean(name="recons")
+        self.KL_loss_tracker = keras.metrics.Mean(name="KLloss")
+
+    @property
+    def metrics(self):
+        return [
+            self.loss_tracker,
+            self.re_loss_tracker,
+            self.KL_loss_tracker,
+        ]
 
     def train_step(self, data, training=True):
         x, y = data
         if training:
             self.zero_grad()
 
-        z = self({'HR_data': x['HR_data']}, training=training)
+        z = self({'HR_data': np.nan_to_num(x['HR_data'])},
+                 training=training)
+
+        z_decoded = z['decoded']
+        z_mean = z['mean']
+        z_logsigma = z['logsigma']
+
+        # compute reconstruction loss
+        z_decoded = z_decoded[:, self.mask_rows, self.mask_cols, :]
         y = y['HR_data'][:, 0, self.mask_rows, self.mask_cols, :]
-        z = z[:, self.mask_rows, self.mask_cols, :]
-        loss = self.loss_fn(z, y)
+        re_loss = self.loss_fn(z_decoded, y) * self.gamma
+
+        # compute KL loss
+        kl_loss = \
+            -self.beta / 2 * \
+            ops.sum(1 + 2 * z_logsigma -
+                    ops.exp(2 * z_logsigma) -
+                    ops.square(z_mean), axis=1)
+
+        # sum over latent dimension, mean over batch size
+        kl_loss = ops.mean(kl_loss)
+
+        # combine losses
+        loss = re_loss + kl_loss
 
         if training:
             loss.backward()
@@ -50,6 +84,10 @@ class VAE(base_model.BaseModel):
         for metric in self.metrics:
             if metric.name == "loss":
                 metric.update_state(loss)
+            if metric.name == "recons":
+                metric.update_state(re_loss)
+            if metric.name == "KLloss":
+                metric.update_state(kl_loss)
 
         return {m.name: m.result() for m in self.metrics}
 
@@ -163,7 +201,10 @@ class VAE(base_model.BaseModel):
             kernel_size=3,
             scale=2,
         )(z)
-        outputs = {'decoded': keras.activations.linear(z),
+
+        # activation and masking
+        z = ops.multiply(keras.activations.linear(z), self.mask)
+        outputs = {'decoded': z,
                    'mean': mean,
                    'logsigma': logsigma,
                    }

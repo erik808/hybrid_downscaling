@@ -28,10 +28,10 @@ vae = vae_model.VAE(data_gen=dgen_train)
 
 vae.build_model("betaVAE")
 vae.summary()
-# vae.compile(vae.compiler)
+vae.compile(vae.compiler)
 
-# hist = vae.fit(
-#     x=dgen_train,
-#     epochs=2,
-#     validation_data=dgen_test,
-# )
+hist = vae.fit(
+    x=dgen_train,
+    epochs=2,
+    validation_data=dgen_test,
+)

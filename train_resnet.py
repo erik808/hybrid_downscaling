@@ -23,19 +23,20 @@ dgen_args = {
 }
 
 
-def wrap_data_generators(**args):
-    dgen_train = data_generator_cmems.DataGeneratorCMEMS(mode='train',
-                                                         **args)
-    dgen_test = data_generator_cmems.DataGeneratorCMEMS(mode='test',
-                                                        **args)
-    return dgen_train, dgen_test
+# def wrap_data_generators(**args):
+#     dgen_train = data_generator_cmems.DataGeneratorCMEMS(mode='train',
+#                                                          **args)
+#     dgen_test = data_generator_cmems.DataGeneratorCMEMS(mode='test',
+#                                                         **args)
+#     return dgen_train, dgen_test
 
 
-dgen_train, dgen_test = wrap_data_generators(**dgen_args)
+dgen_train, dgen_test = \
+    data_generator_cmems.getter(**dgen_args)
 
 resnet = resnet_model.ResNet(data_gen=dgen_train)
 
-resnet.build_model()
+resnet.build_model("ResNet")
 resnet.summary()
 resnet.compile(resnet.compiler)
 

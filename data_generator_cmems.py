@@ -131,3 +131,11 @@ class DataGeneratorCMEMS(keras.utils.PyDataset):
 
     def on_epoch_end(self):
         self.__do_shuffle()
+
+
+def getter(**args):
+    dgen_train = DataGeneratorCMEMS(mode='train',
+                                    **args)
+    dgen_test = DataGeneratorCMEMS(mode='test',
+                                   **args)
+    return dgen_train, dgen_test

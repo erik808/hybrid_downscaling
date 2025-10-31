@@ -3,8 +3,11 @@ import keras
 from keras import layers
 from keras import ops
 import tools
+import importlib
 import numpy as np
 import base_model
+
+importlib.reload(base_model)
 
 
 class ResNet(base_model.BaseModel):
@@ -16,10 +19,15 @@ class ResNet(base_model.BaseModel):
         super().__init__(**kwargs)
 
         tools.load_config(self, config_name='resnet_model')
-        self.input_name = 'LR_data'
-        self.input_shape = self.test_x[self.input_name].shape[1:]
-        self.num_vars = self.input_shape[-1]
 
+        self.get_coarsening_factor()
+
+        self.sub_pixel_blocks = int(np.log2(self.coarsening_factor))
+
+        self.compiler = keras.optimizers.Adam(
+            learning_rate=self.learning_rate)
+
+    def get_coarsening_factor(self):
         # number of necessary upsampling blocks is inferred from LR
         # and HR grids
         grid_HR_shape = self.test_x['meta']['grid_HR']['lat'].shape
@@ -28,36 +36,6 @@ class ResNet(base_model.BaseModel):
             np.asarray(grid_HR_shape) / np.asarray(grid_LR_shape)
         assert coarsening[0] == coarsening[1], "unequal lat/lon coarsening"
         self.coarsening_factor = coarsening[0]
-
-        self.sub_pixel_blocks = int(np.log2(self.coarsening_factor))
-
-        self.compiler = keras.optimizers.Adam(
-            learning_rate=self.learning_rate)
-
-        self.loss_fn = keras.losses.MeanSquaredError()
-        self.loss_tracker = keras.metrics.Mean(name="loss")
-
-    @property
-    def metrics(self):
-        return [
-            self.loss_tracker,
-        ]
-
-    def build_model(self):
-        inputs, outputs = self.builder()
-        self.model = keras.Model(
-            inputs=inputs,
-            outputs=outputs,
-            name="ResNet")
-        self.model.build(self.test_x)
-        self.build(self.test_x)
-        return self.model
-
-    def summary(self):
-        return self.model.summary()
-
-    def call(self, inputs, training=True):
-        return self.model(inputs, training=training)
 
     def train_step(self, data, training=True):
         x, y = data
@@ -84,23 +62,21 @@ class ResNet(base_model.BaseModel):
 
         return {m.name: m.result() for m in self.metrics}
 
-    def test_step(self, data):
-        return self.train_step(data, training=False)
-
     def builder(self):
         """builder uses the functional api, some separate blocks follow
         subclassing style
 
         """
+        # ResNet will take LR input
         inputs = layers.Input(
-            shape=self.input_shape,
-            name=self.input_name)
+            shape=self.input_shape_LR,
+            name=self.input_name_LR)
 
         # take only the first (newest/current) lookback (axis=1)
         input_k = ops.squeeze(
             ops.split(
                 inputs,
-                self.input_shape[0],
+                self.input_shape_LR[0],
                 axis=1)[0],
             axis=1)  # squeeze only axis=1 to support batch_size=1
 

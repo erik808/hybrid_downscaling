@@ -75,27 +75,32 @@ class VAE(base_model.BaseModel):
                           activation=None,
                           )(input_k)
         x = layers.ELU()(x)
-        x = layers.Conv2D(filters=4 * x.shape[-1],
+        x = layers.Conv2D(filters=2 * x.shape[-1],
                           strides=2,
                           kernel_size=3,
                           padding='same',
                           activation=None,
                           )(x)
         x = layers.ELU()(x)
-        x = layers.Conv2D(filters=4 * x.shape[-1],
+        x = layers.Conv2D(filters=2 * x.shape[-1],
                           strides=2,
                           kernel_size=3,
                           padding='same',
                           activation=None,
                           )(x)
         x = layers.ELU()(x)
-        x = layers.Conv2D(filters=4 * x.shape[-1],
+        x = layers.Conv2D(filters=2 * x.shape[-1],
                           strides=2,
                           kernel_size=3,
                           padding='same',
                           activation=None,
                           )(x)
         x = layers.ELU()(x)
+
+        # return to this shape for decoder input
+        return_shape = x.shape
+
+        x = layers.Flatten()(x)
         x = layers.Dense(units=256,
                          activation=None,
                          )(x)
@@ -111,9 +116,57 @@ class VAE(base_model.BaseModel):
                                 name="logsigma",
                                 )(x)
 
-        breakpoint()
+        # -------------------------------------------------------
+        # Sampling
+        y = Sampling()(mean, logsigma)
 
-        outputs = []
+        # -------------------------------------------------------
+        # Decoder
+        z = layers.Dense(
+            units=self.latent_space_dim,
+            activation=None,
+        )(y)
+
+        z = layers.ELU()(z)
+        z = layers.Dense(
+            units=256,
+            activation=None,
+        )(z)
+        z = layers.ELU()(z)
+        z = layers.Dense(
+            units=ops.prod(return_shape[1:]),
+            activation=None,
+        )(z)
+        z = layers.ELU()(z)
+        z = layers.Reshape(return_shape[1:])(z)
+
+        z = resnet_model.SubPixelConv(
+            filters_out=int(z.shape[-1] / 2),
+            kernel_size=3,
+            scale=2,
+        )(z)
+        z = layers.ELU()(z)
+        z = resnet_model.SubPixelConv(
+            filters_out=int(z.shape[-1] / 2),
+            kernel_size=3,
+            scale=2,
+        )(z)
+        z = layers.ELU()(z)
+        z = resnet_model.SubPixelConv(
+            filters_out=int(z.shape[-1] / 2),
+            kernel_size=3,
+            scale=2,
+        )(z)
+        z = layers.ELU()(z)
+        z = resnet_model.SubPixelConv(
+            filters_out=int(z.shape[-1] / 4),
+            kernel_size=3,
+            scale=2,
+        )(z)
+        outputs = {'decoded': keras.activations.linear(z),
+                   'mean': mean,
+                   'logsigma': logsigma,
+                   }
         return inputs, outputs
 
 

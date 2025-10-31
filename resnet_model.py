@@ -29,14 +29,6 @@ class ResNet(base_model.BaseModel):
         assert coarsening[0] == coarsening[1], "unequal lat/lon coarsening"
         self.coarsening_factor = coarsening[0]
 
-        # get mask
-        self.mask = \
-            ops.convert_to_tensor(self.test_x['meta']['mask'][0,])
-        self.mask_rows, self.mask_cols = ops.where(self.mask==1)
-
-        self.mask = ops.tile(ops.expand_dims(self.mask, -1),
-                             self.num_vars)
-
         self.sub_pixel_blocks = int(np.log2(self.coarsening_factor))
 
         self.compiler = keras.optimizers.Adam(

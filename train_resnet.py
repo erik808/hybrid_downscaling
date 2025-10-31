@@ -33,16 +33,17 @@ def wrap_data_generators(**args):
 
 dgen_train, dgen_test = wrap_data_generators(**dgen_args)
 
-resnet = resnet_model.ResNet(dgen_train)
+resnet = resnet_model.ResNet(data_gen=dgen_train)
+
 resnet.build_model()
 resnet.summary()
 resnet.compile(resnet.compiler)
 
-analysis_callback = callbacks.Analysis(data=dgen_test)
+analysis_callback = callbacks.Analysis(data_gen=dgen_test)
 
 hist = resnet.fit(
     x=dgen_train,
-    epochs=10,
+    epochs=2,
     validation_data=dgen_test,
     callbacks=[
         analysis_callback,

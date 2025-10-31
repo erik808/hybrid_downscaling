@@ -4,20 +4,18 @@ from keras import layers
 from keras import ops
 import tools
 import numpy as np
+import base_model
 
 
-class ResNet(keras.Model):
+class ResNet(base_model.BaseModel):
 
     def __init__(
             self,
-            data_gen,
             **kwargs,
     ):
         super().__init__(**kwargs)
-        tools.load_config(self, config_name='resnet_model')
 
-        idx = np.random.randint(data_gen.__len__())
-        self.test_x, self.test_y = data_gen.__getitem__(idx)
+        tools.load_config(self, config_name='resnet_model')
         self.input_name = 'LR_data'
         self.input_shape = self.test_x[self.input_name].shape[1:]
         self.num_vars = self.input_shape[-1]
@@ -98,6 +96,10 @@ class ResNet(keras.Model):
         return self.train_step(data, training=False)
 
     def builder(self):
+        """builder uses the functional api, some separate blocks follow
+        subclassing style
+
+        """
         inputs = layers.Input(
             shape=self.input_shape,
             name=self.input_name)
@@ -142,9 +144,9 @@ class ResNet(keras.Model):
         outputs = layers.Conv2D(filters=3,
                                 kernel_size=9,
                                 padding='same',
-                                # Different output activations should
-                                # be tested. Output values need to be
-                                # mapped to [0,1].
+                                # Todo # Different output activations
+                                # should be tested. Output values need
+                                # to be mapped to [0,1].
                                 activation='sigmoid',
                                 )(y)
 

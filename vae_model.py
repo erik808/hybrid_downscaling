@@ -1,4 +1,3 @@
-import numpy as np
 import keras
 from keras import layers
 from keras import ops
@@ -17,12 +16,6 @@ class VAE(base_model.BaseModel):
 
         super().__init__(**kwargs)
         tools.load_config(self, config_name='vae_model')
-
-        # weight on KL loss
-        self.beta = 1e-7
-
-        # weight on reconstruction
-        self.gamma = 1
 
         self.loss_fn = keras.losses.MeanSquaredError()
 
@@ -108,38 +101,54 @@ class VAE(base_model.BaseModel):
         # Encoder
         x = layers.Conv2D(filters=4 * self.input_shape_HR[-1],
                           strides=2,
-                          kernel_size=3,
+                          kernel_size=self.kernel_size,
                           padding='same',
                           activation=None,
                           )(input_k)
         x = layers.ELU()(x)
         x = layers.Conv2D(filters=2 * x.shape[-1],
                           strides=2,
-                          kernel_size=3,
+                          kernel_size=self.kernel_size,
                           padding='same',
                           activation=None,
                           )(x)
         x = layers.ELU()(x)
         x = layers.Conv2D(filters=2 * x.shape[-1],
                           strides=2,
-                          kernel_size=3,
+                          kernel_size=self.kernel_size,
                           padding='same',
                           activation=None,
                           )(x)
         x = layers.ELU()(x)
         x = layers.Conv2D(filters=2 * x.shape[-1],
                           strides=2,
-                          kernel_size=3,
+                          kernel_size=self.kernel_size,
                           padding='same',
                           activation=None,
                           )(x)
         x = layers.ELU()(x)
+        x = layers.Conv2D(filters=2 * x.shape[-1],
+                          strides=2,
+                          kernel_size=self.kernel_size,
+                          padding='same',
+                          activation=None,
+                          )(x)
+        x = layers.ELU()(x)
+        x = layers.Conv2D(filters=2 * x.shape[-1],
+                          strides=2,
+                          kernel_size=self.kernel_size,
+                          padding='same',
+                          activation=None,
+                          )(x)
+        x = layers.ELU()(x)
+        skip = x
 
         # return to this shape for decoder input
         return_shape = x.shape
 
+        # dense transform
         x = layers.Flatten()(x)
-        x = layers.Dense(units=256,
+        x = layers.Dense(units=self.dense_dim,
                          activation=None,
                          )(x)
         x = layers.ELU()(x)
@@ -158,6 +167,8 @@ class VAE(base_model.BaseModel):
         # Sampling
         y = Sampling()(mean, logsigma)
 
+        if self.deterministic_mode:
+            y = mean
         # -------------------------------------------------------
         # Decoder
         z = layers.Dense(
@@ -167,7 +178,7 @@ class VAE(base_model.BaseModel):
 
         z = layers.ELU()(z)
         z = layers.Dense(
-            units=256,
+            units=self.dense_dim,
             activation=None,
         )(z)
         z = layers.ELU()(z)
@@ -178,6 +189,21 @@ class VAE(base_model.BaseModel):
         z = layers.ELU()(z)
         z = layers.Reshape(return_shape[1:])(z)
 
+        if self.deterministic_mode:
+            z = skip
+
+        z = resnet_model.SubPixelConv(
+            filters_out=int(z.shape[-1] / 2),
+            kernel_size=3,
+            scale=2,
+        )(z)
+        z = layers.ELU()(z)
+        z = resnet_model.SubPixelConv(
+            filters_out=int(z.shape[-1] / 2),
+            kernel_size=3,
+            scale=2,
+        )(z)
+        z = layers.ELU()(z)
         z = resnet_model.SubPixelConv(
             filters_out=int(z.shape[-1] / 2),
             kernel_size=3,
@@ -201,9 +227,19 @@ class VAE(base_model.BaseModel):
             kernel_size=3,
             scale=2,
         )(z)
+        z = layers.ELU()(z)
+
+        z = layers.Conv2D(filters=self.num_vars,
+                          kernel_size=9,
+                          padding='same',
+                          # Todo # Different output activations
+                          # should be tested. Output values need
+                          # to be mapped to [0,1].
+                          activation=None,
+                          )(z)
 
         # activation and masking
-        z = ops.multiply(keras.activations.linear(z), self.mask)
+        z = ops.multiply(z, self.mask)
         outputs = {'decoded': z,
                    'mean': mean,
                    'logsigma': logsigma,
@@ -226,3 +262,72 @@ class Sampling(layers.Layer):
         )
         out = mean + ops.exp(log_sigma) * eps
         return out
+
+    #
+
+    #
+
+    #  upsampling blocks
+
+        # z = layers.Conv2D(filters=64,
+        #                   strides=1,
+        #                   kernel_size=self.kernel_size,
+        #                   padding='same',
+        #                   activation=None,
+        #                   )(z)
+        # z = layers.ELU()(z)
+
+        # z = layers.Conv2D(filters=64,
+        #                   strides=1,
+        #                   kernel_size=self.kernel_size,
+        #                   padding='same',
+        #                   activation=None,
+        #                   )(z)
+        # z = layers.UpSampling2D(
+        #     size=2,
+        #     interpolation="bilinear",
+        # )(z)
+        # z = layers.ELU()(z)
+
+        # z = layers.Conv2D(filters=64,
+        #                   strides=1,
+        #                   kernel_size=self.kernel_size,
+        #                   padding='same',
+        #                   activation=None,
+        #                   )(z)
+        # z = layers.UpSampling2D(
+        #     size=2,
+        #     interpolation="bilinear",
+        # )(z)
+        # z = layers.ELU()(z)
+
+        # z = layers.Conv2D(filters=64,
+        #                   strides=1,
+        #                   kernel_size=self.kernel_size,
+        #                   padding='same',
+        #                   activation=None,
+        #                   )(z)
+        # z = layers.UpSampling2D(
+        #     size=2,
+        #     interpolation="bilinear",
+        # )(z)
+        # z = layers.ELU()(z)
+
+        # z = layers.Conv2D(filters=64,
+        #                   strides=1,
+        #                   kernel_size=self.kernel_size,
+        #                   padding='same',
+        #                   activation=None,
+        #                   )(z)
+        # z = layers.UpSampling2D(
+        #     size=2,
+        #     interpolation="bilinear",
+        # )(z)
+        # z = layers.ELU()(z)
+
+        # z = layers.Conv2D(filters=self.num_vars,
+        #                   strides=1,
+        #                   kernel_size=self.kernel_size,
+        #                   padding='same',
+        #                   activation=None,
+        #                   )(z)

@@ -19,10 +19,15 @@ class AnalysisBase(keras.callbacks.Callback, ABC):
     def __init__(
             self,
             data_gen,
+            plot=[
+                'reconstruction',
+                'spectra',
+            ],
             **kwargs,
     ):
         super().__init__(**kwargs)
         self.dgen = data_gen
+        self.plot_instructions = plot
         self.output_path = self.dgen.dm.dirs['results']
         self.plot_machine = \
             plot_utils.PlotMachine(dm=self.dgen.dm)
@@ -59,8 +64,10 @@ class AnalysisBase(keras.callbacks.Callback, ABC):
     def on_epoch_end(self, epoch, logs=None):
         self.construct_mask()
         if epoch % 1 == 0 or epoch == self.params['epochs'] - 1:
-            self.random_prediction(epoch)
-            self.plot_spectra(epoch)
+            if 'reconstruction' in self.plot_instructions:
+                self.random_prediction(epoch)
+            if 'spectra' in self.plot_instructions:
+                self.plot_spectra(epoch)
 
     def random_prediction(self, epoch):
         n = self.dgen.__len__()

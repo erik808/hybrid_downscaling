@@ -109,7 +109,7 @@ class ResNet(base_model.BaseModel):
                 scale=2,
             )(y)
 
-        outputs = layers.Conv2D(filters=3,
+        outputs = layers.Conv2D(filters=self.num_vars,
                                 kernel_size=9,
                                 padding='same',
                                 # Todo # Different output activations

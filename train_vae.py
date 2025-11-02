@@ -3,13 +3,19 @@ import data_manager_cmems
 import data_generator_cmems
 import vae_model
 import callbacks
+import sys
 
 importlib.reload(data_manager_cmems)
 importlib.reload(data_generator_cmems)
 importlib.reload(vae_model)
 importlib.reload(callbacks)
 
-dmgr_cmems = data_manager_cmems.DataManagerCMEMS(experiment_id='train_vae')
+if len(sys.argv) < 2:
+    experiment_id = 'train_vae'
+else:
+    experiment_id = sys.argv[1]
+
+dmgr_cmems = data_manager_cmems.DataManagerCMEMS(experiment_id=experiment_id)
 dmgr_cmems.create_training_data(force_rebuild=False)
 
 dgen_args = {
@@ -31,7 +37,11 @@ vae.build_model("betaVAE")
 vae.summary()
 vae.compile(vae.compiler)
 
-analysis_callback = callbacks.AnalysisVAE(data_gen=dgen_test)
+analysis_callback = callbacks.AnalysisVAE(data_gen=dgen_test,
+                                          plot=[
+                                              'reconstruction',
+                                              # 'spectra',
+                                          ])
 
 hist = vae.fit(
     x=dgen_train,

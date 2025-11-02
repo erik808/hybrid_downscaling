@@ -4,8 +4,9 @@
 compute_data = False
 scaling_range = (0, 1)
 split_factor = 11 / 12
-time_range = slice('2023-01-01', '2023-12-31')
+# time_range = slice('2023-01-01', '2023-12-31')
 # time_range = slice('2023-01-01', '2023-01-03')
+time_range = slice('2023-01-01', '2023-04-01')
 
 # important directories and files
 data_dir = 'data'

@@ -9,7 +9,7 @@ importlib.reload(data_generator_cmems)
 importlib.reload(resnet_model)
 importlib.reload(callbacks)
 
-dmgr_cmems = data_manager_cmems.DataManagerCMEMS()
+dmgr_cmems = data_manager_cmems.DataManagerCMEMS(experiment_id='train_resnet')
 dmgr_cmems.create_training_data(force_rebuild=False)
 
 dgen_args = {
@@ -22,15 +22,6 @@ dgen_args = {
     'max_queue_size': 10,
 }
 
-
-# def wrap_data_generators(**args):
-#     dgen_train = data_generator_cmems.DataGeneratorCMEMS(mode='train',
-#                                                          **args)
-#     dgen_test = data_generator_cmems.DataGeneratorCMEMS(mode='test',
-#                                                         **args)
-#     return dgen_train, dgen_test
-
-
 dgen_train, dgen_test = \
     data_generator_cmems.getter(**dgen_args)
 
@@ -40,11 +31,11 @@ resnet.build_model("ResNet")
 resnet.summary()
 resnet.compile(resnet.compiler)
 
-analysis_callback = callbacks.Analysis(data_gen=dgen_test)
+analysis_callback = callbacks.AnalysisResNet(data_gen=dgen_test)
 
 hist = resnet.fit(
     x=dgen_train,
-    epochs=2,
+    epochs=10,
     validation_data=dgen_test,
     callbacks=[
         analysis_callback,

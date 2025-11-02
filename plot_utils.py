@@ -42,7 +42,9 @@ class PlotMachine():
         plot_dict.pop('meta', None)
         postfix = \
             self.create_postfix(add_name=f"epoch{metadata['epoch']}")
-        fig_name = f"{self.dirs['results']}/reconstructions{postfix}.png"
+        prefix = metadata['prefix']
+        fig_name = (f"{self.dirs['results']}/"
+                    f"{prefix}reconstructions{postfix}.png")
 
         num_plots = len(plot_dict.keys())
         M, N = metadata['subplot_shape']
@@ -235,17 +237,18 @@ class PlotMachine():
         S_lowres_mn = np.mean(S_lowres, axis=0)
 
         plt.figure()
-        plt.loglog(S_truth_mn, '.-', label='HR truth')
+        plt.loglog(S_truth_mn, 's-', markersize=3, label='HR truth')
         plt.loglog(S_pred_mn, '.-', label='Model prediction')
-        plt.loglog(S_lowres_mn, '.-', label='LR forcing/control')
+        plt.loglog(S_lowres_mn, '--', label='LR forcing/control')
         plt.legend()
         plt.grid()
         plt.gca().set_ylim([1e-5, 1])
         plt.gca().set_title(f'Mean eddy enstrophy spectrum, {transect_name}')
 
         postfix = self.create_postfix()
-        fig_name = (f'{self.results_dir}/'
-                    f'enstrophy_spectrum_{transect_name}{postfix}.png')
+        fig_name = \
+            (f'{self.results_dir}/'
+             f'enstrophy_spectrum_epoch{epoch}_{transect_name}{postfix}.png')
         print(fig_name)
         plt.tight_layout()
         plt.savefig(fig_name)
@@ -288,9 +291,9 @@ class PlotMachine():
             else 1e1 * np.max(S_truth_mn)
 
         plt.figure()
-        plt.loglog(S_truth_mn, '.-', label='HR truth')
+        plt.loglog(S_truth_mn, 's-', markersize=3, label='HR truth')
         plt.loglog(S_pred_mn, '.-', label='Model prediction')
-        plt.loglog(S_lowres_mn, '.-', label='LR forcing/control')
+        plt.loglog(S_lowres_mn, '--', label='LR forcing/control')
         plt.loglog(k_1, offset_1 * k_1**(-5 / 3), '--', label='k^-5/3')
         plt.loglog(k_2, offset_2 * k_2**(-3), ':', label='k^-3')
         plt.legend()

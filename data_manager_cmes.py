@@ -61,26 +61,6 @@ class DataManagerCMEMS(DataManagerBase):
     def crop(self, input_field):
         return input_field[..., 3:-2, :-1]
 
-    def regrid_to_transect(self, tpicker, resolution=1e2):
-
-        print('Create transect regridder')
-        mask = self.crop(xr.open_dataset(self.HR_bathy_file).mask)
-        grid_orig = self.build_grid(mask)
-
-        lons = grid_orig['lon'][0, :]
-        lats = grid_orig['lat'][:, 0]
-
-        transect = {
-            'lon_start': lons[tpicker.x_trans[0]],
-            'lon_end': lons[tpicker.x_trans[-1]],
-            'lat_start': lats[tpicker.y_trans[0]],
-            'lat_end': lats[tpicker.y_trans[-1]]
-        }
-
-        return tools.regrid_to_transect(grid_orig,
-                                        resolution=resolution,
-                                        **transect)
-
     def create_regridders(self):
         print('Create regridders')
         bt_HR = xr.open_dataset(self.HR_bathy_file)

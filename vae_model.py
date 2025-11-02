@@ -47,7 +47,7 @@ class VAE(base_model.BaseModel):
         if training:
             self.zero_grad()
 
-        z = self({'HR_data': np.nan_to_num(x['HR_data'])},
+        z = self({'HR_data': ops.nan_to_num(x['HR_data'])},
                  training=training)
 
         z_decoded = z['decoded']

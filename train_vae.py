@@ -15,7 +15,8 @@ if len(sys.argv) < 2:
 else:
     experiment_id = sys.argv[1]
 
-dmgr_cmems = data_manager_cmems.DataManagerCMEMS(experiment_id=experiment_id)
+dmgr_cmems = \
+    data_manager_cmems.DataManagerCMEMS(experiment_id=experiment_id)
 dmgr_cmems.create_training_data(force_rebuild=False)
 
 dgen_args = {
@@ -36,7 +37,7 @@ vae = vae_model.VAE(data_gen=dgen_train)
 vae.build_model("betaVAE")
 vae.summary()
 vae.compile(vae.compiler)
-
+# breakpoint()
 analysis_callback = callbacks.AnalysisVAE(data_gen=dgen_test,
                                           plot=[
                                               'reconstruction',
@@ -45,7 +46,7 @@ analysis_callback = callbacks.AnalysisVAE(data_gen=dgen_test,
 
 hist = vae.fit(
     x=dgen_train,
-    epochs=10,
+    epochs=50,
     validation_data=dgen_test,
     callbacks=[
         analysis_callback,

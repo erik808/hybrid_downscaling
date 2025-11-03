@@ -14,7 +14,7 @@ kernel_size = 3
 dense_dim = 256
 
 # latent space dimension
-latent_space_dim = 64
+latent_space_dim = 1024
 
 # deterministic mode bypasses the sampling layer and uses the mean
 # only

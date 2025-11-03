@@ -101,7 +101,7 @@ class VAE(base_model.BaseModel):
         # Encoder
         x = layers.Conv2D(filters=4 * self.input_shape_HR[-1],
                           strides=2,
-                          kernel_size=self.kernel_size,
+                          kernel_size=9,
                           padding='same',
                           activation=None,
                           )(input_k)
@@ -134,8 +134,9 @@ class VAE(base_model.BaseModel):
 
         # dense transform
         x = layers.Flatten()(x)
-        # x = layers.Dense(units=x.shape[-1],
+        # x = layers.Dense(units=self.dense_dim,
         #                  activation=None,
+        #                  kernel_initializer="identity",
         #                  )(x)
         # x = layers.ReLU()(x)
 
@@ -161,11 +162,6 @@ class VAE(base_model.BaseModel):
             mean = x
         # -------------------------------------------------------
         # Decoder
-        # z = layers.Dense(
-        #     units=self.latent_space_dim,
-        #     activation=None,
-        # )(y)
-
         # z = layers.ReLU()(z)
         # z = layers.Dense(
         #     units=self.dense_dim,

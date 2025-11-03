@@ -141,41 +141,23 @@ class PlotMachine():
         plt.suptitle(f"date: {np.datetime64(self.time_array[id], 'h')}")
         plt.savefig(fig_name, bbox_inches='tight')
 
-    def plot_history(self, hist, managed=False, add='', plot_baseline=True):
+    def plot_history(self,
+                     hist,
+                     add='',
+                     ):
 
-        if not managed:
-            postfix = self.create_postfix()
-            fig_name = f'{self.results_dir}/history{postfix}.png'
-            plt.close('all')
+        postfix = self.create_postfix()
+        fig_name = f'{self.results_dir}/history{postfix}.png'
 
-        plt.subplot(1, 2, 1)
-        for key, value in hist.history.items():
-            if key == 'error' or key == 'base':
-                continue
-            plt.semilogy(value, '.-',
-                         label=f'{key} {add}')
-
-        plt.grid()
-        plt.legend()
+        plt.figure(figsize=(11, 9))
+        [plt.semilogy(value, label=key) for key, value in hist.history.items()]
+        plt.grid(which='both')
         plt.gca().set_xlabel('epoch')
-
-        plt.subplot(1, 2, 2)
-        if 'error' in hist.history:
-            plt.semilogy(hist.history['error'], '.-',
-                         label=f'validation error {add}')
-
-        if 'base' in hist.history and plot_baseline:
-            plt.semilogy(hist.history['base'], '.-',
-                         label='validation baseline')
-
-        plt.grid()
         plt.legend()
-        plt.gca().set_xlabel('epoch')
 
-        if not managed:
-            print(fig_name)
-            plt.tight_layout()
-            plt.savefig(fig_name)
+        print(fig_name)
+        plt.tight_layout()
+        plt.savefig(fig_name)
 
     def plot_prediction_error(self, X, Y, Z, add_name=''):
 

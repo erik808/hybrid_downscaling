@@ -192,11 +192,11 @@ class VAE(base_model.BaseModel):
         z = layers.Dense(
             units=ops.prod(return_shape[1:]),
             kernel_initializer="identity",
-            trainable=False,
+            trainable=True,
             # kernel_regularizer=regularizers.L2(1e-1),
             activation=None,
         )(y)
-        # z = layers.ReLU()(z)
+        z = layers.ReLU()(z)
 
         z = layers.Reshape(return_shape[1:])(z)
         z = layers.Conv2DTranspose(filters=int(z.shape[-1] / 2),

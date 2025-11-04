@@ -1,12 +1,12 @@
 #!/bin/bash
 
 #SBATCH -t 04:00:00
-#SBATCH -J tuning
+#SBATCH -J VAEdownscaling
 #SBATCH -N 1
-#SBATCH -n 8
+#SBATCH -n 4
 #SBATCH --cpus-per-task 4
-#SBATCH --mem 36G
-#SBATCH --qos low
+#SBATCH --mem 16G
+#SBATCH --account sm_fouo
 
 export OMP_NUM_THREADS=8
 export MKL_NUM_THREADS=8
@@ -23,8 +23,9 @@ origdir=$PWD
 cd ../
 
 runscript=$1
-echo "running" $runscript
-time python $runscript
+arg1=$2
+echo "running" $runscript $arg1
+time python $runscript $arg1
 cd $origdir
 
 echo "done"

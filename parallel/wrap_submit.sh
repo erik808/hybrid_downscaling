@@ -11,14 +11,15 @@ function run_sbatch {
 }
 
 if [ "$#" -eq 0 ]; then
-    runscript=ae_experiment.py
     echo "no arguments given, running $runscript"
+    exit 1
 else
     runscript=$1
-    echo "running $runscript"
+    arg1=$2
+    echo "running $runscript $arg1"
 fi
 
-jobid=`run_sbatch submit.sh $runscript`
+jobid=`run_sbatch submit.sh $runscript $arg1`
 slurmfile=slurm-$jobid.out
 
 while true; do

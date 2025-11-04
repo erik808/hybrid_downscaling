@@ -1,6 +1,7 @@
 import keras
 from keras import layers
 from keras import ops
+from keras import regularizers
 import torch
 import tools
 import base_model
@@ -127,7 +128,13 @@ class VAE(base_model.BaseModel):
                           activation=None,
                           )(x)
         x = layers.ReLU()(x)
-        skip = x
+        x = layers.Conv2D(filters=2 * x.shape[-1],
+                          strides=2,
+                          kernel_size=self.kernel_size,
+                          padding='same',
+                          activation=None,
+                          )(x)
+        x = layers.ReLU()(x)
 
         # return to this shape for decoder input
         return_shape = x.shape
@@ -172,11 +179,20 @@ class VAE(base_model.BaseModel):
         z = layers.Dense(
             units=ops.prod(return_shape[1:]),
             kernel_initializer="identity",
+            trainable=False,
+            # kernel_regularizer=regularizers.L2(1e-1),
             activation=None,
         )(y)
-        z = layers.ReLU()(z)
+        # z = layers.ReLU()(z)
+
         z = layers.Reshape(return_shape[1:])(z)
 
+        z = resnet_model.SubPixelConv(
+            filters_out=int(z.shape[-1] / 2),
+            kernel_size=3,
+            scale=2,
+        )(z)
+        z = layers.ReLU()(z)
         z = resnet_model.SubPixelConv(
             filters_out=int(z.shape[-1] / 2),
             kernel_size=3,

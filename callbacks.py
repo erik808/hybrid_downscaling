@@ -214,7 +214,7 @@ class AnalysisBase(keras.callbacks.Callback, ABC):
             self.plot_machine.plot_reconstructions(plot_dict)
 
     def plot_history(self, hist):
-        self.plot_machine(hist)
+        self.plot_machine.plot_history(hist)
 
 
 class AnalysisResNet(AnalysisBase):

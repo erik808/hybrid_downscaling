@@ -1,7 +1,7 @@
 import keras
 from keras import layers
 from keras import ops
-from keras import regularizers
+# from keras import regularizers
 import torch
 import tools
 import base_model
@@ -157,13 +157,13 @@ class VAE(base_model.BaseModel):
 
         y = layers.Dense(units=self.dense_dim,
                          activation=None,
-                         kernel_initializer="identity",
+                         # kernel_initializer="identity",
                          )(x)
         y = layers.ReLU()(y)
 
         y = layers.Dense(units=self.latent_space_dim * 2,
                          activation=None,
-                         kernel_initializer="identity",
+                         # kernel_initializer="identity",
                          name="mean_logsigma",
                          )(y)
 
@@ -191,8 +191,8 @@ class VAE(base_model.BaseModel):
 
         z = layers.Dense(
             units=ops.prod(return_shape[1:]),
-            kernel_initializer="identity",
-            trainable=True,
+            # kernel_initializer="identity",
+            # trainable=False,
             # kernel_regularizer=regularizers.L2(1e-1),
             activation=None,
         )(y)
@@ -271,72 +271,3 @@ class Sampling(layers.Layer):
         )
         out = mean + ops.exp(log_sigma) * eps
         return out
-
-    #
-
-    #
-
-    #  upsampling blocks
-
-        # z = layers.Conv2D(filters=64,
-        #                   strides=1,
-        #                   kernel_size=3,
-        #                   padding='same',
-        #                   activation=None,
-        #                   )(z)
-        # z = layers.ReLU()(z)
-
-        # z = layers.Conv2D(filters=64,
-        #                   strides=1,
-        #                   kernel_size=3,
-        #                   padding='same',
-        #                   activation=None,
-        #                   )(z)
-        # z = layers.UpSampling2D(
-        #     size=2,
-        #     interpolation="bilinear",
-        # )(z)
-        # z = layers.ReLU()(z)
-
-        # z = layers.Conv2D(filters=64,
-        #                   strides=1,
-        #                   kernel_size=3,
-        #                   padding='same',
-        #                   activation=None,
-        #                   )(z)
-        # z = layers.UpSampling2D(
-        #     size=2,
-        #     interpolation="bilinear",
-        # )(z)
-        # z = layers.ReLU()(z)
-
-        # z = layers.Conv2D(filters=64,
-        #                   strides=1,
-        #                   kernel_size=3,
-        #                   padding='same',
-        #                   activation=None,
-        #                   )(z)
-        # z = layers.UpSampling2D(
-        #     size=2,
-        #     interpolation="bilinear",
-        # )(z)
-        # z = layers.ReLU()(z)
-
-        # z = layers.Conv2D(filters=64,
-        #                   strides=1,
-        #                   kernel_size=3,
-        #                   padding='same',
-        #                   activation=None,
-        #                   )(z)
-        # z = layers.UpSampling2D(
-        #     size=2,
-        #     interpolation="bilinear",
-        # )(z)
-        # z = layers.ReLU()(z)
-
-        # z = layers.Conv2D(filters=self.num_vars,
-        #                   strides=1,
-        #                   kernel_size=3,
-        #                   padding='same',
-        #                   activation=None,
-        #                   )(z)

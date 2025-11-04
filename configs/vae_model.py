@@ -2,7 +2,7 @@
 learning_rate = 1e-4
 
 # weight on KL loss
-beta = 0.01
+beta = 1e-7
 
 # weight on reconstruction loss
 gamma = 1

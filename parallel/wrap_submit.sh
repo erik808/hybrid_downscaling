@@ -1,7 +1,7 @@
 #/bin/bash
 
 function run_sbatch {
-    sbcommand=`sbatch $1 $2`
+    sbcommand=`sbatch $1 $2 $3`
     if [[ "$sbcommand" =~ Submitted\ batch\ job\ ([0-9]+) ]]; then
         jobid=${BASH_REMATCH[1]}
         echo "$jobid"
@@ -11,7 +11,7 @@ function run_sbatch {
 }
 
 if [ "$#" -eq 0 ]; then
-    echo "no arguments given, running $runscript"
+    echo "no arguments given, not running $runscript"
     exit 1
 else
     runscript=$1

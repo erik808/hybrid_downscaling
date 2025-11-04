@@ -2,10 +2,13 @@
 learning_rate = 1e-4
 
 # weight on KL loss
-beta = 1e-7
+beta = 1e-4
 
 # weight on reconstruction loss
 gamma = 1
+
+# multiplying factor number of filters
+filter_mult = 4
 
 # dense dimension
 dense_dim = 256

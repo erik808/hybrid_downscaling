@@ -99,7 +99,7 @@ class VAE(base_model.BaseModel):
 
         # -------------------------------------------------------
         # Encoder
-        x = layers.Conv2D(filters=4 * self.input_shape_HR[-1],
+        x = layers.Conv2D(filters=self.filter_mult * self.input_shape_HR[-1],
                           strides=2,
                           kernel_size=3,
                           padding='valid',
@@ -238,7 +238,7 @@ class VAE(base_model.BaseModel):
         z = ops.pad(z, crop_after)
         print(z.shape)
 
-        z = layers.Conv2DTranspose(filters=int(z.shape[-1] / 4),
+        z = layers.Conv2DTranspose(filters=int(z.shape[-1] / self.filter_mult),
                                    strides=2,
                                    kernel_size=3,
                                    padding='valid',

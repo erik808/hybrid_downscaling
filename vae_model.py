@@ -5,7 +5,6 @@ from keras import regularizers
 import torch
 import tools
 import base_model
-import resnet_model
 
 
 class VAE(base_model.BaseModel):
@@ -102,38 +101,51 @@ class VAE(base_model.BaseModel):
         # Encoder
         x = layers.Conv2D(filters=4 * self.input_shape_HR[-1],
                           strides=2,
-                          kernel_size=9,
-                          padding='same',
+                          kernel_size=3,
+                          padding='valid',
                           activation=None,
                           )(input_k)
+        pad_before = ((0, 0), (1, 0), (1, 0), (0, 0))
+        pad_after = ((0, 0), (0, 1), (0, 1), (0, 0))
+        crop_before = ((0, 0), (-1, 0), (-1, 0), (0, 0))
+        crop_after = ((0, 0), (0, -1), (0, -1), (0, 0))
+        x = ops.pad(x, pad_before)
+        print(x.shape)
         x = layers.ReLU()(x)
         x = layers.Conv2D(filters=2 * x.shape[-1],
                           strides=2,
-                          kernel_size=self.kernel_size,
-                          padding='same',
+                          kernel_size=3,
+                          padding='valid',
                           activation=None,
                           )(x)
+        x = ops.pad(x, pad_after)
+        print(x.shape)
         x = layers.ReLU()(x)
         x = layers.Conv2D(filters=2 * x.shape[-1],
                           strides=2,
-                          kernel_size=self.kernel_size,
-                          padding='same',
+                          kernel_size=3,
+                          padding='valid',
                           activation=None,
                           )(x)
+        x = ops.pad(x, pad_before)
+        print(x.shape)
         x = layers.ReLU()(x)
         x = layers.Conv2D(filters=2 * x.shape[-1],
                           strides=2,
-                          kernel_size=self.kernel_size,
-                          padding='same',
+                          kernel_size=3,
+                          padding='valid',
                           activation=None,
                           )(x)
+        x = ops.pad(x, pad_after)
+        print(x.shape)
         x = layers.ReLU()(x)
         x = layers.Conv2D(filters=2 * x.shape[-1],
                           strides=2,
-                          kernel_size=self.kernel_size,
+                          kernel_size=3,
                           padding='same',
                           activation=None,
                           )(x)
+        print(x.shape)
         x = layers.ReLU()(x)
 
         # return to this shape for decoder input
@@ -141,24 +153,21 @@ class VAE(base_model.BaseModel):
 
         # dense transform
         x = layers.Flatten()(x)
-        # x = layers.Dense(units=self.dense_dim,
-        #                  activation=None,
-        #                  kernel_initializer="identity",
-        #                  )(x)
-        # x = layers.ReLU()(x)
+        skip = x
 
-        mean = layers.Dense(units=self.latent_space_dim,
-                            activation=None,
-                            kernel_initializer="identity",
-                            name="mean",
-                            )(x)
+        y = layers.Dense(units=self.dense_dim,
+                         activation=None,
+                         kernel_initializer="identity",
+                         )(x)
+        y = layers.ReLU()(y)
 
-        logsigma = layers.Dense(units=self.latent_space_dim,
-                                activation=None,
-                                kernel_initializer="identity",
-                                name="logsigma",
-                                )(x)
+        y = layers.Dense(units=self.latent_space_dim * 2,
+                         activation=None,
+                         kernel_initializer="identity",
+                         name="mean_logsigma",
+                         )(y)
 
+        mean, logsigma = ops.split(y, 2, axis=-1)
         # -------------------------------------------------------
         # Sampling
         y = Sampling()(mean, logsigma)
@@ -167,14 +176,18 @@ class VAE(base_model.BaseModel):
             y = x
             logsigma = x
             mean = x
+
         # -------------------------------------------------------
         # Decoder
-        # z = layers.ReLU()(z)
-        # z = layers.Dense(
-        #     units=self.dense_dim,
-        #     activation=None,
-        # )(z)
-        # z = layers.ReLU()(z)
+        z = layers.ReLU()(y)
+        z = layers.Dense(
+            units=self.dense_dim,
+            activation=None,
+        )(z)
+        z = layers.ReLU()(z)
+
+        if self.deterministic_mode:
+            y = skip
 
         z = layers.Dense(
             units=ops.prod(return_shape[1:]),
@@ -186,46 +199,53 @@ class VAE(base_model.BaseModel):
         # z = layers.ReLU()(z)
 
         z = layers.Reshape(return_shape[1:])(z)
-
-        z = resnet_model.SubPixelConv(
-            filters_out=int(z.shape[-1] / 2),
-            kernel_size=3,
-            scale=2,
-        )(z)
-        z = layers.ReLU()(z)
-        z = resnet_model.SubPixelConv(
-            filters_out=int(z.shape[-1] / 2),
-            kernel_size=3,
-            scale=2,
-        )(z)
-        z = layers.ReLU()(z)
-        z = resnet_model.SubPixelConv(
-            filters_out=int(z.shape[-1] / 2),
-            kernel_size=3,
-            scale=2,
-        )(z)
-        z = layers.ReLU()(z)
-        z = resnet_model.SubPixelConv(
-            filters_out=int(z.shape[-1] / 2),
-            kernel_size=3,
-            scale=2,
-        )(z)
-        z = layers.ReLU()(z)
-        z = resnet_model.SubPixelConv(
-            filters_out=int(z.shape[-1] / 2),
-            kernel_size=3,
-            scale=2,
-        )(z)
+        z = layers.Conv2DTranspose(filters=int(z.shape[-1] / 2),
+                                   strides=2,
+                                   kernel_size=3,
+                                   padding='valid',
+                                   activation=None,
+                                   )(z)
+        z = ops.pad(z, crop_before)
+        print(z.shape)
         z = layers.ReLU()(z)
 
-        z = layers.Conv2D(filters=self.num_vars,
-                          kernel_size=9,
-                          padding='same',
-                          # Todo # Different output activations
-                          # should be tested. Output values need
-                          # to be mapped to [0,1].
-                          activation=None,
-                          )(z)
+        z = layers.Conv2DTranspose(filters=int(z.shape[-1] / 2),
+                                   strides=2,
+                                   kernel_size=3,
+                                   padding='valid',
+                                   activation=None,
+                                   )(z)
+        z = ops.pad(z, crop_after)
+        print(z.shape)
+        z = layers.ReLU()(z)
+
+        z = layers.Conv2DTranspose(filters=int(z.shape[-1] / 2),
+                                   strides=2,
+                                   kernel_size=3,
+                                   padding='valid',
+                                   activation=None,
+                                   )(z)
+        z = ops.pad(z, crop_before)
+        print(z.shape)
+        z = layers.ReLU()(z)
+
+        z = layers.Conv2DTranspose(filters=int(z.shape[-1] / 2),
+                                   strides=2,
+                                   kernel_size=3,
+                                   padding='valid',
+                                   activation=None,
+                                   )(z)
+        z = ops.pad(z, crop_after)
+        print(z.shape)
+
+        z = layers.Conv2DTranspose(filters=int(z.shape[-1] / 4),
+                                   strides=2,
+                                   kernel_size=3,
+                                   padding='valid',
+                                   activation=None,
+                                   )(z)
+        z = ops.pad(z, crop_before)
+        print(z.shape)
 
         # activation and masking
         z = ops.multiply(z, self.mask)
@@ -260,7 +280,7 @@ class Sampling(layers.Layer):
 
         # z = layers.Conv2D(filters=64,
         #                   strides=1,
-        #                   kernel_size=self.kernel_size,
+        #                   kernel_size=3,
         #                   padding='same',
         #                   activation=None,
         #                   )(z)
@@ -268,19 +288,7 @@ class Sampling(layers.Layer):
 
         # z = layers.Conv2D(filters=64,
         #                   strides=1,
-        #                   kernel_size=self.kernel_size,
-        #                   padding='same',
-        #                   activation=None,
-        #                   )(z)
-        # z = layers.UpSampling2D(
-        #     size=2,
-        #     interpolation="bilinear",
-        # )(z)
-        # z = layers.ReLU()(z)
-
-        # z = layers.Conv2D(filters=64,
-        #                   strides=1,
-        #                   kernel_size=self.kernel_size,
+        #                   kernel_size=3,
         #                   padding='same',
         #                   activation=None,
         #                   )(z)
@@ -292,7 +300,7 @@ class Sampling(layers.Layer):
 
         # z = layers.Conv2D(filters=64,
         #                   strides=1,
-        #                   kernel_size=self.kernel_size,
+        #                   kernel_size=3,
         #                   padding='same',
         #                   activation=None,
         #                   )(z)
@@ -304,7 +312,19 @@ class Sampling(layers.Layer):
 
         # z = layers.Conv2D(filters=64,
         #                   strides=1,
-        #                   kernel_size=self.kernel_size,
+        #                   kernel_size=3,
+        #                   padding='same',
+        #                   activation=None,
+        #                   )(z)
+        # z = layers.UpSampling2D(
+        #     size=2,
+        #     interpolation="bilinear",
+        # )(z)
+        # z = layers.ReLU()(z)
+
+        # z = layers.Conv2D(filters=64,
+        #                   strides=1,
+        #                   kernel_size=3,
         #                   padding='same',
         #                   activation=None,
         #                   )(z)
@@ -316,7 +336,7 @@ class Sampling(layers.Layer):
 
         # z = layers.Conv2D(filters=self.num_vars,
         #                   strides=1,
-        #                   kernel_size=self.kernel_size,
+        #                   kernel_size=3,
         #                   padding='same',
         #                   activation=None,
         #                   )(z)

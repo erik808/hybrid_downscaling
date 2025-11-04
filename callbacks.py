@@ -9,10 +9,9 @@ from abc import ABC, abstractmethod
 
 importlib.reload(plot_utils)
 
+plt.switch_backend('Agg')
 # if os.environ.get('DISPLAY') is not None:
 #     plt.switch_backend('qtagg')
-# else:
-#     plt.switch_backend('Agg')
 
 
 class AnalysisBase(keras.callbacks.Callback, ABC):

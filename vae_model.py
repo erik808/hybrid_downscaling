@@ -85,6 +85,11 @@ class VAE(base_model.BaseModel):
         return {m.name: m.result() for m in self.metrics}
 
     def builder(self):
+        pad_before = ((0, 0), (1, 0), (1, 0), (0, 0))
+        pad_after = ((0, 0), (0, 1), (0, 1), (0, 0))
+        crop_before = ((0, 0), (-1, 0), (-1, 0), (0, 0))
+        crop_after = ((0, 0), (0, -1), (0, -1), (0, 0))
+
         inputs = layers.Input(
             shape=self.input_shape_HR,
             name=self.input_name_HR)
@@ -99,53 +104,50 @@ class VAE(base_model.BaseModel):
 
         # -------------------------------------------------------
         # Encoder
-        x = layers.Conv2D(filters=self.filter_mult * self.input_shape_HR[-1],
-                          strides=2,
-                          kernel_size=3,
-                          padding='valid',
-                          activation=None,
-                          )(input_k)
-        pad_before = ((0, 0), (1, 0), (1, 0), (0, 0))
-        pad_after = ((0, 0), (0, 1), (0, 1), (0, 0))
-        crop_before = ((0, 0), (-1, 0), (-1, 0), (0, 0))
-        crop_after = ((0, 0), (0, -1), (0, -1), (0, 0))
+        x = layers.Conv2D(
+            filters=self.filter_mult_start * self.input_shape_HR[-1],
+            strides=2,
+            kernel_size=3,
+            padding='valid',
+            activation=None,
+        )(input_k)
         x = ops.pad(x, pad_before)
-        print(x.shape)
         x = layers.ReLU()(x)
-        x = layers.Conv2D(filters=2 * x.shape[-1],
-                          strides=2,
-                          kernel_size=3,
-                          padding='valid',
-                          activation=None,
-                          )(x)
+        
+        x = layers.Conv2D(
+            filters=self.filter_mult_rest * x.shape[-1],
+            strides=2,
+            kernel_size=3,
+            padding='valid',
+            activation=None,
+        )(x)
         x = ops.pad(x, pad_after)
-        print(x.shape)
         x = layers.ReLU()(x)
-        x = layers.Conv2D(filters=2 * x.shape[-1],
+        
+        x = layers.Conv2D(self.filter_mult_rest * x.shape[-1],
                           strides=2,
                           kernel_size=3,
                           padding='valid',
                           activation=None,
                           )(x)
         x = ops.pad(x, pad_before)
-        print(x.shape)
         x = layers.ReLU()(x)
-        x = layers.Conv2D(filters=2 * x.shape[-1],
+        
+        x = layers.Conv2D(self.filter_mult_rest * x.shape[-1],
                           strides=2,
                           kernel_size=3,
                           padding='valid',
                           activation=None,
                           )(x)
         x = ops.pad(x, pad_after)
-        print(x.shape)
         x = layers.ReLU()(x)
-        x = layers.Conv2D(filters=2 * x.shape[-1],
+        
+        x = layers.Conv2D(self.filter_mult_rest * x.shape[-1],
                           strides=2,
                           kernel_size=3,
                           padding='same',
                           activation=None,
                           )(x)
-        print(x.shape)
         x = layers.ReLU()(x)
 
         # return to this shape for decoder input
@@ -173,21 +175,20 @@ class VAE(base_model.BaseModel):
         y = Sampling()(mean, logsigma)
 
         if self.deterministic_mode:
-            y = x
-            logsigma = x
-            mean = x
+            y = mean
+            logsigma = mean
+            mean = mean
 
         # -------------------------------------------------------
         # Decoder
-        z = layers.ReLU()(y)
         z = layers.Dense(
             units=self.dense_dim,
             activation=None,
-        )(z)
+        )(y)
         z = layers.ReLU()(z)
 
         if self.deterministic_mode:
-            y = skip
+            z = skip
 
         z = layers.Dense(
             units=ops.prod(return_shape[1:]),
@@ -195,55 +196,60 @@ class VAE(base_model.BaseModel):
             # trainable=False,
             # kernel_regularizer=regularizers.L2(1e-1),
             activation=None,
-        )(y)
+        )(z)
         z = layers.ReLU()(z)
 
         z = layers.Reshape(return_shape[1:])(z)
-        z = layers.Conv2DTranspose(filters=int(z.shape[-1] / 2),
-                                   strides=2,
-                                   kernel_size=3,
-                                   padding='valid',
-                                   activation=None,
-                                   )(z)
+        z = layers.Conv2DTranspose(
+            filters=int(z.shape[-1] / self.filter_mult_rest),
+            strides=2,
+            kernel_size=3,
+            padding='valid',
+            activation=None,
+        )(z)
         z = ops.pad(z, crop_before)
         print(z.shape)
         z = layers.ReLU()(z)
 
-        z = layers.Conv2DTranspose(filters=int(z.shape[-1] / 2),
-                                   strides=2,
-                                   kernel_size=3,
-                                   padding='valid',
-                                   activation=None,
-                                   )(z)
+        z = layers.Conv2DTranspose(
+            filters=int(z.shape[-1] / self.filter_mult_rest),
+            strides=2,
+            kernel_size=3,
+            padding='valid',
+            activation=None,
+        )(z)
         z = ops.pad(z, crop_after)
         print(z.shape)
         z = layers.ReLU()(z)
 
-        z = layers.Conv2DTranspose(filters=int(z.shape[-1] / 2),
-                                   strides=2,
-                                   kernel_size=3,
-                                   padding='valid',
-                                   activation=None,
-                                   )(z)
+        z = layers.Conv2DTranspose(
+            filters=int(z.shape[-1] / self.filter_mult_rest),
+            strides=2,
+            kernel_size=3,
+            padding='valid',
+            activation=None,
+        )(z)
         z = ops.pad(z, crop_before)
         print(z.shape)
         z = layers.ReLU()(z)
 
-        z = layers.Conv2DTranspose(filters=int(z.shape[-1] / 2),
-                                   strides=2,
-                                   kernel_size=3,
-                                   padding='valid',
-                                   activation=None,
-                                   )(z)
+        z = layers.Conv2DTranspose(
+            filters=int(z.shape[-1] / self.filter_mult_rest),
+            strides=2,
+            kernel_size=3,
+            padding='valid',
+            activation=None,
+        )(z)
         z = ops.pad(z, crop_after)
         print(z.shape)
 
-        z = layers.Conv2DTranspose(filters=int(z.shape[-1] / self.filter_mult),
-                                   strides=2,
-                                   kernel_size=3,
-                                   padding='valid',
-                                   activation=None,
-                                   )(z)
+        z = layers.Conv2DTranspose(
+            filters=int(z.shape[-1] / self.filter_mult_start),
+            strides=2,
+            kernel_size=3,
+            padding='valid',
+            activation=None,
+        )(z)
         z = ops.pad(z, crop_before)
         print(z.shape)
 

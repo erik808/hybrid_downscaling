@@ -8,7 +8,8 @@ beta = 1e-4
 gamma = 1
 
 # multiplying factor number of filters
-filter_mult = 4
+filter_mult_start = 4
+filter_mult_rest = 2
 
 # dense dimension
 dense_dim = 256

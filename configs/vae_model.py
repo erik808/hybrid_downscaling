@@ -1,14 +1,14 @@
 # learning rate in Adam optimizer
-learning_rate = 5e-5
+learning_rate = 1e-4
 
 # weight on KL loss
-beta = 1e-4
+beta = 0.0
 
 # weight on reconstruction loss
 gamma = 1
 
 # multiplying factors number of filters
-filter_mult_start = 8
+filter_mult_start = 4
 filter_mult_rest = 2
 
 # activation type ('relu', 'leaky_relu', 'elu')
@@ -22,4 +22,4 @@ latent_space_dim = 64
 
 # deterministic mode bypasses the sampling layer and uses the mean
 # only
-deterministic_mode = False
+deterministic_mode = True

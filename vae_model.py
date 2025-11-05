@@ -45,22 +45,29 @@ class VAE(base_model.BaseModel):
 
         z_decoded = z['decoded']
         z_mean = z['mean']
-        z_logsigma = z['logsigma']
+        z_logvar = z['logvar']
 
         # compute reconstruction loss
         z_decoded = z_decoded[:, self.mask_rows, self.mask_cols, :]
         y = y['HR_data'][:, 0, self.mask_rows, self.mask_cols, :]
         re_loss = self.loss_fn(z_decoded, y) * self.gamma
 
-        # compute KL loss
+        # compute KL loss (sigma formulation)
+        # kl_loss = \
+        #     -self.beta / 2 * \
+        #     ops.mean(1 + 2 * z_logsigma -
+        #              ops.exp(2 * z_logsigma) -
+        #              ops.square(z_mean))
+
+        # kl loss variance formulation
         kl_loss = \
             -self.beta / 2 * \
-            ops.sum(1 + 2 * z_logsigma -
-                    ops.exp(2 * z_logsigma) -
-                    ops.square(z_mean), axis=1)
+            ops.mean(1 + z_logvar -
+                     ops.exp(z_logvar) -
+                     ops.square(z_mean))
 
-        # sum over latent dimension, mean over batch size
-        kl_loss = ops.mean(kl_loss)
+        # # sum over latent dimension, mean over batch size
+        # kl_loss = ops.mean(kl_loss)
 
         # combine losses
         loss = re_loss + kl_loss
@@ -166,17 +173,17 @@ class VAE(base_model.BaseModel):
         y = layers.Dense(units=self.latent_space_dim * 2,
                          activation=None,
                          # kernel_initializer="identity",
-                         name="mean_logsigma",
+                         name="mean_logvar",
                          )(y)
 
-        mean, logsigma = ops.split(y, 2, axis=-1)
+        mean, logvar = ops.split(y, 2, axis=-1)
         # -------------------------------------------------------
         # Sampling
-        y = Sampling()(mean, logsigma)
+        y = Sampling()(mean, logvar)
 
         if self.deterministic_mode:
             y = mean
-            logsigma = mean
+            logvar = mean
             mean = mean
 
         # -------------------------------------------------------
@@ -190,7 +197,7 @@ class VAE(base_model.BaseModel):
         if self.deterministic_mode:
             z = skip
             mean = skip
-            logsigma = skip
+            logvar = skip
 
         z = layers.Dense(
             units=ops.prod(return_shape[1:]),
@@ -259,7 +266,7 @@ class VAE(base_model.BaseModel):
         z = ops.multiply(z, self.mask)
         outputs = {'decoded': z,
                    'mean': mean,
-                   'logsigma': logsigma,
+                   'logvar': logvar,
                    }
         return inputs, outputs
 
@@ -273,9 +280,9 @@ class Sampling(layers.Layer):
         super().__init__(**kwargs)
         # optional seed here
 
-    def call(self, mean, log_sigma):
+    def call(self, mean, log_var):
         eps = keras.random.normal(
             shape=ops.shape(mean)
         )
-        out = mean + ops.exp(log_sigma) * eps
+        out = mean + ops.exp(0.5 * log_var) * eps
         return out

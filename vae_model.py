@@ -145,13 +145,6 @@ class VAE(base_model.BaseModel):
                           )(x)
         x = ops.pad(x, pad_after)
 
-        x = layers.Conv2D(self.filter_mult_rest * x.shape[-1],
-                          strides=2,
-                          kernel_size=3,
-                          padding='same',
-                          activation=self.activation,
-                          )(x)
-
         # return to this shape for decoder input
         return_shape = x.shape
         skip = x  # in deterministic mode
@@ -196,15 +189,6 @@ class VAE(base_model.BaseModel):
             z = skip
             mean = skip
             logvar = skip
-
-        z = layers.Conv2DTranspose(
-            filters=int(z.shape[-1] / self.filter_mult_rest),
-            strides=2,
-            kernel_size=3,
-            padding='valid',
-            activation=self.activation,
-        )(z)
-        z = ops.pad(z, crop_before)
 
         z = layers.Conv2DTranspose(
             filters=int(z.shape[-1] / self.filter_mult_rest),

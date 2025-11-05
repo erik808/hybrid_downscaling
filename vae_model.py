@@ -144,7 +144,7 @@ class VAE(base_model.BaseModel):
         x = layers.PReLU()(x)
 
         x = layers.Conv2D(
-            filters=64,
+            filters=128,
             strides=2,
             kernel_size=3,
             padding='same',

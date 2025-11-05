@@ -122,7 +122,7 @@ class VAE(base_model.BaseModel):
             kernel_size=3,
             padding='same',
             activation=None,
-        )(input_k)
+        )(x)
         x = layers.PReLU()(x)
 
         x = layers.Conv2D(

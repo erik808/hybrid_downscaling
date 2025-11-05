@@ -129,39 +129,42 @@ class VAE(base_model.BaseModel):
         )(x)
         x = ops.pad(x, pad_after)
 
-        x = layers.Conv2D(self.filter_mult_rest * x.shape[-1],
-                          strides=2,
-                          kernel_size=3,
-                          padding='valid',
-                          activation=self.activation,
-                          )(x)
+        x = layers.Conv2D(
+            self.filter_mult_rest * x.shape[-1],
+            strides=2,
+            kernel_size=3,
+            padding='valid',
+            activation=self.activation,
+        )(x)
         x = ops.pad(x, pad_before)
 
-        x = layers.Conv2D(self.filter_mult_rest * x.shape[-1],
-                          strides=2,
-                          kernel_size=3,
-                          padding='valid',
-                          activation=self.activation,
-                          )(x)
+        x = layers.Conv2D(
+            self.filter_mult_rest * x.shape[-1],
+            strides=2,
+            kernel_size=3,
+            padding='valid',
+            activation=self.activation,
+        )(x)
         x = ops.pad(x, pad_after)
+        skip = x
 
         # return to this shape for decoder input
-        return_shape = x.shape
-        skip = x  # in deterministic mode
+        # return_shape = x.shape
+        # skip = x  # in deterministic mode
 
-        # dense transform
-        # x = layers.Flatten()(x)
+        # # dense transform
+        # # x = layers.Flatten()(x)
 
-        y = layers.Dense(units=self.dense_dim,
-                         activation=self.activation,
-                         # kernel_initializer="identity",
-                         )(x)
+        # y = layers.Dense(units=self.dense_dim,
+        #                  activation=self.activation,
+        #                  # kernel_initializer="identity",
+        #                  )(x)
 
-        y = layers.Dense(units=self.latent_space_dim * 2,
-                         activation=None,
-                         # kernel_initializer="identity",
-                         name="mean_logvar",
-                         )(y)
+        # y = layers.Dense(units=self.latent_space_dim * 2,
+        #                  activation=None,
+        #                  # kernel_initializer="identity",
+        #                  name="mean_logvar",
+        #                  )(y)
 
         mean, logvar = ops.split(x, 2, axis=-1)
         # -------------------------------------------------------
@@ -177,7 +180,6 @@ class VAE(base_model.BaseModel):
         )(y)
         y = ops.pad(y, crop_before)
         y = ops.pad(y, crop_after)
-
         # -------------------------------------------------------
         # Decoder
         # z = layers.Dense(
@@ -200,6 +202,9 @@ class VAE(base_model.BaseModel):
         #     mean = skip
         #     logvar = skip
 
+        if self.deterministic_mode:
+            y = skip
+
         z = layers.Conv2DTranspose(
             filters=int(y.shape[-1] / self.filter_mult_rest),
             strides=2,
@@ -218,13 +223,22 @@ class VAE(base_model.BaseModel):
         )(z)
         z = ops.pad(z, crop_after)
         z = layers.Conv2DTranspose(
+            filters=int(z.shape[-1] / self.filter_mult_rest),
+            strides=2,
+            kernel_size=3,
+            padding='valid',
+            activation=self.activation,
+        )(z)
+        z = ops.pad(z, crop_before)
+        z = layers.Conv2DTranspose(
             filters=int(z.shape[-1] / self.filter_mult_start),
             strides=2,
             kernel_size=3,
             padding='valid',
             activation=None,
         )(z)
-        z = ops.pad(z, crop_before)
+        z = ops.pad(z, crop_after)
+        breakpoint()
 
         # activation and masking
         z = ops.multiply(z, self.mask)

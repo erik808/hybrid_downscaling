@@ -11,6 +11,7 @@ import importlib
 import xesmf as xe
 from dask.diagnostics import ProgressBar
 from sklearn.preprocessing import MinMaxScaler
+from sklearn.preprocessing import StandardScaler
 
 
 class CustomScaler():
@@ -267,13 +268,16 @@ def nested_groupby(ds):
     return keys, datasets
 
 
-def create_scaler(ds, scaling_range):
+def create_scaler(ds, scaling_range, scaling_type='minmax'):
     """we do a partial fit per chunk to avoid loading everything in memory
 
     """
 
     da = ds.to_array()
-    scaler = MinMaxScaler(feature_range=scaling_range)
+    if scaling_type == 'minmax':
+        scaler = MinMaxScaler(feature_range=scaling_range)
+    elif scaling_type == 'standardize':
+        scaler = StandardScaler()
 
     # make sure only time is chunked
     N_vars = len(da.variable)

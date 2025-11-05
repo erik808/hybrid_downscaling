@@ -2,7 +2,6 @@
 # Data configuration specific for the synthetic CMEMS NWS set
 # --------------------------------------------------------------------
 compute_data = False
-scaling_range = (0, 1)
 split_factor = 11 / 12
 time_range = slice('2023-01-01', '2023-12-31')
 # time_range = slice('2023-01-01', '2023-01-03')
@@ -45,6 +44,8 @@ coarse_data_file = \
      f'{coarse_data_prefix}data.zarr')
 
 # scalers for both coarse and HR data
+scaling_range = (0, 1)
+scaling_type = 'minmax'
 scalers_file =  \
     (f'{data_dir}/scalers_{time_range.start}_{time_range.stop}_'
-     f'{coarse_data_prefix}.dill')
+     f'{coarse_data_prefix}_{scaling_type}.dill')

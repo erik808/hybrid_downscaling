@@ -132,9 +132,11 @@ class DataManagerCMEMS(data_manager_base.DataManagerBase):
         self.create_training_data()
         scalers = {}
         scalers['HR'] = tools.create_scaler(self.ds_HR,
-                                            self.scaling_range)
+                                            self.scaling_range,
+                                            self.scaling_type)
         scalers['LR'] = tools.create_scaler(self.ds_LR,
-                                            self.scaling_range)
+                                            self.scaling_range,
+                                            self.scaling_type)
 
         if export:
             with open(self.scalers_file, 'wb') as file:

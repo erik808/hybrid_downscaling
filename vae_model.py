@@ -184,7 +184,7 @@ class VAE(base_model.BaseModel):
             filters=self.num_vars,
             kernel_size=9,
             padding='same',
-            activation='linear')(y)
+            activation='sigmoid')(y)
 
         # activation and masking
         z = ops.multiply(y, self.mask)

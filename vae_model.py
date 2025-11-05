@@ -238,7 +238,6 @@ class VAE(base_model.BaseModel):
             activation=None,
         )(z)
         z = ops.pad(z, crop_after)
-        breakpoint()
 
         # activation and masking
         z = ops.multiply(z, self.mask)

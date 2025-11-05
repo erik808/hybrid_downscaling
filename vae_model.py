@@ -154,10 +154,10 @@ class VAE(base_model.BaseModel):
 
         # return to this shape for decoder input
         return_shape = x.shape
+        skip = x  # in deterministic mode
 
         # dense transform
         x = layers.Flatten()(x)
-        skip = x
 
         y = layers.Dense(units=self.dense_dim,
                          activation=self.activation,
@@ -175,22 +175,12 @@ class VAE(base_model.BaseModel):
         # Sampling
         y = Sampling()(mean, logvar)
 
-        if self.deterministic_mode:
-            y = mean
-            logvar = mean
-            mean = mean
-
         # -------------------------------------------------------
         # Decoder
         z = layers.Dense(
             units=self.dense_dim,
             activation=self.activation,
         )(y)
-
-        if self.deterministic_mode:
-            z = skip
-            mean = skip
-            logvar = skip
 
         z = layers.Dense(
             units=ops.prod(return_shape[1:]),
@@ -201,6 +191,12 @@ class VAE(base_model.BaseModel):
         )(z)
 
         z = layers.Reshape(return_shape[1:])(z)
+
+        if self.deterministic_mode:
+            z = skip
+            mean = skip
+            logvar = skip
+
         z = layers.Conv2DTranspose(
             filters=int(z.shape[-1] / self.filter_mult_rest),
             strides=2,

@@ -167,6 +167,7 @@ class VAE(base_model.BaseModel):
         # -------------------------------------------------------
         # Sampling
         y = Sampling()(mean, logvar)
+
         y = layers.Conv2DTranspose(
             filters=int(y.shape[-1] * self.filter_mult_rest),
             strides=1,

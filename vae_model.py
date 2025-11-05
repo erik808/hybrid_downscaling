@@ -143,6 +143,14 @@ class VAE(base_model.BaseModel):
         )(x)
         x = layers.PReLU()(x)
 
+        if not self.deterministic_mode:
+            mean, logvar = ops.split(x, 2, axis=-1)
+            # Sampling
+            x = Sampling()(mean, logvar)
+        else:
+            mean = x
+            logvar = x
+
         y = resnet_model.SubPixelConv(
             filters_out=64,
             kernel_size=3,
@@ -167,12 +175,10 @@ class VAE(base_model.BaseModel):
             filters=self.num_vars,
             kernel_size=9,
             padding='same',
-            activation='sigmoid')(y)
+            activation='linear')(y)
 
         # activation and masking
         z = ops.multiply(y, self.mask)
-        mean=z
-        logvar=z
 
         outputs = {'decoded': z,
                    'mean': mean,

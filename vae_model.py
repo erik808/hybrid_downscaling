@@ -116,46 +116,41 @@ class VAE(base_model.BaseModel):
             strides=2,
             kernel_size=3,
             padding='valid',
-            activation=None,
+            activation=self.activation,
         )(input_k)
         x = ops.pad(x, pad_before)
-        x = layers.ELU()(x)
 
         x = layers.Conv2D(
             filters=self.filter_mult_rest * x.shape[-1],
             strides=2,
             kernel_size=3,
             padding='valid',
-            activation=None,
+            activation=self.activation,
         )(x)
         x = ops.pad(x, pad_after)
-        x = layers.ELU()(x)
 
         x = layers.Conv2D(self.filter_mult_rest * x.shape[-1],
                           strides=2,
                           kernel_size=3,
                           padding='valid',
-                          activation=None,
+                          activation=self.activation,
                           )(x)
         x = ops.pad(x, pad_before)
-        x = layers.ELU()(x)
 
         x = layers.Conv2D(self.filter_mult_rest * x.shape[-1],
                           strides=2,
                           kernel_size=3,
                           padding='valid',
-                          activation=None,
+                          activation=self.activation,
                           )(x)
         x = ops.pad(x, pad_after)
-        x = layers.ELU()(x)
 
         x = layers.Conv2D(self.filter_mult_rest * x.shape[-1],
                           strides=2,
                           kernel_size=3,
                           padding='same',
-                          activation=None,
+                          activation=self.activation,
                           )(x)
-        x = layers.ELU()(x)
 
         # return to this shape for decoder input
         return_shape = x.shape
@@ -165,10 +160,9 @@ class VAE(base_model.BaseModel):
         skip = x
 
         y = layers.Dense(units=self.dense_dim,
-                         activation=None,
+                         activation=self.activation,
                          # kernel_initializer="identity",
                          )(x)
-        y = layers.ELU()(y)
 
         y = layers.Dense(units=self.latent_space_dim * 2,
                          activation=None,
@@ -190,9 +184,8 @@ class VAE(base_model.BaseModel):
         # Decoder
         z = layers.Dense(
             units=self.dense_dim,
-            activation=None,
+            activation=self.activation,
         )(y)
-        z = layers.ELU()(z)
 
         if self.deterministic_mode:
             z = skip
@@ -204,9 +197,8 @@ class VAE(base_model.BaseModel):
             # kernel_initializer="identity",
             # trainable=False,
             # kernel_regularizer=regularizers.L2(1e-1),
-            activation=None,
+            activation=self.activation,
         )(z)
-        z = layers.ELU()(z)
 
         z = layers.Reshape(return_shape[1:])(z)
         z = layers.Conv2DTranspose(
@@ -214,43 +206,36 @@ class VAE(base_model.BaseModel):
             strides=2,
             kernel_size=3,
             padding='valid',
-            activation=None,
+            activation=self.activation,
         )(z)
         z = ops.pad(z, crop_before)
-        print(z.shape)
-        z = layers.ELU()(z)
 
         z = layers.Conv2DTranspose(
             filters=int(z.shape[-1] / self.filter_mult_rest),
             strides=2,
             kernel_size=3,
             padding='valid',
-            activation=None,
+            activation=self.activation,
         )(z)
         z = ops.pad(z, crop_after)
-        print(z.shape)
-        z = layers.ELU()(z)
 
         z = layers.Conv2DTranspose(
             filters=int(z.shape[-1] / self.filter_mult_rest),
             strides=2,
             kernel_size=3,
             padding='valid',
-            activation=None,
+            activation=self.activation,
         )(z)
         z = ops.pad(z, crop_before)
-        print(z.shape)
-        z = layers.ELU()(z)
 
         z = layers.Conv2DTranspose(
             filters=int(z.shape[-1] / self.filter_mult_rest),
             strides=2,
             kernel_size=3,
             padding='valid',
-            activation=None,
+            activation=self.activation,
         )(z)
         z = ops.pad(z, crop_after)
-        print(z.shape)
 
         z = layers.Conv2DTranspose(
             filters=int(z.shape[-1] / self.filter_mult_start),
@@ -260,7 +245,6 @@ class VAE(base_model.BaseModel):
             activation=None,
         )(z)
         z = ops.pad(z, crop_before)
-        print(z.shape)
 
         # activation and masking
         z = ops.multiply(z, self.mask)

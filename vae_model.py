@@ -167,12 +167,15 @@ class VAE(base_model.BaseModel):
         # -------------------------------------------------------
         # Sampling
         y = Sampling()(mean, logvar)
-        y = layers.Conv2D(filters=int(y.shape[-1] * self.filter_mult_rest),
-                          strides=1,
-                          kernel_size=3,
-                          padding='same',
-                          activation=self.activation,
-                          )(y)
+        y = layers.Conv2DTranspose(
+            filters=int(y.shape[-1] * self.filter_mult_rest),
+            strides=1,
+            kernel_size=3,
+            padding='valid',
+            activation=self.activation,
+        )(y)
+        y = ops.pad(y, crop_before)
+        y = ops.pad(y, crop_after)
 
         # -------------------------------------------------------
         # Decoder

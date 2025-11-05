@@ -1,5 +1,5 @@
 # learning rate in Adam optimizer
-learning_rate = 1e-4
+learning_rate = 5e-5
 
 # weight on KL loss
 beta = 1e-4
@@ -8,7 +8,7 @@ beta = 1e-4
 gamma = 1
 
 # multiplying factors number of filters
-filter_mult_start = 4
+filter_mult_start = 8
 filter_mult_rest = 2
 
 # activation type ('relu', 'leaky_relu', 'elu')

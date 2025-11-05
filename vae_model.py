@@ -108,9 +108,18 @@ class VAE(base_model.BaseModel):
         # -------------------------------------------------------
         # Encoder
         x = layers.Conv2D(
+            filters=32,
+            strides=1,
+            kernel_size=9,
+            padding='same',
+            activation=None,
+        )(input_k)
+        x = layers.PReLU()(x)
+
+        x = layers.Conv2D(
             filters=64,
             strides=2,
-            kernel_size=9,
+            kernel_size=3,
             padding='same',
             activation=None,
         )(input_k)

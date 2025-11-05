@@ -41,7 +41,7 @@ vae.compile(vae.compiler)
 analysis_callback = callbacks.AnalysisVAE(data_gen=dgen_test,
                                           plot=[
                                               'reconstruction',
-                                              # 'spectra',
+                                              'spectra',
                                           ])
 hist = vae.fit(
     x=dgen_train,

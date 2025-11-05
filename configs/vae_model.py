@@ -2,7 +2,7 @@
 learning_rate = 1e-4
 
 # weight on KL loss
-beta = 0.0
+beta = 1e-4
 
 # weight on reconstruction loss
 gamma = 1
@@ -22,4 +22,4 @@ latent_space_dim = 64
 
 # deterministic mode bypasses the sampling layer and uses the mean
 # only
-deterministic_mode = True
+deterministic_mode = False

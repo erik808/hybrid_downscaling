@@ -5,6 +5,7 @@ from keras import ops
 import torch
 import tools
 import base_model
+import resnet_model
 
 
 class VAE(base_model.BaseModel):
@@ -92,11 +93,6 @@ class VAE(base_model.BaseModel):
         return {m.name: m.result() for m in self.metrics}
 
     def builder(self):
-        pad_before = ((0, 0), (1, 0), (1, 0), (0, 0))
-        pad_after = ((0, 0), (0, 1), (0, 1), (0, 0))
-        crop_before = ((0, 0), (-1, 0), (-1, 0), (0, 0))
-        crop_after = ((0, 0), (0, -1), (0, -1), (0, 0))
-
         inputs = layers.Input(
             shape=self.input_shape_HR,
             name=self.input_name_HR)
@@ -112,137 +108,72 @@ class VAE(base_model.BaseModel):
         # -------------------------------------------------------
         # Encoder
         x = layers.Conv2D(
-            filters=self.filter_mult_start * self.input_shape_HR[-1],
+            filters=64,
             strides=2,
-            kernel_size=3,
-            padding='valid',
-            activation=self.activation,
-        )(input_k)
-        x = ops.pad(x, pad_before)
-
-        x = layers.Conv2D(
-            filters=self.filter_mult_rest * x.shape[-1],
-            strides=2,
-            kernel_size=3,
-            padding='valid',
-            activation=self.activation,
-        )(x)
-        x = ops.pad(x, pad_after)
-
-        x = layers.Conv2D(
-            self.filter_mult_rest * x.shape[-1],
-            strides=2,
-            kernel_size=3,
-            padding='valid',
-            activation=self.activation,
-        )(x)
-        x = ops.pad(x, pad_before)
-        skip = x
-
-        x = layers.Conv2D(
-            self.filter_mult_rest * x.shape[-1],
-            strides=2,
-            kernel_size=3,
-            padding='valid',
-            activation=self.activation,
-        )(x)
-        x = ops.pad(x, pad_after)
-
-        # return to this shape for decoder input
-        # return_shape = x.shape
-        # skip = x  # in deterministic mode
-
-        # # dense transform
-        # # x = layers.Flatten()(x)
-
-        # y = layers.Dense(units=self.dense_dim,
-        #                  activation=self.activation,
-        #                  # kernel_initializer="identity",
-        #                  )(x)
-
-        # y = layers.Dense(units=self.latent_space_dim * 2,
-        #                  activation=None,
-        #                  # kernel_initializer="identity",
-        #                  name="mean_logvar",
-        #                  )(y)
-
-        mean, logvar = ops.split(x, 2, axis=-1)
-        # -------------------------------------------------------
-        # Sampling
-        y = Sampling()(mean, logvar)
-
-        y = layers.Conv2DTranspose(
-            filters=int(y.shape[-1] * self.filter_mult_rest),
-            strides=1,
-            kernel_size=3,
-            padding='valid',
-            activation=self.activation,
-        )(y)
-        y = ops.pad(y, crop_before)
-        y = ops.pad(y, crop_after)
-        # -------------------------------------------------------
-        # Decoder
-        # z = layers.Dense(
-        #     units=self.dense_dim,
-        #     activation=self.activation,
-        # )(y)
-
-        # z = layers.Dense(
-        #     units=ops.prod(return_shape[1:]),
-        #     # kernel_initializer="identity",
-        #     # trainable=False,
-        #     # kernel_regularizer=regularizers.L2(1e-1),
-        #     activation=self.activation,
-        # )(z)
-
-        # z = layers.Reshape(return_shape[1:])(z)
-
-        # if self.deterministic_mode:
-        #     z = skip
-        #     mean = skip
-        #     logvar = skip
-
-        z = layers.Conv2DTranspose(
-            filters=int(y.shape[-1] / self.filter_mult_rest),
-            strides=2,
-            kernel_size=3,
-            padding='valid',
-            activation=self.activation,
-        )(y)
-        z = ops.pad(z, crop_before)
-
-        if self.deterministic_mode:
-            z = skip
-            mean = skip
-            logvar = skip
-
-        z = layers.Conv2DTranspose(
-            filters=int(z.shape[-1] / self.filter_mult_rest),
-            strides=2,
-            kernel_size=3,
-            padding='valid',
-            activation=self.activation,
-        )(z)
-        z = ops.pad(z, crop_after)
-        z = layers.Conv2DTranspose(
-            filters=int(z.shape[-1] / self.filter_mult_rest),
-            strides=2,
-            kernel_size=3,
-            padding='valid',
-            activation=self.activation,
-        )(z)
-        z = ops.pad(z, crop_before)
-        z = layers.Conv2DTranspose(
-            filters=int(z.shape[-1] / self.filter_mult_start),
-            strides=2,
-            kernel_size=3,
-            padding='valid',
+            kernel_size=9,
+            padding='same',
             activation=None,
-        )(z)
-        z = ops.pad(z, crop_after)
+        )(input_k)
+        x = layers.PReLU()(x)
+
+        x = layers.Conv2D(
+            filters=64,
+            strides=2,
+            kernel_size=3,
+            padding='same',
+            activation=None,
+        )(x)
+        x = layers.PReLU()(x)
+
+        x = layers.Conv2D(
+            filters=64,
+            strides=2,
+            kernel_size=3,
+            padding='same',
+            activation=None,
+        )(x)
+        x = layers.PReLU()(x)
+
+        x = layers.Conv2D(
+            filters=64,
+            strides=2,
+            kernel_size=3,
+            padding='same',
+            activation=None,
+        )(x)
+        x = layers.PReLU()(x)
+
+        y = resnet_model.SubPixelConv(
+            filters_out=64,
+            kernel_size=3,
+            scale=2)(x)
+
+        y = resnet_model.SubPixelConv(
+            filters_out=64,
+            kernel_size=3,
+            scale=2)(y)
+
+        y = resnet_model.SubPixelConv(
+            filters_out=64,
+            kernel_size=3,
+            scale=2)(y)
+
+        y = resnet_model.SubPixelConv(
+            filters_out=64,
+            kernel_size=3,
+            scale=2)(y)
+
+        y = layers.Conv2D(
+            filters=self.num_vars,
+            kernel_size=9,
+            padding='same',
+            activation='sigmoid')(y)
 
         # activation and masking
-        z = ops.multiply(z, self.mask)
+        z = ops.multiply(y, self.mask)
+        mean=z
+        logvar=z
+
         outputs = {'decoded': z,
                    'mean': mean,
                    'logvar': logvar,

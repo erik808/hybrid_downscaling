@@ -215,15 +215,6 @@ class VAE(base_model.BaseModel):
             padding='valid',
             activation=self.activation,
         )(z)
-        z = ops.pad(z, crop_before)
-
-        z = layers.Conv2DTranspose(
-            filters=int(z.shape[-1] / self.filter_mult_rest),
-            strides=2,
-            kernel_size=3,
-            padding='valid',
-            activation=self.activation,
-        )(z)
         z = ops.pad(z, crop_after)
         z = layers.Conv2DTranspose(
             filters=int(z.shape[-1] / self.filter_mult_start),

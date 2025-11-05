@@ -45,7 +45,7 @@ coarse_data_file = \
 
 # scalers for both coarse and HR data
 scaling_range = (0, 1)
-scaling_type = 'minmax'
+scaling_type = 'standardize'
 scalers_file =  \
     (f'{data_dir}/scalers_{time_range.start}_{time_range.stop}_'
      f'{coarse_data_prefix}_{scaling_type}.dill')

@@ -65,12 +65,14 @@ class RNN(base_model.BaseModel):
         self.loss_fn = keras.losses.MeanSquaredError()
         self.loss_tracker = keras.metrics.Mean(name="loss")
         self.re_loss_tracker = keras.metrics.Mean(name="recons")
+        self.rnn_loss_tracker = keras.metrics.Mean(name="rnn_loss")
 
     @property
     def metrics(self):
         return [
             self.loss_tracker,
             self.re_loss_tracker,
+            self.rnn_loss_tracker,
         ]
 
     def train_step(self, data, training=True):
@@ -81,10 +83,21 @@ class RNN(base_model.BaseModel):
         z = self({'HR_data': ops.nan_to_num(x['HR_data'])},
                  training=training)
 
-        z = z[:,
-              self.masking.rows,
-              self.masking.cols,
-              :]
+        z_decoded = z['decoded']
+        z_ls_pred = z['ls_pred']
+        z_decoded = z_decoded[:,
+                              self.masking.rows,
+                              self.masking.cols,
+                              :]
+
+        y_ls = \
+            self.encoder(
+                ops.nan_to_num(
+                    ops.squeeze(y['HR_data'][:,
+                                             0,  # current lookback index
+                                             ...])))
+
+        rnn_loss = self.loss_fn(z_ls_pred, y_ls)
 
         y = y['HR_data'][:,
                          0,  # current lookback index
@@ -92,8 +105,8 @@ class RNN(base_model.BaseModel):
                          self.masking.cols,
                          :]
 
-        re_loss = self.loss_fn(z, y)
-        loss = re_loss
+        re_loss = self.loss_fn(z_decoded, y)
+        loss = re_loss + rnn_loss
 
         if training:
             loss.backward()
@@ -109,6 +122,8 @@ class RNN(base_model.BaseModel):
                 metric.update_state(loss)
             if metric.name == "recons":
                 metric.update_state(re_loss)
+            if metric.name == "rnn_loss":
+                metric.update_state(rnn_loss)
 
         return {m.name: m.result() for m in self.metrics}
 
@@ -146,5 +161,7 @@ class RNN(base_model.BaseModel):
             activation='leaky_relu')(prediction)
         prediction = layers.Reshape(encoded_dims[1:])(prediction)
         prediction_decoded = self.decoder(prediction)
-        outputs = self.masking(prediction_decoded)
+        outputs = {'decoded': self.masking(prediction_decoded),
+                   'ls_pred': prediction}
+
         return inputs, outputs

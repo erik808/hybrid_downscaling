@@ -11,8 +11,8 @@ gamma = 1
 filter_mult_start = 4
 filter_mult_rest = 2
 
-# activation type ('relu', 'leaky_relu', 'elu')
-activation='prelu'
+# activation type ('prelu', 'relu', 'leaky_relu', 'elu')
+activation='leaky_relu'
 
 # dense dimension
 dense_dim = 256

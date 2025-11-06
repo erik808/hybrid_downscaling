@@ -22,8 +22,6 @@ class VAE(base_model.BaseModel):
         super().__init__(**kwargs)
         tools.load_config(self, config_name='vae_model')
 
-        self.loss_fn = keras.losses.MeanSquaredError()
-
         self.compiler = keras.optimizers.Adam(
             learning_rate=self.learning_rate)
 

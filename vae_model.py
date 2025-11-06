@@ -6,6 +6,9 @@ import torch
 import tools
 import base_model
 import resnet_model
+import importlib
+
+importlib.reload(resnet_model)
 
 
 class VAE(base_model.BaseModel):
@@ -92,7 +95,7 @@ class VAE(base_model.BaseModel):
 
         return {m.name: m.result() for m in self.metrics}
 
-    def activation(self, inputs):
+    def create_activation(self, inputs):
         if self.activation == 'prelu':
             return layers.PReLU()(inputs)
         else:
@@ -120,7 +123,7 @@ class VAE(base_model.BaseModel):
             padding='same',
             activation=None,
         )(input_k)
-        x = self.activation(x)
+        x = self.create_activation(x)
 
         x = layers.Conv2D(
             filters=64,
@@ -129,7 +132,7 @@ class VAE(base_model.BaseModel):
             padding='same',
             activation=None,
         )(x)
-        x = self.activation(x)
+        x = self.create_activation(x)
 
         x = layers.Conv2D(
             filters=64,
@@ -138,7 +141,7 @@ class VAE(base_model.BaseModel):
             padding='same',
             activation=None,
         )(x)
-        x = self.activation(x)
+        x = self.create_activation(x)
 
         x = layers.Conv2D(
             filters=64,
@@ -147,7 +150,7 @@ class VAE(base_model.BaseModel):
             padding='same',
             activation=None,
         )(x)
-        x = self.activation(x)
+        x = self.create_activation(x)
 
         x = layers.Conv2D(
             filters=128,
@@ -156,7 +159,7 @@ class VAE(base_model.BaseModel):
             padding='same',
             activation=None,
         )(x)
-        x = self.activation(x)
+        x = self.create_activation(x)
 
         if not self.deterministic_mode:
             mean, logvar = ops.split(x, 2, axis=-1)

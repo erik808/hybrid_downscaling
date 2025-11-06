@@ -43,7 +43,8 @@ analysis_callback = callbacks.AnalysisVAE(data_gen=dgen_test,
                                           plot=[
                                               'reconstruction',
                                               'spectra',
-                                          ])
+                                          ]
+                                          )
 
 checkpoint_filepath = \
     f'{dmgr_cmems.dirs["checkpoints"]}/checkpoint.vae.keras'

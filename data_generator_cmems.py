@@ -68,7 +68,7 @@ class DataGeneratorCMEMS(keras.utils.PyDataset):
                    'meta' : {
                        # 'time':
                        # time.astype("datetime64[s]").astype(np.float32),
-                       'mask': self.dm.mask,
+                       'mask': self.dm.mask.values,
                        'grid_HR': self.dm.grid_HR,
                        'grid_LR': self.dm.grid_LR,
                        # 'vars': list(self.dm.ds_HR.data_vars),

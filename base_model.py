@@ -15,8 +15,7 @@ class BaseModel(keras.Model):
         self.data_gen = data_gen
 
         # use random batch as test input
-        idx = np.random.randint(self.data_gen.__len__())
-        test_x, test_y = data_gen.__getitem__(idx)
+        test_x, test_y = self.get_random_item()
 
         self.coarsening_factor = self.get_coarsening_factor(test_x)
 
@@ -35,6 +34,7 @@ class BaseModel(keras.Model):
             Masking(test_x['meta']['mask'][0,],
                     self.num_vars)
 
+        # setup loss and loss tracker
         self.loss_fn = keras.losses.MeanSquaredError()
         self.loss_tracker = keras.metrics.Mean(name="loss")
 
@@ -44,12 +44,21 @@ class BaseModel(keras.Model):
             self.loss_tracker,
         ]
 
+    def get_random_item(self):
+        idx = np.random.randint(self.data_gen.__len__())
+        return self.data_gen.__getitem__(idx)
+
     def build_model(self, name):
         inputs, outputs = self.builder()
         self.model = keras.Model(
             inputs=inputs,
             outputs=outputs,
             name=name)
+
+        # use random batch as test input
+        test_x, test_y = self.get_random_item()
+        self.model.build(test_x)
+        self.build(test_x)
         return self.model
 
     def get_coarsening_factor(self, test_x):
@@ -79,7 +88,6 @@ class BaseModel(keras.Model):
         return self.train_step(data, training=False)
 
 
-@keras.saving.register_keras_serializable(name="masking")
 class Masking(layers.Layer):
     def __init__(
             self,
@@ -96,15 +104,6 @@ class Masking(layers.Layer):
         self.mask = ops.tile(
             ops.expand_dims(mask, -1),
             self.num_vars)
-
-    def get_config(self):
-        config = super().get_config()
-        config.update({
-            'mask': keras.saving.serialize_keras_object(self.mask),
-            'rows': keras.saving.serialize_keras_object(self.rows),
-            'cols': keras.saving.serialize_keras_object(self.cols),
-        })
-        return config
 
     def call(self, inputs):
         return ops.multiply(inputs, self.mask)

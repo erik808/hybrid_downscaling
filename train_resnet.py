@@ -1,3 +1,4 @@
+import keras
 import importlib
 import data_manager_cmems
 import data_generator_cmems
@@ -37,7 +38,20 @@ resnet.build_model("ResNet")
 resnet.summary()
 resnet.compile(resnet.compiler)
 
-analysis_callback = callbacks.AnalysisResNet(data_gen=dgen_test)
+analysis_callback = callbacks.AnalysisResNet(data_gen=dgen_test,
+                                             plot=[
+                                                 'reconstruction',
+                                                 'spectra',
+                                             ]
+                                             )
+
+checkpoint_filepath = \
+    f'{dmgr_cmems.dirs["checkpoints"]}/checkpoint.vae.keras'
+model_checkpoint_callback = keras.callbacks.ModelCheckpoint(
+    filepath=checkpoint_filepath,
+    monitor='val_loss',
+    mode='min',
+    save_best_only=True)
 
 hist = resnet.fit(
     x=dgen_train,
@@ -45,5 +59,6 @@ hist = resnet.fit(
     validation_data=dgen_test,
     callbacks=[
         analysis_callback,
+        model_checkpoint_callback,
     ]
 )

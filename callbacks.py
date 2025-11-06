@@ -276,3 +276,34 @@ class AnalysisVAE(AnalysisBase):
 
         """
         return ['HR', 'HR', 'HR']
+
+
+class AnalysisRNN(AnalysisBase):
+    """ for now this is the same as the VAE version """
+    def __init__(
+            self,
+            data_gen,
+            **kwargs,
+    ):
+        super().__init__(data_gen, **kwargs)
+
+    def call_model(self, x):
+        z = self.model({'HR_data': ops.nan_to_num(x['HR_data'])},
+                       training=False)
+        z = z['decoded']
+        # apply nan mask and detach
+        z = (z * self.mask).cpu().detach().numpy()
+        return z
+
+    def restrict_xy(self, x, y):
+        # keep relevant keys, ignore lookback
+        x, y = x['HR_data'][:, 0,], y['HR_data'][:, 0,]
+        return x, y
+
+    @property
+    def scaler_list(self):
+        """Provide a list of scalers to use. Ordering (x,y,z) with x: model
+        input, y: truth, z: model prediction
+
+        """
+        return ['HR', 'HR', 'HR']

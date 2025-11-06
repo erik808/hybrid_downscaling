@@ -36,9 +36,7 @@ dgen_train, dgen_test = \
     data_generator_cmems.getter(**dgen_args)
 
 vae = vae_model.VAE(data_gen=dgen_train)
-
 vae.build_model("betaVAE")
-# vae.compile(vae.compiler)
 
 # load existing weights
 checkpoint_filepath = \
@@ -52,12 +50,12 @@ rnn.build_model("RNN")
 rnn.summary()
 rnn.compile(rnn.compiler)
 
-# analysis_callback = callbacks.AnalysisRNN(data_gen=dgen_test,
-#                                           plot=[
-#                                               'reconstruction',
-#                                               'spectra',
-#                                           ]
-#                                           )
+analysis_callback = callbacks.AnalysisRNN(data_gen=dgen_test,
+                                          plot=[
+                                              'reconstruction',
+                                              'spectra',
+                                          ]
+                                          )
 
 checkpoint_filepath = \
     f'{dmgr_cmems.dirs["checkpoints"]}/checkpoint.rnn.keras'
@@ -66,15 +64,16 @@ model_checkpoint_callback = keras.callbacks.ModelCheckpoint(
     monitor='val_loss',
     mode='min',
     save_best_only=True)
-# breakpoint()
+
+breakpoint()
 hist = rnn.fit(
     x=dgen_train,
     epochs=10,
     validation_data=dgen_test,
     callbacks=[
-        # analysis_callback,
+        analysis_callback,
         model_checkpoint_callback,
     ]
 )
 
-# analysis_callback.plot_history(hist)
+analysis_callback.plot_history(hist)

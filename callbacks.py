@@ -1,7 +1,6 @@
 import numpy as np
 import keras
 from keras import ops
-import os
 import plot_utils
 import importlib
 import matplotlib.pyplot as plt
@@ -50,9 +49,11 @@ class AnalysisBase(keras.callbacks.Callback, ABC):
 
     def construct_mask(self):
         if not self.mask_constructed:
-            self.mask = ops.not_equal(self.model.mask, 0.0)
+            self.mask = ops.not_equal(self.model.masking.mask, 0.0)
             self.mask = \
-                self.model.mask / ops.cast(self.mask, self.model.mask.dtype)
+                (self.model.masking.mask /
+                 ops.cast(self.mask, self.model.masking.mask.dtype)
+                 )
             self.mask_constructed = True
         else:
             pass

@@ -8,6 +8,7 @@ import base_model
 import resnet_model
 import importlib
 
+importlib.reload(base_model)
 importlib.reload(resnet_model)
 
 
@@ -52,8 +53,16 @@ class VAE(base_model.BaseModel):
         z_logvar = z['logvar']
 
         # compute reconstruction loss
-        z_decoded = z_decoded[:, self.mask_rows, self.mask_cols, :]
-        y = y['HR_data'][:, 0, self.mask_rows, self.mask_cols, :]
+        z_decoded = z_decoded[:,
+                              self.masking.rows,
+                              self.masking.cols,
+                              :]
+        y = y['HR_data'][:,
+                         0,
+                         self.masking.rows,
+                         self.masking.cols,
+                         :]
+
         re_loss = self.loss_fn(z_decoded, y) * self.gamma
 
         # compute KL loss (sigma formulation)
@@ -204,7 +213,7 @@ class VAE(base_model.BaseModel):
             activation='sigmoid')(y)
 
         # activation and masking
-        z = ops.multiply(y, self.mask)
+        z = self.masking(y)
 
         outputs = {'decoded': z,
                    'mean': mean,

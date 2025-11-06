@@ -20,22 +20,10 @@ class ResNet(base_model.BaseModel):
 
         tools.load_config(self, config_name='resnet_model')
 
-        self.get_coarsening_factor()
-
         self.sub_pixel_blocks = int(np.log2(self.coarsening_factor))
 
         self.compiler = keras.optimizers.Adam(
             learning_rate=self.learning_rate)
-
-    def get_coarsening_factor(self):
-        # number of necessary upsampling blocks is inferred from LR
-        # and HR grids
-        grid_HR_shape = self.test_x['meta']['grid_HR']['lat'].shape
-        grid_LR_shape = self.test_x['meta']['grid_LR']['lat'].shape
-        coarsening = \
-            np.asarray(grid_HR_shape) / np.asarray(grid_LR_shape)
-        assert coarsening[0] == coarsening[1], "unequal lat/lon coarsening"
-        self.coarsening_factor = coarsening[0]
 
     def train_step(self, data, training=True):
         x, y = data
@@ -43,8 +31,16 @@ class ResNet(base_model.BaseModel):
             self.zero_grad()
 
         z = self({'LR_data': x['LR_data']}, training=training)
-        y = y['HR_data'][:, 0, self.mask_rows, self.mask_cols, :]
-        z = z[:, self.mask_rows, self.mask_cols, :]
+        y = y['HR_data'][:,
+                         0,
+                         self.masking.rows,
+                         self.masking.cols,
+                         :]
+        z = z[:,
+              self.masking.rows,
+              self.masking.cols,
+              :]
+
         loss = self.loss_fn(z, y)
 
         if training:
@@ -119,7 +115,7 @@ class ResNet(base_model.BaseModel):
                                 )(y)
 
         # masking
-        outputs = ops.multiply(outputs, self.mask)
+        outputs = self.masking(outputs)
 
         return inputs, outputs
 

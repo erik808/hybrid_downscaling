@@ -1,5 +1,6 @@
 import keras
 from keras import ops
+from keras import layers
 import numpy as np
 
 
@@ -15,25 +16,24 @@ class BaseModel(keras.Model):
 
         # use random batch as test input
         idx = np.random.randint(self.data_gen.__len__())
-        self.test_x, self.test_y = data_gen.__getitem__(idx)
+        test_x, test_y = data_gen.__getitem__(idx)
+
+        self.coarsening_factor = self.get_coarsening_factor(test_x)
 
         self.input_name_LR = 'LR_data'
         self.input_name_HR = 'HR_data'
         self.input_shape_LR = \
-            self.test_x[self.input_name_LR].shape[1:]
+            test_x[self.input_name_LR].shape[1:]
         self.input_shape_HR = \
-            self.test_x[self.input_name_HR].shape[1:]
+            test_x[self.input_name_HR].shape[1:]
         self.num_vars = self.input_shape_LR[-1]
         assert self.num_vars == self.input_shape_LR[-1], \
             "unequal variables in LR and HR data"
 
-        # get mask
-        self.mask = \
-            ops.convert_to_tensor(self.test_x['meta']['mask'][0,])
-        self.mask_rows, self.mask_cols = ops.where(self.mask==1)
-
-        self.mask = ops.tile(ops.expand_dims(self.mask, -1),
-                             self.num_vars)
+        # create mask
+        self.masking = \
+            Masking(test_x['meta']['mask'][0,],
+                    self.num_vars)
 
         self.loss_fn = keras.losses.MeanSquaredError()
         self.loss_tracker = keras.metrics.Mean(name="loss")
@@ -50,9 +50,18 @@ class BaseModel(keras.Model):
             inputs=inputs,
             outputs=outputs,
             name=name)
-        self.model.build(self.test_x)
-        self.build(self.test_x)
         return self.model
+
+    def get_coarsening_factor(self, test_x):
+        # number of necessary upsampling blocks is inferred from LR
+        # and HR grids
+        grid_HR_shape = test_x['meta']['grid_HR']['lat'].shape
+        grid_LR_shape = test_x['meta']['grid_LR']['lat'].shape
+        coarsening = \
+            np.asarray(grid_HR_shape) / np.asarray(grid_LR_shape)
+        assert coarsening[0] == coarsening[1], "unequal lat/lon coarsening"
+        coarsening_factor = coarsening[0]
+        return coarsening_factor
 
     def summary(self):
         return self.model.summary()
@@ -68,3 +77,34 @@ class BaseModel(keras.Model):
 
     def test_step(self, data):
         return self.train_step(data, training=False)
+
+
+@keras.saving.register_keras_serializable(name="masking")
+class Masking(layers.Layer):
+    def __init__(
+            self,
+            mask,
+            num_vars,
+            **kwargs,
+    ):
+        super().__init__(**kwargs)
+        mask = ops.convert_to_tensor(mask)
+        self.rows, self.cols = ops.where(mask==1)
+        self.num_vars = num_vars
+
+        # usable mask for multiply
+        self.mask = ops.tile(
+            ops.expand_dims(mask, -1),
+            self.num_vars)
+
+    def get_config(self):
+        config = super().get_config()
+        config.update({
+            'mask': keras.saving.serialize_keras_object(self.mask),
+            'rows': keras.saving.serialize_keras_object(self.rows),
+            'cols': keras.saving.serialize_keras_object(self.cols),
+        })
+        return config
+
+    def call(self, inputs):
+        return ops.multiply(inputs, self.mask)

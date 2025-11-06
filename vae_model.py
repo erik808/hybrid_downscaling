@@ -102,12 +102,6 @@ class VAE(base_model.BaseModel):
 
         return {m.name: m.result() for m in self.metrics}
 
-    def create_activation(self, inputs):
-        if self.activation == 'prelu':
-            return layers.PReLU()(inputs)
-        else:
-            return layers.Activation(self.activation)(inputs)
-
     def builder(self):
         inputs = layers.Input(
             shape=self.input_shape_HR,
@@ -129,6 +123,7 @@ class VAE(base_model.BaseModel):
             kernel_size=9,
             padding='same',
             activation=None,
+            name='input_transform',
         )(input_k)
         x = self.create_activation(x)
 
@@ -169,7 +164,7 @@ class VAE(base_model.BaseModel):
         x = self.create_activation(x)
 
         if not self.deterministic_mode:
-            mean, logvar = ops.split(x, 2, axis=-1)
+            mean, logvar = Split(name="splitter")(x)
             # Sampling
             x = Sampling()(mean, logvar)
         else:
@@ -218,6 +213,24 @@ class VAE(base_model.BaseModel):
                    'logvar': logvar,
                    }
         return inputs, outputs
+
+    def create_activation(self, inputs):
+        if self.activation == 'prelu':
+            return layers.PReLU()(inputs)
+        else:
+            return layers.Activation(self.activation)(inputs)
+
+
+class Split(layers.Layer):
+    """
+    Split layer (wrapping ops call as a layer)
+    """
+
+    def __init__(self, **kwargs):
+        super().__init__(**kwargs)
+
+    def call(self, x):
+        return ops.split(x, 2, axis=-1)
 
 
 class Sampling(layers.Layer):

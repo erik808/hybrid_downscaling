@@ -1,7 +1,10 @@
 import keras
 from keras import ops
 from keras import layers
+from keras import backend as K
 import numpy as np
+
+K.clear_session()
 
 
 class BaseModel(keras.Model):

@@ -1,3 +1,4 @@
+import keras
 import importlib
 import data_manager_cmems
 import data_generator_cmems
@@ -37,18 +38,28 @@ vae = vae_model.VAE(data_gen=dgen_train)
 vae.build_model("betaVAE")
 vae.summary()
 vae.compile(vae.compiler)
-# breakpoint()
+
 analysis_callback = callbacks.AnalysisVAE(data_gen=dgen_test,
                                           plot=[
                                               'reconstruction',
                                               'spectra',
                                           ])
+
+checkpoint_filepath = \
+    f'{dmgr_cmems.dirs["checkpoints"]}/checkpoint.vae.keras'
+model_checkpoint_callback = keras.callbacks.ModelCheckpoint(
+    filepath=checkpoint_filepath,
+    monitor='val_loss',
+    mode='min',
+    save_best_only=True)
+
 hist = vae.fit(
     x=dgen_train,
-    epochs=20,
+    epochs=10,
     validation_data=dgen_test,
     callbacks=[
         analysis_callback,
+        model_checkpoint_callback,
     ]
 )
 

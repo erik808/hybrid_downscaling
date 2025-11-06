@@ -92,6 +92,12 @@ class VAE(base_model.BaseModel):
 
         return {m.name: m.result() for m in self.metrics}
 
+    def activation(self, inputs):
+        if self.activation == 'prelu':
+            return layers.PReLU()(inputs)
+        else:
+            return layers.Activation(self.activation)(inputs)
+
     def builder(self):
         inputs = layers.Input(
             shape=self.input_shape_HR,
@@ -114,7 +120,7 @@ class VAE(base_model.BaseModel):
             padding='same',
             activation=None,
         )(input_k)
-        x = layers.PReLU()(x)
+        x = self.activation(x)
 
         x = layers.Conv2D(
             filters=64,
@@ -123,7 +129,7 @@ class VAE(base_model.BaseModel):
             padding='same',
             activation=None,
         )(x)
-        x = layers.PReLU()(x)
+        x = self.activation(x)
 
         x = layers.Conv2D(
             filters=64,
@@ -132,7 +138,7 @@ class VAE(base_model.BaseModel):
             padding='same',
             activation=None,
         )(x)
-        x = layers.PReLU()(x)
+        x = self.activation(x)
 
         x = layers.Conv2D(
             filters=64,
@@ -141,7 +147,7 @@ class VAE(base_model.BaseModel):
             padding='same',
             activation=None,
         )(x)
-        x = layers.PReLU()(x)
+        x = self.activation(x)
 
         x = layers.Conv2D(
             filters=128,
@@ -150,7 +156,7 @@ class VAE(base_model.BaseModel):
             padding='same',
             activation=None,
         )(x)
-        x = layers.PReLU()(x)
+        x = self.activation(x)
 
         if not self.deterministic_mode:
             mean, logvar = ops.split(x, 2, axis=-1)
@@ -163,22 +169,30 @@ class VAE(base_model.BaseModel):
         y = resnet_model.SubPixelConv(
             filters_out=64,
             kernel_size=3,
-            scale=2)(x)
+            scale=2,
+            activation=self.activation
+        )(x)
 
         y = resnet_model.SubPixelConv(
             filters_out=64,
             kernel_size=3,
-            scale=2)(y)
+            scale=2,
+            activation=self.activation,
+        )(y)
 
         y = resnet_model.SubPixelConv(
             filters_out=64,
             kernel_size=3,
-            scale=2)(y)
+            scale=2,
+            activation=self.activation,
+        )(y)
 
         y = resnet_model.SubPixelConv(
             filters_out=64,
             kernel_size=3,
-            scale=2)(y)
+            scale=2,
+            activation=self.activation,
+        )(y)
 
         y = layers.Conv2D(
             filters=self.num_vars,

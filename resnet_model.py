@@ -195,12 +195,14 @@ class SubPixelConv(layers.Layer):
             filters_out,
             kernel_size,
             scale,
+            activation='prelu',
             **kwargs,
     ):
         super().__init__(**kwargs)
         self.filters_out = filters_out
         self.kernel_size = kernel_size
         self.scale = scale
+        self.activation = activation
 
     def build(self, input_shape):
         self.conv2d = layers.Conv2D(
@@ -209,13 +211,18 @@ class SubPixelConv(layers.Layer):
             padding='same',
             activation=None,
         )
+
         _, M, N, C = input_shape
         self.reshape1 = layers.Reshape(
             (M, N, self.scale, self.scale, self.filters_out))
         self.permute = layers.Permute((1, 3, 2, 4, 5))
         self.reshape2 = layers.Reshape(
             (M * self.scale, N * self.scale, self.filters_out))
-        self.actv = layers.PReLU()
+
+        if self.activation == 'prelu':
+            self.actv = layers.PReLU()
+        else:
+            self.actv = layers.Activation(self.activation)
 
     def call(self, inputs):
         s = self.conv2d(inputs)

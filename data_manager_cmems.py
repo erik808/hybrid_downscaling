@@ -17,11 +17,19 @@ class DataManagerCMEMS(data_manager_base.DataManagerBase):
 
     def __init__(
             self,
-            experiment_id="test"):
+            experiment_id="test",
+            testing=False,
+    ):
         super().__init__()
         tools.load_config(self, config_name='data_config_cmems')
         self.dirs, self.files = self.setup_directories(
             experiment_id=experiment_id)
+
+        # setup test mode
+        self.testing = testing
+        if self.testing:
+            self.time_range = self.time_range_testing
+
         self.load_grid()
         self.load_scalers()
 

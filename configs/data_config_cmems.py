@@ -3,9 +3,8 @@
 # --------------------------------------------------------------------
 compute_data = False
 split_factor = 11 / 12
-# time_range = slice('2023-01-01', '2023-12-31')
-time_range = slice('2023-01-01', '2023-01-01')
-# time_range = slice('2023-01-01', '2023-04-01')
+time_range = slice('2023-01-01', '2023-12-31')
+time_range_testing = slice('2023-01-01', '2023-01-01')
 
 # important directories and files
 data_dir = 'data'

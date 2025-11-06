@@ -16,7 +16,11 @@ if len(sys.argv) < 2:
 else:
     experiment_id = sys.argv[1]
 
-dmgr_cmems = data_manager_cmems.DataManagerCMEMS(experiment_id=experiment_id)
+dmgr_cmems = \
+    data_manager_cmems.DataManagerCMEMS(
+        experiment_id=experiment_id,
+        testing=False,
+    )
 dmgr_cmems.create_training_data(force_rebuild=False)
 
 dgen_args = {
@@ -46,7 +50,7 @@ analysis_callback = callbacks.AnalysisResNet(data_gen=dgen_test,
                                              )
 
 checkpoint_filepath = \
-    f'{dmgr_cmems.dirs["checkpoints"]}/checkpoint.vae.keras'
+    f'{dmgr_cmems.dirs["checkpoints"]}/checkpoint.resnet.keras'
 model_checkpoint_callback = keras.callbacks.ModelCheckpoint(
     filepath=checkpoint_filepath,
     monitor='val_loss',
@@ -62,3 +66,5 @@ hist = resnet.fit(
         model_checkpoint_callback,
     ]
 )
+
+analysis_callback.plot_history(hist)

@@ -157,6 +157,6 @@ def test_vae():
     analysis_callback.plot_history(hist)
 
 
-test_data_generator()
-test_resnet()
-test_vae()
+# test_data_generator()
+# test_resnet()
+# test_vae()

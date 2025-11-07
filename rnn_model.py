@@ -157,23 +157,11 @@ class RNN(base_model.BaseModel):
         current_lb = ops.squeeze(timeseries.pop())
         ae_projection = self.decoder(self.encoder(current_lb))
 
+        # encode timeseries
         encoded_series = [self.encoder(ops.squeeze(sample))
                           for sample in timeseries]
-        encoded_dims = encoded_series[0].shape
 
-        encoded_size = int(np.prod(encoded_dims[1:]))
-
-        rnn_input = ops.stack([layers.Flatten()(sample)
-                               for sample in encoded_series],
-                              axis=1)
-
-        rnn_output = layers.SimpleRNN(
-            units=encoded_size,
-            dropout=0.4,
-            recurrent_dropout=0.4,
-            unroll=False
-        )(rnn_input)
-        prediction = layers.Reshape(encoded_dims[1:])(rnn_output)
+        prediction = RNNLayer('simpleRNN')(encoded_series)
         prediction_decoded = self.decoder(prediction)
         outputs = {
             'decoded': prediction_decoded,
@@ -182,3 +170,46 @@ class RNN(base_model.BaseModel):
         }
 
         return inputs, outputs
+
+
+class RNNLayer(layers.Layer):
+    def __init__(
+            self,
+            mode,
+            **kwargs,
+    ):
+        super().__init__(**kwargs)
+        self.mode = mode
+
+    def build(self, input_shape):
+
+        if self.mode == 'simpleRNN':
+            self.input_transf = FlattenAndStack()
+            self.rnnmodel = layers.SimpleRNN(
+                units=128,
+                recurrent_dropout=0.4,
+                unroll=False
+            )
+            dims = input_shape[0][1:]  # ignore batch dim
+            self.output_transf = \
+                keras.Sequential([
+                    layers.Dense(units=np.prod(dims),
+                                 activation='leaky_relu'),
+                    layers.Reshape(dims),
+                ])
+
+    def call(self, inputs):
+        x = self.input_transf(inputs)
+        x = self.rnnmodel(x)
+        out = self.output_transf(x)
+        return out
+
+
+class FlattenAndStack(layers.Layer):
+    def __init__(self, **kwargs):
+        super().__init__(**kwargs)
+
+    def call(self, x):
+        return ops.stack([layers.Flatten()(sample)
+                          for sample in x],
+                         axis=1)

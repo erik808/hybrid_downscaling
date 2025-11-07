@@ -4,3 +4,7 @@ trainable_VAE = False
 
 # learning rate
 learning_rate = 1e-4
+
+# model that does the actual prediction in the latent space
+# options: 'simpleRNN', 'dense'
+predictor = 'dense'

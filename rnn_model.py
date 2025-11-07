@@ -162,7 +162,7 @@ class RNN(base_model.BaseModel):
                           for sample in timeseries]
 
         # prediction = RNNLayer('simpleRNN')(encoded_series)
-        prediction = RNNLayer('dense')(encoded_series)
+        prediction = RNNLayer(self.predictor)(encoded_series)
 
         prediction_decoded = self.decoder(prediction)
         outputs = {

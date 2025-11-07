@@ -1,20 +1,24 @@
-import keras
+# import keras
 import importlib
 import data_manager_cmems
 import data_generator_cmems
+import resnet_model
 import vae_model
 import predictor_model
+import hybrid_model
 import callbacks
 import sys
 
 importlib.reload(data_manager_cmems)
 importlib.reload(data_generator_cmems)
+importlib.reload(resnet_model)
 importlib.reload(vae_model)
 importlib.reload(predictor_model)
+importlib.reload(hybrid_model)
 importlib.reload(callbacks)
 
 if len(sys.argv) < 2:
-    experiment_id = 'train_predictor'
+    experiment_id = 'train_hybrid'
 else:
     experiment_id = sys.argv[1]
 
@@ -35,6 +39,10 @@ dgen_args = {
 dgen_train, dgen_test = \
     data_generator_cmems.getter(**dgen_args)
 
+
+resnet = resnet_model.VAE(data_gen=dgen_train)
+resnet.build_model("ResNet")
+
 vae = vae_model.VAE(data_gen=dgen_train)
 vae.build_model("betaVAE")
 
@@ -45,34 +53,13 @@ vae.load_weights(checkpoint_filepath)
 
 predictor = predictor_model.Predictor(data_gen=dgen_train,
                                       vae_model=vae)
-
 predictor.build_model("predictor")
-predictor.summary()
-predictor.compile(predictor.compiler)
 
-analysis_callback = callbacks.AnalysisPredictor(data_gen=dgen_test,
-                                                plot=[
-                                                    # 'reconstruction',
-                                                    # 'spectra',
-                                                ]
-                                                )
 
-checkpoint_filepath = \
-    f'{dmgr_cmems.dirs["checkpoints"]}/checkpoint.predictor.keras'
-model_checkpoint_callback = keras.callbacks.ModelCheckpoint(
-    filepath=checkpoint_filepath,
-    monitor='val_loss',
-    mode='min',
-    save_best_only=True)
-
-hist = predictor.fit(
-    x=dgen_train,
-    epochs=5,
-    validation_data=dgen_test,
-    callbacks=[
-        analysis_callback,
-        model_checkpoint_callback,
-    ]
-)
-
-analysis_callback.plot_history(hist)
+# create hybrid
+hybrid = hybrid_model.Hybrid(data_gen=dgen_train,
+                             resnet_model=resnet,
+                             predictor_model=predictor)
+hybrid.build_model("hybrid")
+hybrid.summary()
+hybrid.compile(hybrid.compiler)

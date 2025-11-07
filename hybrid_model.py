@@ -24,3 +24,8 @@ class Hybrid(base_model.BaseModel):
     ):
         super().__init__(**kwargs)
         tools.load_config(self, config_name='hybrid_model')
+        self.resnet_model = resnet_model
+        self.predictor_model = predictor_model
+
+        self.compiler = keras.optimizers.Adam(
+            learning_rate=self.learning_rate)

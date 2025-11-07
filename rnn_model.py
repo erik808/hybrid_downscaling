@@ -161,7 +161,9 @@ class RNN(base_model.BaseModel):
         encoded_series = [self.encoder(ops.squeeze(sample))
                           for sample in timeseries]
 
-        prediction = RNNLayer('simpleRNN')(encoded_series)
+        # prediction = RNNLayer('simpleRNN')(encoded_series)
+        prediction = RNNLayer('dense')(encoded_series)
+
         prediction_decoded = self.decoder(prediction)
         outputs = {
             'decoded': prediction_decoded,
@@ -182,15 +184,15 @@ class RNNLayer(layers.Layer):
         self.mode = mode
 
     def build(self, input_shape):
+        dims = input_shape[0][1:]  # ignore batch dim
 
         if self.mode == 'simpleRNN':
             self.input_transf = FlattenAndStack()
-            self.rnnmodel = layers.SimpleRNN(
+            self.model = layers.SimpleRNN(
                 units=128,
                 recurrent_dropout=0.4,
                 unroll=False
             )
-            dims = input_shape[0][1:]  # ignore batch dim
             self.output_transf = \
                 keras.Sequential([
                     layers.Dense(units=np.prod(dims),
@@ -198,9 +200,26 @@ class RNNLayer(layers.Layer):
                     layers.Reshape(dims),
                 ])
 
+        elif self.mode == 'dense':
+            self.input_transf = keras.Sequential([
+                FlattenAndStack(),
+                layers.Flatten(),
+            ])
+            self.model = keras.Sequential([
+                layers.Dense(
+                    units=128,
+                    activation='leaky_relu',
+                ),
+                layers.Dense(
+                    units=np.prod(dims),
+                    activation='leaky_relu',
+                )
+            ])
+            self.output_transf = layers.Reshape(dims)
+
     def call(self, inputs):
         x = self.input_transf(inputs)
-        x = self.rnnmodel(x)
+        x = self.model(x)
         out = self.output_transf(x)
         return out
 

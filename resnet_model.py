@@ -108,6 +108,7 @@ class ResNet(base_model.BaseModel):
         outputs = layers.Conv2D(filters=self.num_vars,
                                 kernel_size=9,
                                 padding='same',
+                                name='resnet_output_conv',
                                 # Todo # Different output activations
                                 # should be tested. Output values need
                                 # to be mapped to [0,1].

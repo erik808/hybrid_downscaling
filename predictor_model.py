@@ -241,22 +241,15 @@ class LSPredictor(layers.Layer):
             self.input_transf = Stack()
 
             self.model = keras.Sequential([
-                # layers.Conv3D(
-                #     filters=128,
-                #     kernel_size=3,
-                #     strides=1,
-                #     padding='same',
-                #     activation='leaky_relu',
-                # ),
                 layers.Conv3D(
-                    filters=64,
+                    filters=256,
                     kernel_size=(int(lb_dim / 2), 3, 3),
                     strides=1,
                     padding='same',
                     activation='leaky_relu',
                 ),
                 layers.Conv3D(
-                    filters=64,
+                    filters=128,
                     kernel_size=(lb_dim, 2, 2),
                     strides=1,
                     padding='same',

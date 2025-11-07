@@ -52,8 +52,8 @@ predictor.compile(predictor.compiler)
 
 analysis_callback = callbacks.AnalysisPredictor(data_gen=dgen_test,
                                                 plot=[
-                                                    # 'reconstruction',
-                                                    # 'spectra',
+                                                    'reconstruction',
+                                                    'spectra',
                                                 ]
                                                 )
 

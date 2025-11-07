@@ -203,6 +203,7 @@ class VAE(base_model.BaseModel):
             filters=self.num_vars,
             kernel_size=9,
             padding='same',
+            name='vae_output_conv',
             activation='sigmoid')(y)
 
         # activation and masking

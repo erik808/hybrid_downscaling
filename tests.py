@@ -6,14 +6,14 @@ from keras import backend as K
 import callbacks
 import resnet_model
 import vae_model
-import rnn_model
+import predictor_model
 import data_manager_cmems
 import data_generator_cmems
 
 importlib.reload(data_manager_cmems)
 importlib.reload(data_generator_cmems)
 importlib.reload(resnet_model)
-importlib.reload(rnn_model)
+importlib.reload(predictor_model)
 importlib.reload(vae_model)
 importlib.reload(callbacks)
 
@@ -164,12 +164,12 @@ def test_vae():
     analysis_callback.plot_history(hist)
 
 
-def test_rnn():
+def test_predictor():
     K.clear_session()
 
     dmgr_cmems = \
         data_manager_cmems.DataManagerCMEMS(
-            experiment_id='test/rnn',
+            experiment_id='test/predictor',
             testing=True,
         )
 
@@ -195,12 +195,12 @@ def test_rnn():
         'experiments/test/vae/checkpoints/checkpoint.vae.keras'
     vae.load_weights(checkpoint_filepath)
 
-    rnn = rnn_model.RNN(data_gen=dgen_train,
-                        vae_model=vae)
+    predictor = predictor_model.RNN(data_gen=dgen_train,
+                                    vae_model=vae)
 
-    rnn.build_model("RNN")
-    rnn.summary()
-    rnn.compile(rnn.compiler)
+    predictor.build_model("RNN")
+    predictor.summary()
+    predictor.compile(predictor.compiler)
 
     analysis_callback = callbacks.AnalysisRNN(data_gen=dgen_test,
                                               plot=[
@@ -210,14 +210,14 @@ def test_rnn():
                                               )
 
     checkpoint_filepath = \
-        f'{dmgr_cmems.dirs["checkpoints"]}/checkpoint.rnn.keras'
+        f'{dmgr_cmems.dirs["checkpoints"]}/checkpoint.predictor.keras'
     model_checkpoint_callback = keras.callbacks.ModelCheckpoint(
         filepath=checkpoint_filepath,
         monitor='val_loss',
         mode='min',
         save_best_only=True)
 
-    rnn.fit(
+    predictor.fit(
         x=dgen_train,
         epochs=1,
         validation_data=dgen_test,
@@ -229,6 +229,6 @@ def test_rnn():
 
 
 # test_vae()
-# test_rnn()
+# test_predictor()
 # test_data_generator()
 # test_resnet()

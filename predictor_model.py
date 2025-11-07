@@ -234,40 +234,40 @@ class LSPredictor(layers.Layer):
             self.input_transf = Stack()
 
             self.model = keras.Sequential([
-                layers.Conv3D(
-                    filters=128,
-                    kernel_size=3,
-                    strides=1,
-                    padding='same',
-                    activation='leaky_relu',
-                ),
+                # layers.Conv3D(
+                #     filters=128,
+                #     kernel_size=3,
+                #     strides=1,
+                #     padding='same',
+                #     activation='leaky_relu',
+                # ),
                 layers.Conv3D(
                     filters=256,
-                    kernel_size=3,
+                    kernel_size=(lb_dim, 3, 3),
                     strides=1,
                     padding='same',
                     activation='leaky_relu',
                 ),
                 layers.Conv3D(
                     filters=128,
-                    kernel_size=3,
+                    kernel_size=(lb_dim, 3, 3),
                     strides=1,
                     padding='same',
                     activation='leaky_relu',
                 ),
                 layers.Conv3D(
                     filters=dims[-1],
-                    kernel_size=3,
-                    strides=1,
+                    kernel_size=(lb_dim, 3, 3),
+                    strides=(lb_dim, 1, 1),
                     padding='same',
                     activation='leaky_relu',
                 ),
             ])
 
             self.output_transf = keras.Sequential([
-                layers.MaxPooling3D(
-                    pool_size=(lb_dim, 1, 1),
-                    padding='same'),
+                # layers.MaxPooling3D(
+                #     pool_size=(lb_dim, 1, 1),
+                #     padding='same'),
                 Squeeze(),
             ])
 

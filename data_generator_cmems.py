@@ -134,8 +134,8 @@ class DataGeneratorCMEMS(keras.utils.PyDataset):
 
 
 def getter(**args):
-    dgen_train = DataGeneratorCMEMS(mode='train',
-                                    **args)
-    dgen_test = DataGeneratorCMEMS(mode='test',
-                                   **args)
+    dgen_train = DataGeneratorCMEMS(mode='train', **args)
+    args.update({'shuffle': False})
+    print(f"(dgen_test): setting shuffle to {args['shuffle']}")
+    dgen_test = DataGeneratorCMEMS(mode='test', **args)
     return dgen_train, dgen_test

@@ -116,8 +116,12 @@ class Predictor(base_model.BaseModel):
         # prediction loss, compare against target
         pred_loss = self.loss_fn(z_decoded, y_k(0))
 
-        # reconstruction loss, compare using most recent
-        re_loss = self.loss_fn(z_ae_proj, y_k(1))
+        # reconstruction loss, compare using most recent, only used
+        # when the VAE weights are trainable
+        if self.trainable_VAE:
+            re_loss = self.loss_fn(z_ae_proj, y_k(1))
+        else:
+            re_loss = 0.0
 
         # combine losses
         loss = pred_loss + lspred_loss + re_loss
@@ -165,9 +169,12 @@ class Predictor(base_model.BaseModel):
         timeseries.pop()
 
         # use most recent lookback for reconstruction loss
-        ae_projection = \
-            self.decoder(
-                self.encoder(ops.squeeze(timeseries[-1])))
+        if self.trainable_VAE:
+            ae_projection = \
+                self.decoder(
+                    self.encoder(ops.squeeze(timeseries[-1])))
+        else:
+            ae_projection = ops.squeeze(timeseries[-1])
 
         # encode timeseries
         encoded_series = [self.encoder(ops.squeeze(sample))
@@ -242,14 +249,14 @@ class LSPredictor(layers.Layer):
                 #     activation='leaky_relu',
                 # ),
                 layers.Conv3D(
-                    filters=256,
+                    filters=64,
                     kernel_size=(int(lb_dim / 2), 3, 3),
                     strides=1,
                     padding='same',
                     activation='leaky_relu',
                 ),
                 layers.Conv3D(
-                    filters=128,
+                    filters=64,
                     kernel_size=(lb_dim, 2, 2),
                     strides=1,
                     padding='same',

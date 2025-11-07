@@ -65,7 +65,6 @@ model_checkpoint_callback = keras.callbacks.ModelCheckpoint(
     mode='min',
     save_best_only=True)
 
-breakpoint()
 hist = rnn.fit(
     x=dgen_train,
     epochs=10,

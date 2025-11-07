@@ -66,6 +66,7 @@ class RNN(base_model.BaseModel):
         self.loss_tracker = keras.metrics.Mean(name="loss")
         self.re_loss_tracker = keras.metrics.Mean(name="recons")
         self.rnn_loss_tracker = keras.metrics.Mean(name="rnn_loss")
+        self.ae_loss_tracker = keras.metrics.Mean(name="ae_loss")
 
     @property
     def metrics(self):
@@ -73,6 +74,7 @@ class RNN(base_model.BaseModel):
             self.loss_tracker,
             self.re_loss_tracker,
             self.rnn_loss_tracker,
+            self.ae_loss_tracker,
         ]
 
     def train_step(self, data, training=True):
@@ -83,12 +85,15 @@ class RNN(base_model.BaseModel):
         z = self({'HR_data': ops.nan_to_num(x['HR_data'])},
                  training=training)
 
-        z_decoded = z['decoded']
+        z_decoded = z['decoded'][:,
+                                 self.masking.rows,
+                                 self.masking.cols,
+                                 :]
         z_ls_pred = z['ls_pred']
-        z_decoded = z_decoded[:,
-                              self.masking.rows,
-                              self.masking.cols,
-                              :]
+        z_ae_proj = z['ae_proj'][:,
+                                 self.masking.rows,
+                                 self.masking.cols,
+                                 :]
 
         y_ls = \
             self.encoder(
@@ -106,7 +111,8 @@ class RNN(base_model.BaseModel):
                          :]
 
         re_loss = self.loss_fn(z_decoded, y)
-        loss = re_loss + rnn_loss
+        ae_loss = self.loss_fn(z_ae_proj, y)
+        loss = re_loss + rnn_loss + ae_loss
 
         if training:
             loss.backward()
@@ -124,6 +130,8 @@ class RNN(base_model.BaseModel):
                 metric.update_state(re_loss)
             if metric.name == "rnn_loss":
                 metric.update_state(rnn_loss)
+            if metric.name == "ae_loss":
+                metric.update_state(ae_loss)
 
         return {m.name: m.result() for m in self.metrics}
 
@@ -141,27 +149,36 @@ class RNN(base_model.BaseModel):
             self.input_shape_LR[0],
             axis=1)
 
-        # lookback ordering is back in time, reversing
+        # lookback ordering is backwards in time, reversing to get it
+        # forward in time
         timeseries.reverse()
 
         # remove current lookback, keep only past samples
-        timeseries.pop()
+        current_lb = ops.squeeze(timeseries.pop())
+        ae_projection = self.decoder(self.encoder(current_lb))
 
         encoded_series = [self.encoder(ops.squeeze(sample))
                           for sample in timeseries]
-
         encoded_dims = encoded_series[0].shape
+        breakpoint()
+        encoded_size = int(np.prod(encoded_dims[1:]))
 
-        encoded = layers.Flatten()(ops.stack(encoded_series, axis=-1))
-        prediction = layers.Dense(
-            units=128,
-            activation='leaky_relu')(encoded)
-        prediction = layers.Dense(
-            units=np.prod(encoded_dims[1:]),
-            activation='leaky_relu')(prediction)
-        prediction = layers.Reshape(encoded_dims[1:])(prediction)
+        rnn_input = ops.stack([layers.Flatten()(sample)
+                               for sample in encoded_series],
+                              axis=1)
+
+        rnn_output = layers.SimpleRNN(
+            units=encoded_size,
+            dropout=0.4,
+            recurrent_dropout=0.4,
+            unroll=False
+        )(rnn_input)
+        prediction = layers.Reshape(encoded_dims[1:])(rnn_output)
         prediction_decoded = self.decoder(prediction)
-        outputs = {'decoded': self.masking(prediction_decoded),
-                   'ls_pred': prediction}
+        outputs = {
+            'decoded': prediction_decoded,
+            'ls_pred': prediction,
+            'ae_proj': ae_projection,
+        }
 
         return inputs, outputs

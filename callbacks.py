@@ -278,7 +278,7 @@ class AnalysisVAE(AnalysisBase):
         return ['HR', 'HR', 'HR']
 
 
-class AnalysisRNN(AnalysisBase):
+class AnalysisPredictor(AnalysisBase):
     """ for now this is the same as the VAE version """
     def __init__(
             self,

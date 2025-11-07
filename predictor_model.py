@@ -15,7 +15,7 @@ importlib.reload(resnet_model)
 importlib.reload(vae_model)
 
 
-class RNN(base_model.BaseModel):
+class Predictor(base_model.BaseModel):
     def __init__(
             self,
             vae_model,
@@ -23,7 +23,7 @@ class RNN(base_model.BaseModel):
     ):
         super().__init__(**kwargs)
 
-        tools.load_config(self, config_name='rnn_model')
+        tools.load_config(self, config_name='predictor_model')
 
         self.vae_model = vae_model
 
@@ -65,7 +65,7 @@ class RNN(base_model.BaseModel):
         self.loss_fn = keras.losses.MeanSquaredError()
         self.loss_tracker = keras.metrics.Mean(name="loss")
         self.pred_loss_tracker = keras.metrics.Mean(name="prediction")
-        self.rnn_loss_tracker = keras.metrics.Mean(name="rnn")
+        self.lspred_loss_tracker = keras.metrics.Mean(name="ls_pred")
         self.re_loss_tracker = keras.metrics.Mean(name="reconstruction")
 
     @property
@@ -73,7 +73,7 @@ class RNN(base_model.BaseModel):
         return [
             self.loss_tracker,
             self.pred_loss_tracker,
-            self.rnn_loss_tracker,
+            self.lspred_loss_tracker,
             self.re_loss_tracker,
         ]
 
@@ -99,20 +99,28 @@ class RNN(base_model.BaseModel):
             self.encoder(
                 ops.nan_to_num(
                     ops.squeeze(y['HR_data'][:,
-                                             0,  # current lookback index
+                                             0,  # target lookback index
                                              ...])))
 
-        rnn_loss = self.loss_fn(z_ls_pred, y_ls)
+        # prediction loss in the latent space
+        lspred_loss = self.loss_fn(z_ls_pred, y_ls)
 
-        y = y['HR_data'][:,
-                         0,  # current lookback index
-                         self.masking.rows,
-                         self.masking.cols,
-                         :]
+        def y_k(k):
+            return \
+                y['HR_data'][:,
+                             k,  # kth lookback index
+                             self.masking.rows,
+                             self.masking.cols,
+                             :]
 
-        pred_loss = self.loss_fn(z_decoded, y)
-        re_loss = self.loss_fn(z_ae_proj, y)
-        loss = pred_loss + rnn_loss + re_loss
+        # prediction loss, compare against target
+        pred_loss = self.loss_fn(z_decoded, y_k(0))
+
+        # reconstruction loss, compare using most recent
+        re_loss = self.loss_fn(z_ae_proj, y_k(1))
+
+        # combine losses
+        loss = pred_loss + lspred_loss + re_loss
 
         if training:
             loss.backward()
@@ -128,8 +136,8 @@ class RNN(base_model.BaseModel):
                 metric.update_state(loss)
             if metric.name == "prediction":
                 metric.update_state(pred_loss)
-            if metric.name == "rnn":
-                metric.update_state(rnn_loss)
+            if metric.name == "ls_pred":
+                metric.update_state(lspred_loss)
             if metric.name == "reconstruction":
                 metric.update_state(re_loss)
 
@@ -150,19 +158,23 @@ class RNN(base_model.BaseModel):
             axis=1)
 
         # lookback ordering is backwards in time, reversing to get it
-        # forward in time
+        # forwards in time
         timeseries.reverse()
 
-        # remove current lookback, keep only past samples
-        current_lb = ops.squeeze(timeseries.pop())
-        ae_projection = self.decoder(self.encoder(current_lb))
+        # remove current lookback (our target), keep only past samples
+        timeseries.pop()
+
+        # use most recent lookback for reconstruction loss
+        ae_projection = \
+            self.decoder(
+                self.encoder(ops.squeeze(timeseries[-1])))
 
         # encode timeseries
         encoded_series = [self.encoder(ops.squeeze(sample))
                           for sample in timeseries]
 
-        # prediction = RNNLayer('simpleRNN')(encoded_series)
-        prediction = RNNLayer(self.predictor)(encoded_series)
+        # do prediction
+        prediction = LSPredictor(self.predictor)(encoded_series)
 
         prediction_decoded = self.decoder(prediction)
         outputs = {
@@ -174,7 +186,7 @@ class RNN(base_model.BaseModel):
         return inputs, outputs
 
 
-class RNNLayer(layers.Layer):
+class LSPredictor(layers.Layer):
     def __init__(
             self,
             mode,
@@ -223,6 +235,13 @@ class RNNLayer(layers.Layer):
 
             self.model = keras.Sequential([
                 layers.Conv3D(
+                    filters=128,
+                    kernel_size=3,
+                    strides=1,
+                    padding='same',
+                    activation='leaky_relu',
+                ),
+                layers.Conv3D(
                     filters=256,
                     kernel_size=3,
                     strides=1,
@@ -252,10 +271,19 @@ class RNNLayer(layers.Layer):
                 Squeeze(),
             ])
 
+        elif self.mode == 'convlstm':
+            self.input_transf = Stack()
+            self.model = layers.ConvLSTM2D(
+                filters=64,
+                kernel_size=3,
+                strides=1,
+                padding='same',
+            )
+            self.output_transf = layers.Identity()
+
     def call(self, inputs):
         x = self.input_transf(inputs)
         x = self.model(x)
-#        breakpoint()
         out = self.output_transf(x)
         return out
 

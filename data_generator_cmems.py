@@ -76,7 +76,6 @@ class DataGeneratorCMEMS(keras.utils.PyDataset):
                    }
 
         batch_y = {'HR_data': HR_data}
-
         return (batch_x, batch_y)
 
     def create_batch(self, inds, ds, lookback, scaler, axis=1):

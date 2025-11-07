@@ -177,7 +177,7 @@ def test_predictor():
     dgen_args = {
         'dm': dmgr_cmems,
         'batch_size': 4,
-        'lookback': 3,
+        'lookback': 4,
         'shuffle': True,
         'use_multiprocessing': True,
         'workers': 4,

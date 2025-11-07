@@ -100,7 +100,8 @@ class Predictor(base_model.BaseModel):
                 ops.nan_to_num(
                     ops.squeeze(y['HR_data'][:,
                                              0,  # target lookback index
-                                             ...])))
+                                             ...],
+                                axis=1)))
 
         # prediction loss in the latent space
         lspred_loss = self.loss_fn(z_ls_pred, y_ls)
@@ -172,12 +173,15 @@ class Predictor(base_model.BaseModel):
         if self.trainable_VAE:
             ae_projection = \
                 self.decoder(
-                    self.encoder(ops.squeeze(timeseries[-1])))
+                    self.encoder(ops.squeeze(timeseries[-1],
+                                             axis=1)))
         else:
-            ae_projection = ops.squeeze(timeseries[-1])
+            ae_projection = ops.squeeze(timeseries[-1],
+                                        axis=1)
 
         # encode timeseries
-        encoded_series = [self.encoder(ops.squeeze(sample))
+        encoded_series = [self.encoder(ops.squeeze(sample,
+                                                   axis=1))
                           for sample in timeseries]
 
         # do prediction
@@ -301,7 +305,7 @@ class Squeeze(layers.Layer):
         super().__init__(**kwargs)
 
     def call(self, x):
-        return ops.squeeze(x)
+        return ops.squeeze(x, axis=1)
 
 
 class FlattenAndStack(layers.Layer):

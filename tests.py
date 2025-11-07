@@ -195,19 +195,19 @@ def test_predictor():
         'experiments/test/vae/checkpoints/checkpoint.vae.keras'
     vae.load_weights(checkpoint_filepath)
 
-    predictor = predictor_model.RNN(data_gen=dgen_train,
-                                    vae_model=vae)
+    predictor = predictor_model.Predictor(data_gen=dgen_train,
+                                          vae_model=vae)
 
-    predictor.build_model("RNN")
+    predictor.build_model("predictor")
     predictor.summary()
     predictor.compile(predictor.compiler)
 
-    analysis_callback = callbacks.AnalysisRNN(data_gen=dgen_test,
-                                              plot=[
-                                                  'reconstruction',
-                                                  'spectra',
-                                              ]
-                                              )
+    analysis_callback = callbacks.AnalysisPredictor(data_gen=dgen_test,
+                                                    plot=[
+                                                        'reconstruction',
+                                                        'spectra',
+                                                    ]
+                                                    )
 
     checkpoint_filepath = \
         f'{dmgr_cmems.dirs["checkpoints"]}/checkpoint.predictor.keras'

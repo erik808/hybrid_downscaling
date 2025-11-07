@@ -40,7 +40,7 @@ dgen_train, dgen_test = \
     data_generator_cmems.getter(**dgen_args)
 
 
-resnet = resnet_model.VAE(data_gen=dgen_train)
+resnet = resnet_model.ResNet(data_gen=dgen_train)
 resnet.build_model("ResNet")
 
 vae = vae_model.VAE(data_gen=dgen_train)
@@ -54,7 +54,6 @@ vae.load_weights(checkpoint_filepath)
 predictor = predictor_model.Predictor(data_gen=dgen_train,
                                       vae_model=vae)
 predictor.build_model("predictor")
-
 
 # create hybrid
 hybrid = hybrid_model.Hybrid(data_gen=dgen_train,

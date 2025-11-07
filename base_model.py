@@ -31,11 +31,11 @@ class BaseModel(keras.Model):
         self.num_vars = self.input_shape_LR[-1]
         assert self.num_vars == self.input_shape_LR[-1], \
             "unequal variables in LR and HR data"
-
         # create mask
         self.masking = \
             Masking(test_x['meta']['mask'][0,],
-                    self.num_vars)
+                    self.num_vars,
+                    name=self.name + '_masking')
 
         # setup loss and loss tracker
         self.loss_fn = keras.losses.MeanSquaredError()

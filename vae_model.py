@@ -123,7 +123,7 @@ class VAE(base_model.BaseModel):
             kernel_size=9,
             padding='same',
             activation=None,
-            name='input_transform',
+            name='vae_input_transform',
         )(input_k)
         x = self.create_activation(x)
 
@@ -164,9 +164,9 @@ class VAE(base_model.BaseModel):
         x = self.create_activation(x)
 
         if not self.deterministic_mode:
-            mean, logvar = Split(name="splitter")(x)
+            mean, logvar = Split(name="vae_splitter")(x)
             # Sampling
-            x = Sampling()(mean, logvar)
+            x = Sampling(name="vae_sampling")(mean, logvar)
         else:
             mean = x
             logvar = x

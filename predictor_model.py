@@ -30,16 +30,16 @@ class Predictor(base_model.BaseModel):
         # get input and output layers to isolate encoder+decoder
         mean, logsigma = \
             self.vae_model.get_layer('betaVAE')\
-                          .get_layer('splitter').output
+                          .get_layer('vae_splitter').output
         sampled = \
             self.vae_model.get_layer('betaVAE')\
-                          .get_layer('sampling').output
+                          .get_layer('vae_sampling').output
         vae_input = \
             self.vae_model.get_layer('betaVAE')\
-                          .get_layer('input_transform').input
+                          .get_layer('vae_input_transform').input
         vae_output = \
             self.vae_model.get_layer('betaVAE')\
-                          .get_layer('masking').output
+                          .get_layer('vae_masking').output
 
         self.encoder = keras.Model(
             inputs=vae_input,

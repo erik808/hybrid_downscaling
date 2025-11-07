@@ -64,17 +64,17 @@ class RNN(base_model.BaseModel):
 
         self.loss_fn = keras.losses.MeanSquaredError()
         self.loss_tracker = keras.metrics.Mean(name="loss")
-        self.re_loss_tracker = keras.metrics.Mean(name="recons")
-        self.rnn_loss_tracker = keras.metrics.Mean(name="rnn_loss")
-        self.ae_loss_tracker = keras.metrics.Mean(name="ae_loss")
+        self.pred_loss_tracker = keras.metrics.Mean(name="prediction")
+        self.rnn_loss_tracker = keras.metrics.Mean(name="rnn")
+        self.re_loss_tracker = keras.metrics.Mean(name="reconstruction")
 
     @property
     def metrics(self):
         return [
             self.loss_tracker,
-            self.re_loss_tracker,
+            self.pred_loss_tracker,
             self.rnn_loss_tracker,
-            self.ae_loss_tracker,
+            self.re_loss_tracker,
         ]
 
     def train_step(self, data, training=True):
@@ -110,9 +110,9 @@ class RNN(base_model.BaseModel):
                          self.masking.cols,
                          :]
 
-        re_loss = self.loss_fn(z_decoded, y)
-        ae_loss = self.loss_fn(z_ae_proj, y)
-        loss = re_loss + rnn_loss + ae_loss
+        pred_loss = self.loss_fn(z_decoded, y)
+        re_loss = self.loss_fn(z_ae_proj, y)
+        loss = pred_loss + rnn_loss + re_loss
 
         if training:
             loss.backward()
@@ -126,12 +126,12 @@ class RNN(base_model.BaseModel):
         for metric in self.metrics:
             if metric.name == "loss":
                 metric.update_state(loss)
-            if metric.name == "recons":
-                metric.update_state(re_loss)
-            if metric.name == "rnn_loss":
+            if metric.name == "prediction":
+                metric.update_state(pred_loss)
+            if metric.name == "rnn":
                 metric.update_state(rnn_loss)
-            if metric.name == "ae_loss":
-                metric.update_state(ae_loss)
+            if metric.name == "reconstruction":
+                metric.update_state(re_loss)
 
         return {m.name: m.result() for m in self.metrics}
 
@@ -160,7 +160,7 @@ class RNN(base_model.BaseModel):
         encoded_series = [self.encoder(ops.squeeze(sample))
                           for sample in timeseries]
         encoded_dims = encoded_series[0].shape
-        breakpoint()
+
         encoded_size = int(np.prod(encoded_dims[1:]))
 
         rnn_input = ops.stack([layers.Flatten()(sample)

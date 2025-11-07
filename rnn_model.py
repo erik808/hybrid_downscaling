@@ -185,6 +185,7 @@ class RNNLayer(layers.Layer):
 
     def build(self, input_shape):
         dims = input_shape[0][1:]  # ignore batch dim
+        lb_dim = len(input_shape)
 
         if self.mode == 'simpleRNN':
             self.input_transf = FlattenAndStack()
@@ -217,11 +218,44 @@ class RNNLayer(layers.Layer):
             ])
             self.output_transf = layers.Reshape(dims)
 
+        elif self.mode == 'conv3d':
+            self.input_transf = Stack()
+            self.model = layers.Conv3D(
+                filters=128,
+                kernel_size=3,
+                strides=1,
+                padding='same',
+                activation='leaky_relu',
+            )
+            self.output_transf = keras.Sequential([
+                layers.MaxPooling3D(
+                    pool_size=(lb_dim, 1, 1),
+                    padding='same'),
+                Squeeze(),
+            ])
+
     def call(self, inputs):
         x = self.input_transf(inputs)
         x = self.model(x)
+#        breakpoint()
         out = self.output_transf(x)
         return out
+
+
+class Stack(layers.Layer):
+    def __init__(self, **kwargs):
+        super().__init__(**kwargs)
+
+    def call(self, x):
+        return ops.stack(x, axis=1)
+
+
+class Squeeze(layers.Layer):
+    def __init__(self, **kwargs):
+        super().__init__(**kwargs)
+
+    def call(self, x):
+        return ops.squeeze(x)
 
 
 class FlattenAndStack(layers.Layer):
@@ -230,5 +264,4 @@ class FlattenAndStack(layers.Layer):
 
     def call(self, x):
         return ops.stack([layers.Flatten()(sample)
-                          for sample in x],
-                         axis=1)
+                          for sample in x], axis=1)

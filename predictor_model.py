@@ -39,36 +39,32 @@ class Predictor(base_model.BaseModel):
             vae_model.get_layer('betaVAE')\
                      .get_layer('vae_masking').output
 
+        decoder_skip_output = \
+            vae_model.get_layer('betaVAE')\
+                     .get_layer('skip_output').output
+
         self.vae_input = vae_model.get_layer('betaVAE').input
 
-        self.encoder_pred = keras.Model(
+        self.encoder = keras.Model(
             inputs=encoder_input,
             outputs=mean,
             name="encoder_pred",
         )
 
-        self.encoder_recons = keras.Model(
-            inputs=encoder_input,
-            outputs=mean,
-            name="encoder_recons",
-        )
-
-        self.decoder_pred = keras.Model(
+        self.decoder = keras.Model(
             inputs=sampled,
             outputs=decoder_output,
             name="decoder_pred",
         )
 
-        self.decoder_recons = keras.Model(
+        self.decoder_skip_output = keras.Model(
             inputs=sampled,
-            outputs=decoder_output,
-            name="decoder_recons",
+            outputs=decoder_skip_output,
+            name="decoder_skip",
         )
 
-        self.encoder_pred.trainable = self.trainable_encoder
-        self.decoder_pred.trainable = self.trainable_decoder
-        self.encoder_recons.trainable = self.trainable_encoder
-        self.decoder_recons.trainable = self.trainable_decoder
+        self.encoder.trainable = self.trainable_encoder
+        self.decoder.trainable = self.trainable_decoder
         self.trainable_VAE = \
             self.trainable_encoder or self.trainable_decoder
 
@@ -111,7 +107,7 @@ class Predictor(base_model.BaseModel):
                                      :]
 
         y_ls = \
-            self.encoder_pred(
+            self.encoder(
                 ops.nan_to_num(
                     ops.squeeze(
                         y[self.input_name_HR][:,
@@ -188,16 +184,16 @@ class Predictor(base_model.BaseModel):
         # use most recent lookback for reconstruction loss
         if self.trainable_VAE:
             ae_reconstruction = \
-                self.decoder_recons(
-                    self.encoder_recons(ops.squeeze(timeseries[-1],
-                                                    axis=1)))
+                self.decoder(
+                    self.encoder(ops.squeeze(timeseries[-1],
+                                             axis=1)))
         else:
             ae_reconstruction = ops.squeeze(timeseries[-1],
                                             axis=1)
 
         # encode timeseries
-        encoded_series = [self.encoder_pred(ops.squeeze(sample,
-                                                        axis=1))
+        encoded_series = [self.encoder(ops.squeeze(sample,
+                                                   axis=1))
                           for sample in timeseries]
 
         # do prediction
@@ -205,11 +201,13 @@ class Predictor(base_model.BaseModel):
                                  name="latent_predictor",
                                  )(encoded_series)
 
-        prediction_decoded = self.decoder_pred(prediction)
+        prediction_decoded = self.decoder(prediction)
+        skipped = self.decoder_skip_output(prediction)
         outputs = {
             'decoded': prediction_decoded,
             'ls_pred': prediction,
             'ae_recons': ae_reconstruction,
+            'skip_vae_output': skipped,
         }
         return inputs, outputs
 

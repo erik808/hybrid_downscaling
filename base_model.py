@@ -61,7 +61,6 @@ class BaseModel(keras.Model):
         # use random batch as test input
         test_x, test_y = self.get_random_item()
         self.model.build(test_x)
-        self.build(test_x)
         return self.model
 
     def get_coarsening_factor(self, test_x):

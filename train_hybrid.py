@@ -44,7 +44,6 @@ dgen_args = {
 dgen_train, dgen_test = \
     data_generator_cmems.getter(**dgen_args)
 
-
 resnet = resnet_model.ResNet(data_gen=dgen_train)
 resnet.build_model("ResNet")
 resnet.summary()
@@ -62,7 +61,6 @@ predictor = predictor_model.Predictor(data_gen=dgen_train,
                                       vae_model=vae)
 predictor.build_model("predictor")
 predictor.summary()
-breakpoint()
 
 # create hybrid
 hybrid = hybrid_model.Hybrid(data_gen=dgen_train,
@@ -72,6 +70,7 @@ hybrid = hybrid_model.Hybrid(data_gen=dgen_train,
 hybrid.build_model("hybrid")
 hybrid.summary()
 hybrid.compile(hybrid.compiler)
+breakpoint()
 
 hist = hybrid.fit(
     x=dgen_train,

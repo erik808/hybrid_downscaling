@@ -49,7 +49,6 @@ predictor = predictor_model.Predictor(data_gen=dgen_train,
 predictor.build_model("predictor")
 predictor.summary(line_length=80, expand_nested=True)
 predictor.compile(predictor.compiler)
-breakpoint()
 
 analysis_callback = callbacks.AnalysisPredictor(data_gen=dgen_test,
                                                 plot=[

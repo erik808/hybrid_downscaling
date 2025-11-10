@@ -199,6 +199,9 @@ class VAE(base_model.BaseModel):
             activation=self.activation,
         )(y)
 
+        # connection to skip the output convolution
+        skip_output = layers.Identity(name='skip_output')(y)
+
         y = layers.Conv2D(
             filters=self.num_vars,
             kernel_size=9,
@@ -212,6 +215,7 @@ class VAE(base_model.BaseModel):
         outputs = {'decoded': z,
                    'mean': mean,
                    'logvar': logvar,
+                   'skip_output': skip_output,
                    }
         return inputs, outputs
 

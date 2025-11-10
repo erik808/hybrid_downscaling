@@ -39,8 +39,7 @@ class Hybrid(base_model.BaseModel):
 
         self.predictor_output = \
             self.predictor_model.get_layer('predictor')\
-                                .get_layer('decoder_pred')\
-                                .get_layer('vae_output_conv').input
+                                .get_layer('decoder_skip').output
 
         self.ae_recons = \
             self.predictor_model.get_layer('predictor').output['ae_recons']
@@ -59,9 +58,20 @@ class Hybrid(base_model.BaseModel):
             name="predictor_submodel",
         )
 
+        # set encoder/decoder trainable
+        self.predictor_model.get_layer('predictor')\
+                            .get_layer('encoder_pred')\
+                            .trainable = self.predictor_model.trainable_encoder
+        self.predictor_model.get_layer('predictor')\
+                            .get_layer('decoder_pred')\
+                            .trainable = self.predictor_model.trainable_decoder
+
+        breakpoint()
+
+        self.trainable_VAE = self.predictor_model.trainable_VAE
+
         self.resnet_layers.trainable = self.trainable_resnet
         self.predictor_layers.trainable = self.trainable_predictor
-        self.trainable_VAE = self.predictor_model.trainable_VAE
 
         self.compiler = keras.optimizers.Adam(
             learning_rate=self.learning_rate)

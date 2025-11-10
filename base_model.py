@@ -75,8 +75,8 @@ class BaseModel(keras.Model):
         coarsening_factor = coarsening[0]
         return coarsening_factor
 
-    def summary(self):
-        return self.model.summary()
+    def summary(self, **kwargs):
+        return self.model.summary(**kwargs)
 
     def call(self, inputs, training=True):
         return self.model(inputs, training=training)

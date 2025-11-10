@@ -3,7 +3,6 @@ import keras
 from keras import ops
 from keras import layers
 
-import numpy as np
 import importlib
 import tools
 import base_model
@@ -26,49 +25,60 @@ class Hybrid(base_model.BaseModel):
         super().__init__(**kwargs)
         tools.load_config(self, config_name='hybrid_model')
 
-        resnet_input = resnet_model.get_layer("ResNet").input
-        resnet_output = \
+        self.resnet_model = resnet_model
+        self.predictor_model = predictor_model
+
+        self.resnet_input = resnet_model.get_layer("ResNet").input
+        self.resnet_output = \
             resnet_model.get_layer("ResNet")\
                         .get_layer('resnet_output_conv')\
                         .input
 
-        predictor_input = \
+        self.predictor_input = \
             predictor_model.get_layer('predictor').input
-        predictor_output = \
-            predictor_model.get_layer('predictor')\
-                           .get_layer('decoder')\
-                           .get_layer('vae_output_conv').input
 
-        predictor_model.get_layer('predictor').layers
+        self.predictor_output = \
+            self.predictor_model.get_layer('predictor')\
+                                .get_layer('decoder_pred')\
+                                .get_layer('vae_output_conv').input
 
-        self.resnet_model = keras.Model(
-            inputs=resnet_input,
-            outputs=resnet_output,
-            name="ResNet",
+        self.ae_recons = \
+            self.predictor_model.get_layer('predictor').output['ae_recons']
+        self.ls_pred = \
+            self.predictor_model.get_layer('predictor').output['ls_pred']
+
+        self.resnet_layers = keras.Model(
+            inputs=self.resnet_input,
+            outputs=self.resnet_output,
+            name="ResNet_submodel",
         )
 
-        self.predictor_model = keras.Model(
-            inputs=predictor_input,
-            outputs=predictor_output,
-            name="predictor",
+        self.predictor_layers = keras.Model(
+            inputs=self.predictor_input,
+            outputs=self.predictor_output,
+            name="predictor_submodel",
         )
 
-        self.hybrid_HR_input = self.input_name_HR + '_hybrid'
-        self.hybrid_LR_input = self.input_name_LR + '_hybrid'
-
-        self.resnet_model.trainable = self.trainable_resnet
-        self.predictor_model.trainable = self.trainable_predictor
+        self.resnet_layers.trainable = self.trainable_resnet
+        self.predictor_layers.trainable = self.trainable_predictor
+        self.trainable_VAE = self.predictor_model.trainable_VAE
 
         self.compiler = keras.optimizers.Adam(
             learning_rate=self.learning_rate)
 
         self.loss_fn = keras.losses.MeanSquaredError()
         self.loss_tracker = keras.metrics.Mean(name="loss")
+        self.re_loss_tracker = keras.metrics.Mean(name="reconstruction")
+        self.pred_loss_tracker = keras.metrics.Mean(name="prediction")
+        self.lspred_loss_tracker = keras.metrics.Mean(name="ls_pred")
 
     @property
     def metrics(self):
         return [
             self.loss_tracker,
+            self.re_loss_tracker,
+            self.pred_loss_tracker,
+            self.lspred_loss_tracker,
         ]
 
     def train_step(self, data, training=True):
@@ -76,24 +86,84 @@ class Hybrid(base_model.BaseModel):
         if training:
             self.zero_grad()
 
-        breakpoint()
+        y_ls = \
+            self.predictor_model.get_layer('encoder_pred')(
+                ops.nan_to_num(
+                    ops.squeeze(
+                        y[self.input_name_HR][:,
+                                              0,  # target lookback index
+                                              ...],
+                        axis=1)))
+
         z = self.model({self.input_name_HR:
                         ops.nan_to_num(x[self.input_name_HR]),
                         self.input_name_LR:
                         ops.nan_to_num(x[self.input_name_LR])},
                        training=training)
 
+        z_hybrid = z['hybrid'][:,
+                               self.masking.rows,
+                               self.masking.cols,
+                               :]
+
+        z_ae_recons = z['ae_recons'][:,
+                                     self.masking.rows,
+                                     self.masking.cols,
+                                     :]
+
+        z_ls_pred = z['ls_pred']
+        lspred_loss = self.loss_fn(z_ls_pred, y_ls)
+
+        def y_k(k):
+            return \
+                y[self.input_name_HR][:,
+                                      k,  # kth lookback index
+                                      self.masking.rows,
+                                      self.masking.cols,
+                                      :]
+
+        if self.trainable_VAE:
+            re_loss = self.loss_fn(z_ae_recons, y_k(1))
+        else:
+            re_loss = 0.0
+
+        # total loss
+        pred_loss = self.loss_fn(z_hybrid, y_k(0))
+        loss = pred_loss + re_loss + lspred_loss
+
+        if training:
+            loss.backward()
+            trainable_weights = [v for v in self.trainable_weights]
+            gradients = [v.value.grad for v in trainable_weights]
+
+            # update weights
+            with torch.no_grad():
+                self.optimizer.apply(gradients, trainable_weights)
+
+        for metric in self.metrics:
+            if metric.name == "loss":
+                metric.update_state(loss)
+            if metric.name == "prediction":
+                metric.update_state(pred_loss)
+            if metric.name == "ls_pred":
+                metric.update_state(lspred_loss)
+            if metric.name == "reconstruction":
+                metric.update_state(re_loss)
+
+        return {m.name: m.result() for m in self.metrics}
+
     def builder(self):
-        input_HR = layers.Input(
-            shape=self.input_shape_HR,
-            name=self.input_name_HR)
 
-        input_LR = layers.Input(
-            shape=self.input_shape_LR,
-            name=self.input_name_LR)
+        # reusing predictor input
+        input_HR = self.predictor_input
+        assert input_HR.shape[1] > 1, \
+            "need at least lookback=2 to make predictions"
 
-        resnet_result = self.resnet_model(input_LR)
-        predictor_result = self.predictor_model(input_HR)
+        # reusing resnet input
+        input_LR = self.resnet_input
+
+        resnet_result = self.resnet_layers(input_LR)
+        predictor_result = self.predictor_layers(input_HR)
 
         # if self.hybridization == 'product':
         assert resnet_result.shape == predictor_result.shape, \
@@ -113,7 +183,11 @@ class Hybrid(base_model.BaseModel):
             activation='sigmoid')(x)
 
         out = self.masking(out)
-        outputs = out
+
+        outputs = {'hybrid': out,
+                   'ae_recons': self.ae_recons,
+                   'ls_pred': self.ls_pred,
+                   }
 
         inputs = {self.input_name_HR: input_HR,
                   self.input_name_LR: input_LR}

@@ -36,7 +36,7 @@ dgen_train, dgen_test = \
 vae = vae_model.VAE(data_gen=dgen_train)
 
 vae.build_model("betaVAE")
-vae.summary()
+vae.summary(line_length=80, expand_nested=True)
 vae.compile(vae.compiler)
 
 analysis_callback = callbacks.AnalysisVAE(data_gen=dgen_test,

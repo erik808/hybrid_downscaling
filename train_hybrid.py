@@ -1,6 +1,7 @@
 # import keras
 import importlib
 import data_manager_cmems
+from keras import backend as K
 import data_generator_cmems
 import resnet_model
 import vae_model
@@ -17,13 +18,17 @@ importlib.reload(predictor_model)
 importlib.reload(hybrid_model)
 importlib.reload(callbacks)
 
+K.clear_session()
+
 if len(sys.argv) < 2:
     experiment_id = 'train_hybrid'
 else:
     experiment_id = sys.argv[1]
 
 dmgr_cmems = \
-    data_manager_cmems.DataManagerCMEMS(experiment_id=experiment_id)
+    data_manager_cmems.DataManagerCMEMS(
+        experiment_id=experiment_id,
+        testing=True)
 dmgr_cmems.create_training_data(force_rebuild=False)
 
 dgen_args = {
@@ -57,6 +62,7 @@ predictor = predictor_model.Predictor(data_gen=dgen_train,
                                       vae_model=vae)
 predictor.build_model("predictor")
 predictor.summary()
+breakpoint()
 
 # create hybrid
 hybrid = hybrid_model.Hybrid(data_gen=dgen_train,

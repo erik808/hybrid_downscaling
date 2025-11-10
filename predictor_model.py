@@ -32,57 +32,71 @@ class Predictor(base_model.BaseModel):
         sampled = \
             vae_model.get_layer('betaVAE')\
                      .get_layer('vae_sampling').output
-        vae_input = \
+        encoder_input = \
             vae_model.get_layer('betaVAE')\
                      .get_layer('vae_input_transform').input
-        vae_output = \
+        decoder_output = \
             vae_model.get_layer('betaVAE')\
                      .get_layer('vae_masking').output
 
-        self.encoder = keras.Model(
-            inputs=vae_input,
+        self.vae_input = vae_model.get_layer('betaVAE').input
+
+        self.encoder_pred = keras.Model(
+            inputs=encoder_input,
             outputs=mean,
-            name="encoder",
+            name="encoder_pred",
         )
 
-        self.decoder = keras.Model(
+        self.encoder_recons = keras.Model(
+            inputs=encoder_input,
+            outputs=mean,
+            name="encoder_recons",
+        )
+
+        self.decoder_pred = keras.Model(
             inputs=sampled,
-            outputs=vae_output,
-            name="decoder",
+            outputs=decoder_output,
+            name="decoder_pred",
         )
 
-        self.predictor_input_name = self.input_name_HR + '_predictor'
+        self.decoder_recons = keras.Model(
+            inputs=sampled,
+            outputs=decoder_output,
+            name="decoder_recons",
+        )
 
-        self.encoder.trainable = self.trainable_encoder
-        self.decoder.trainable = self.trainable_decoder
+        self.encoder_pred.trainable = self.trainable_encoder
+        self.decoder_pred.trainable = self.trainable_decoder
+        self.encoder_recons.trainable = self.trainable_encoder
+        self.decoder_recons.trainable = self.trainable_decoder
         self.trainable_VAE = \
-            self.trainable_encoder and self.trainable_decoder
+            self.trainable_encoder or self.trainable_decoder
 
         self.compiler = keras.optimizers.Adam(
             learning_rate=self.learning_rate)
 
         self.loss_fn = keras.losses.MeanSquaredError()
         self.loss_tracker = keras.metrics.Mean(name="loss")
+        self.re_loss_tracker = keras.metrics.Mean(name="reconstruction")
         self.pred_loss_tracker = keras.metrics.Mean(name="prediction")
         self.lspred_loss_tracker = keras.metrics.Mean(name="ls_pred")
-        self.re_loss_tracker = keras.metrics.Mean(name="reconstruction")
 
     @property
     def metrics(self):
         return [
             self.loss_tracker,
+            self.re_loss_tracker,
             self.pred_loss_tracker,
             self.lspred_loss_tracker,
-            self.re_loss_tracker,
         ]
 
     def train_step(self, data, training=True):
         x, y = data
         if training:
             self.zero_grad()
-            
+
         z = self(
-            {self.predictor_input_name:
+            {self.input_name_HR:
              ops.nan_to_num(x[self.input_name_HR])},
             training=training)
 
@@ -91,18 +105,19 @@ class Predictor(base_model.BaseModel):
                                  self.masking.cols,
                                  :]
         z_ls_pred = z['ls_pred']
-        z_ae_proj = z['ae_proj'][:,
-                                 self.masking.rows,
-                                 self.masking.cols,
-                                 :]
+        z_ae_recons = z['ae_recons'][:,
+                                     self.masking.rows,
+                                     self.masking.cols,
+                                     :]
 
         y_ls = \
-            self.encoder(
+            self.encoder_pred(
                 ops.nan_to_num(
-                    ops.squeeze(y[self.input_name_HR][:,
-                                                      0,  # target lookback index
-                                                      ...],
-                                axis=1)))
+                    ops.squeeze(
+                        y[self.input_name_HR][:,
+                                              0,  # target lookback index
+                                              ...],
+                        axis=1)))
 
         # prediction loss in the latent space
         lspred_loss = self.loss_fn(z_ls_pred, y_ls)
@@ -121,7 +136,7 @@ class Predictor(base_model.BaseModel):
         # reconstruction loss, compare using most recent, only used
         # when the VAE weights are trainable
         if self.trainable_VAE:
-            re_loss = self.loss_fn(z_ae_proj, y_k(1))
+            re_loss = self.loss_fn(z_ae_recons, y_k(1))
         else:
             re_loss = 0.0
 
@@ -151,9 +166,8 @@ class Predictor(base_model.BaseModel):
 
     def builder(self):
 
-        inputs = layers.Input(
-            shape=self.input_shape_HR,
-            name=self.predictor_input_name)
+        # reusing the vae input layer
+        inputs = self.vae_input
 
         # check dimensions
         _, lbdim, _, _, _ = inputs.shape
@@ -173,29 +187,30 @@ class Predictor(base_model.BaseModel):
 
         # use most recent lookback for reconstruction loss
         if self.trainable_VAE:
-            ae_projection = \
-                self.decoder(
-                    self.encoder(ops.squeeze(timeseries[-1],
-                                             axis=1)))
+            ae_reconstruction = \
+                self.decoder_recons(
+                    self.encoder_recons(ops.squeeze(timeseries[-1],
+                                                    axis=1)))
         else:
-            ae_projection = ops.squeeze(timeseries[-1],
-                                        axis=1)
+            ae_reconstruction = ops.squeeze(timeseries[-1],
+                                            axis=1)
 
         # encode timeseries
-        encoded_series = [self.encoder(ops.squeeze(sample,
-                                                   axis=1))
+        encoded_series = [self.encoder_pred(ops.squeeze(sample,
+                                                        axis=1))
                           for sample in timeseries]
 
         # do prediction
-        prediction = LSPredictor(self.predictor)(encoded_series)
+        prediction = LSPredictor(self.predictor,
+                                 name="latent_predictor",
+                                 )(encoded_series)
 
-        prediction_decoded = self.decoder(prediction)
+        prediction_decoded = self.decoder_pred(prediction)
         outputs = {
             'decoded': prediction_decoded,
             'ls_pred': prediction,
-            'ae_proj': ae_projection,
+            'ae_recons': ae_reconstruction,
         }
-
         return inputs, outputs
 
 

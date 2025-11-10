@@ -62,6 +62,17 @@ predictor.summary()
 hybrid = hybrid_model.Hybrid(data_gen=dgen_train,
                              resnet_model=resnet,
                              predictor_model=predictor)
-#hybrid.build_model("hybrid")
-#hybrid.summary()
-#hybrid.compile(hybrid.compiler)
+
+hybrid.build_model("hybrid")
+hybrid.summary()
+hybrid.compile(hybrid.compiler)
+
+hist = hybrid.fit(
+    x=dgen_train,
+    epochs=1,
+    validation_data=dgen_test,
+    # callbacks=[
+    #     analysis_callback,
+    #     model_checkpoint_callback,
+    # ]
+)

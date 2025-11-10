@@ -25,21 +25,19 @@ class Predictor(base_model.BaseModel):
 
         tools.load_config(self, config_name='predictor_model')
 
-        self.vae_model = vae_model
-
         # get input and output layers to isolate encoder+decoder
         mean, logsigma = \
-            self.vae_model.get_layer('betaVAE')\
-                          .get_layer('vae_splitter').output
+            vae_model.get_layer('betaVAE')\
+                     .get_layer('vae_splitter').output
         sampled = \
-            self.vae_model.get_layer('betaVAE')\
-                          .get_layer('vae_sampling').output
+            vae_model.get_layer('betaVAE')\
+                     .get_layer('vae_sampling').output
         vae_input = \
-            self.vae_model.get_layer('betaVAE')\
-                          .get_layer('vae_input_transform').input
+            vae_model.get_layer('betaVAE')\
+                     .get_layer('vae_input_transform').input
         vae_output = \
-            self.vae_model.get_layer('betaVAE')\
-                          .get_layer('vae_masking').output
+            vae_model.get_layer('betaVAE')\
+                     .get_layer('vae_masking').output
 
         self.encoder = keras.Model(
             inputs=vae_input,
@@ -53,8 +51,12 @@ class Predictor(base_model.BaseModel):
             name="decoder",
         )
 
+        self.predictor_input_name = self.input_name_HR + '_predictor'
+
         self.encoder.trainable = self.trainable_encoder
         self.decoder.trainable = self.trainable_decoder
+        self.trainable_VAE = \
+            self.trainable_encoder and self.trainable_decoder
 
         self.compiler = keras.optimizers.Adam(
             learning_rate=self.learning_rate)
@@ -78,9 +80,11 @@ class Predictor(base_model.BaseModel):
         x, y = data
         if training:
             self.zero_grad()
-
-        z = self({'HR_data': ops.nan_to_num(x['HR_data'])},
-                 training=training)
+            
+        z = self(
+            {self.predictor_input_name:
+             ops.nan_to_num(x[self.input_name_HR])},
+            training=training)
 
         z_decoded = z['decoded'][:,
                                  self.masking.rows,
@@ -95,9 +99,9 @@ class Predictor(base_model.BaseModel):
         y_ls = \
             self.encoder(
                 ops.nan_to_num(
-                    ops.squeeze(y['HR_data'][:,
-                                             0,  # target lookback index
-                                             ...],
+                    ops.squeeze(y[self.input_name_HR][:,
+                                                      0,  # target lookback index
+                                                      ...],
                                 axis=1)))
 
         # prediction loss in the latent space
@@ -105,11 +109,11 @@ class Predictor(base_model.BaseModel):
 
         def y_k(k):
             return \
-                y['HR_data'][:,
-                             k,  # kth lookback index
-                             self.masking.rows,
-                             self.masking.cols,
-                             :]
+                y[self.input_name_HR][:,
+                                      k,  # kth lookback index
+                                      self.masking.rows,
+                                      self.masking.cols,
+                                      :]
 
         # prediction loss, compare against target
         pred_loss = self.loss_fn(z_decoded, y_k(0))
@@ -146,9 +150,10 @@ class Predictor(base_model.BaseModel):
         return {m.name: m.result() for m in self.metrics}
 
     def builder(self):
+
         inputs = layers.Input(
             shape=self.input_shape_HR,
-            name=self.input_name_HR)
+            name=self.predictor_input_name)
 
         # check dimensions
         _, lbdim, _, _, _ = inputs.shape

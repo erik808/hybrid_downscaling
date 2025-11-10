@@ -42,9 +42,11 @@ dgen_train, dgen_test = \
 
 resnet = resnet_model.ResNet(data_gen=dgen_train)
 resnet.build_model("ResNet")
+resnet.summary()
 
 vae = vae_model.VAE(data_gen=dgen_train)
 vae.build_model("betaVAE")
+vae.summary()
 
 # load existing weights
 checkpoint_filepath = \
@@ -54,11 +56,12 @@ vae.load_weights(checkpoint_filepath)
 predictor = predictor_model.Predictor(data_gen=dgen_train,
                                       vae_model=vae)
 predictor.build_model("predictor")
+predictor.summary()
 
 # create hybrid
 hybrid = hybrid_model.Hybrid(data_gen=dgen_train,
                              resnet_model=resnet,
                              predictor_model=predictor)
-hybrid.build_model("hybrid")
-hybrid.summary()
-hybrid.compile(hybrid.compiler)
+#hybrid.build_model("hybrid")
+#hybrid.summary()
+#hybrid.compile(hybrid.compiler)

@@ -22,18 +22,37 @@ class Hybrid(base_model.BaseModel):
             predictor_model,
             **kwargs,
     ):
+
         super().__init__(**kwargs)
         tools.load_config(self, config_name='hybrid_model')
-        self.resnet_model = resnet_model
-        self.predictor_model = predictor_model
 
+        resnet_input = resnet_model.get_layer("ResNet").input
+        resnet_output = \
+            resnet_model.get_layer("ResNet")\
+                        .get_layer('resnet_output_conv')\
+                        .input
 
-        self.resnet_model.get_layer("ResNet")\
-                         .get_layer('resnet_output_conv').input.shape
+        predictor_input = \
+            predictor_model.get_layer('predictor').input
+        predictor_output = \
+            predictor_model.get_layer('predictor')\
+                           .get_layer('decoder')\
+                           .get_layer('vae_output_conv').input
 
-        breakpoint()
-        self.predictor_model.get_layer("predictor")\
-                        .get_layer('predictor_output_conv').input.shape
+        self.resnet_model = keras.Model(
+            inputs=resnet_input,
+            outputs=resnet_output,
+            name="ResNet",
+        )
+
+        self.predictor_model = keras.MOdel(
+            inputs=predictor_input,
+            outputs=predictor_output,
+            name="predictor",
+        )
+
+        self.resnet_model.trainable = self.trainable_resnet
+        self.predictor_model.trainable = self.trainable_predictor
 
         self.compiler = keras.optimizers.Adam(
             learning_rate=self.learning_rate)

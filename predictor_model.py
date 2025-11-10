@@ -53,11 +53,8 @@ class Predictor(base_model.BaseModel):
             name="decoder",
         )
 
-        if not self.trainable_VAE:
-            # disable training on VAE model
-            self.vae_model.trainable = False
-            self.encoder.trainable = False
-            self.decoder.trainable = False
+        self.encoder.trainable = self.trainable_encoder
+        self.decoder.trainable = self.trainable_decoder
 
         self.compiler = keras.optimizers.Adam(
             learning_rate=self.learning_rate)

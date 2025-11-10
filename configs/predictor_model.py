@@ -1,6 +1,7 @@
 # Set True if the encoder and decoder weights are allowed to get
-# updated during RNN training
-trainable_VAE = True
+# updated during training
+trainable_encoder = True
+trainable_decoder = True
 
 # learning rate
 learning_rate = 1e-4

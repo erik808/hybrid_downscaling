@@ -54,7 +54,7 @@ analysis_callback = callbacks.AnalysisPredictor(data_gen=dgen_test,
                                                 plot=[
                                                     # 'reconstruction',
                                                     # 'spectra',
-                                                    'timestepping',  # TODO
+                                                    # 'timestepping',  # TODO
                                                 ]
                                                 )
 
@@ -68,7 +68,7 @@ model_checkpoint_callback = keras.callbacks.ModelCheckpoint(
 
 hist = predictor.fit(
     x=dgen_train,
-    epochs=5,
+    epochs=20,
     validation_data=dgen_test,
     callbacks=[
         analysis_callback,

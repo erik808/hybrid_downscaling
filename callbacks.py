@@ -1,5 +1,6 @@
 import numpy as np
 import keras
+import pandas as pd
 from keras import ops
 import plot_utils
 import importlib
@@ -219,7 +220,29 @@ class AnalysisBase(keras.callbacks.Callback, ABC):
         self.plot_machine.plot_history(hist)
 
     def timestepping(self, epoch):
+        num_batches = self.dgen.__len__()
+        print(num_batches)
+
+        # initialization
         x, y = self.dgen.__getitem__(0)
+
+        batch_size = x['HR_data'].shape[0]
+
+        x.update({
+            'HR_data': np.expand_dims(x['HR_data'][0,], 0),
+            'LR_data': np.expand_dims(x['LR_data'][0,], 0),
+        })
+
+        z = self.call_model(x)
+
+        # x_HR = x_HR[0,:,]
+        # for i in range(0, num_batches):
+        #     x, y = self.dgen.__getitem__(i)
+        #     time = pd.to_datetime(x['meta']['time'][:, 0], unit="s")
+        #     z = self.call_model(x)
+
+        #     print(time)
+        #     breakpoint()
 
 
 

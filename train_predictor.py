@@ -19,7 +19,8 @@ else:
     experiment_id = sys.argv[1]
 
 dmgr_cmems = \
-    data_manager_cmems.DataManagerCMEMS(experiment_id=experiment_id)
+    data_manager_cmems.DataManagerCMEMS(experiment_id=experiment_id,
+                                        testing=True)
 dmgr_cmems.create_training_data(force_rebuild=False)
 
 dgen_args = {
@@ -54,7 +55,7 @@ analysis_callback = callbacks.AnalysisPredictor(data_gen=dgen_test,
                                                 plot=[
                                                     # 'reconstruction',
                                                     # 'spectra',
-                                                    # 'timestepping',  # TODO
+                                                    'timestepping',  # TODO
                                                 ]
                                                 )
 
@@ -68,7 +69,7 @@ model_checkpoint_callback = keras.callbacks.ModelCheckpoint(
 
 hist = predictor.fit(
     x=dgen_train,
-    epochs=20,
+    epochs=2,
     validation_data=dgen_test,
     callbacks=[
         analysis_callback,

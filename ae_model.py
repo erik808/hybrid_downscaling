@@ -1,4 +1,4 @@
-simport numpy as np
+import numpy as np
 
 import torch
 import keras
@@ -514,8 +514,6 @@ class ConvBlock():
             name=f'{name}_l{ctr}')
 
         self.layer_list.append(conv_l)
-
-
 
     def __call__(self, inputs, skip=None, **kwargs):
         if skip == None:

@@ -66,8 +66,8 @@ class DataGeneratorCMEMS(keras.utils.PyDataset):
         batch_x = {'LR_data': LR_data,
                    'HR_data': HR_data,
                    'meta' : {
-                       # 'time':
-                       # time.astype("datetime64[s]").astype(np.float32),
+                       'time':
+                       time.astype("datetime64[s]").astype(np.float32),
                        'mask': self.dm.mask.values,
                        'grid_HR': self.dm.grid_HR,
                        'grid_LR': self.dm.grid_LR,

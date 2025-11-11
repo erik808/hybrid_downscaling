@@ -68,6 +68,8 @@ class AnalysisBase(keras.callbacks.Callback, ABC):
                 self.random_prediction(epoch)
             if 'spectra' in self.plot_instructions:
                 self.plot_spectra(epoch)
+            if 'timestepping' in self.plot_instructions:
+                self.timestepping(epoch)
 
     def random_prediction(self, epoch):
         n = self.dgen.__len__()
@@ -215,6 +217,10 @@ class AnalysisBase(keras.callbacks.Callback, ABC):
 
     def plot_history(self, hist):
         self.plot_machine.plot_history(hist)
+
+    def timestepping(self, epoch):
+        x, y = self.dgen.__getitem__(0)
+
 
 
 class AnalysisResNet(AnalysisBase):

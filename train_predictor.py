@@ -39,9 +39,9 @@ vae = vae_model.VAE(data_gen=dgen_train)
 vae.build_model("betaVAE")
 
 # load existing weights
-checkpoint_filepath = \
+vae_checkpoint = \
     'experiments/train_vae/checkpoints/checkpoint.vae.keras'
-vae.load_weights(checkpoint_filepath)
+vae.load_weights(vae_checkpoint)
 
 predictor = predictor_model.Predictor(data_gen=dgen_train,
                                       vae_model=vae)
@@ -54,7 +54,7 @@ analysis_callback = callbacks.AnalysisPredictor(data_gen=dgen_test,
                                                 plot=[
                                                     # 'reconstruction',
                                                     # 'spectra',
-                                                    'timestepping', # TODO
+                                                    'timestepping',  # TODO
                                                 ]
                                                 )
 

@@ -47,23 +47,23 @@ dgen_train, dgen_test = \
 resnet = resnet_model.ResNet(data_gen=dgen_train)
 resnet.build_model("ResNet")
 resnet.summary()
-# breakpoint()
+
+resnet_checkpoint = \
+    'experiments/train_resnet/checkpoints/checkpoint.resnet.keras'
+resnet.load_weights(resnet_checkpoint)
 
 vae = vae_model.VAE(data_gen=dgen_train)
 vae.build_model("betaVAE")
 vae.summary()
-# breakpoint()
 
-# load existing weights
-checkpoint_filepath = \
+vae_checkpoint = \
     'experiments/train_vae/checkpoints/checkpoint.vae.keras'
-vae.load_weights(checkpoint_filepath)
+vae.load_weights(vae_checkpoint)
 
 predictor = predictor_model.Predictor(data_gen=dgen_train,
                                       vae_model=vae)
 predictor.build_model("predictor")
 predictor.summary()
-# breakpoint()
 
 # create hybrid
 hybrid = hybrid_model.Hybrid(data_gen=dgen_train,

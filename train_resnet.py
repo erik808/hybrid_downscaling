@@ -59,7 +59,7 @@ model_checkpoint_callback = keras.callbacks.ModelCheckpoint(
 
 hist = resnet.fit(
     x=dgen_train,
-    epochs=10,
+    epochs=20,
     validation_data=dgen_test,
     callbacks=[
         analysis_callback,

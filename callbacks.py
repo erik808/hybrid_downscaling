@@ -220,30 +220,61 @@ class AnalysisBase(keras.callbacks.Callback, ABC):
         self.plot_machine.plot_history(hist)
 
     def timestepping(self, epoch):
+
+        def x_(batch_x, b_i, x_old=None):
+            x_HR = np.expand_dims(batch_x['HR_data'][b_i,].copy(), 0)
+            x_LR = np.expand_dims(batch_x['LR_data'][b_i,].copy(), 0)
+            time = pd.to_datetime(batch_x['meta']['time'][b_i, 0], unit="s")
+
+            # remove truth (just to be sure)
+            x_HR[0, 0, ] = np.zeros_like(x_HR[0, 0, ])
+
+            # update x with previous time step
+            if x_old is not None:
+                x_HR[0, 1:, ] = x_old['HR_data'][0, :-1, ]
+
+            return {
+                'HR_data': x_HR,
+                'LR_data': x_LR,
+                'time': time,
+            }
+
         num_batches = self.dgen.__len__()
-        print(num_batches)
 
-        # initialization
-        x, y = self.dgen.__getitem__(0)
+        x_km1 = None
+        xk_arr = []
+        y_arr = []
+        time_arr = []
+        plt.switch_backend('qtagg')
+        plt.close('all')
+        # plt.figure()
+        for b in range(num_batches):
+            batch_x, batch_y = self.dgen.__getitem__(b)
+            batch_size = batch_x['HR_data'].shape[0]
 
-        batch_size = x['HR_data'].shape[0]
+            for k in range(batch_size):
+                x_k = x_(batch_x, k, x_km1)
+                x_k['HR_data'][0, 0, ] = self.call_model(x_k)
+                x_km1 = x_k
 
-        x.update({
-            'HR_data': np.expand_dims(x['HR_data'][0,], 0),
-            'LR_data': np.expand_dims(x['LR_data'][0,], 0),
-        })
+                xk_arr.append(
+                    np.linalg.norm(np.nan_to_num(x_k['HR_data'][0, 0, ])))
+                time_arr.append(x_k['time'])
+                y_arr.append(
+                    np.linalg.norm(np.nan_to_num(batch_y['HR_data'][k, 2, ])))
 
-        z = self.call_model(x)
+                # plt.pcolormesh(x_k['HR_data'][0, 0, ..., 0])
+                # plt.pause(0.2)
 
-        # x_HR = x_HR[0,:,]
-        # for i in range(0, num_batches):
-        #     x, y = self.dgen.__getitem__(i)
-        #     time = pd.to_datetime(x['meta']['time'][:, 0], unit="s")
-        #     z = self.call_model(x)
-
-        #     print(time)
-        #     breakpoint()
-
+        plt.figure()
+        plt.plot(time_arr, xk_arr, '.-', label='xk')
+        plt.plot(time_arr, y_arr, '.-', label='truth')
+        plt.legend()
+        plt.grid(which='both')
+        plt.gca().tick_params(axis='x', labelrotation=45)
+        plt.tight_layout()
+        plt.pause(1)
+        breakpoint()
 
 
 class AnalysisResNet(AnalysisBase):

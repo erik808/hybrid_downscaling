@@ -47,10 +47,12 @@ dgen_train, dgen_test = \
 resnet = resnet_model.ResNet(data_gen=dgen_train)
 resnet.build_model("ResNet")
 resnet.summary()
+# breakpoint()
 
 vae = vae_model.VAE(data_gen=dgen_train)
 vae.build_model("betaVAE")
 vae.summary()
+# breakpoint()
 
 # load existing weights
 checkpoint_filepath = \
@@ -61,6 +63,7 @@ predictor = predictor_model.Predictor(data_gen=dgen_train,
                                       vae_model=vae)
 predictor.build_model("predictor")
 predictor.summary()
+# breakpoint()
 
 # create hybrid
 hybrid = hybrid_model.Hybrid(data_gen=dgen_train,
@@ -68,13 +71,15 @@ hybrid = hybrid_model.Hybrid(data_gen=dgen_train,
                              predictor_model=predictor)
 
 hybrid.build_model("hybrid")
-hybrid.summary()
-hybrid.compile(hybrid.compiler)
-breakpoint()
+hybrid.compile(hybrid.compiler, loss=hybrid.loss_fn)
+hybrid.summary(
+    # expand_nested=True,
+)
+# breakpoint()
 
 hist = hybrid.fit(
     x=dgen_train,
-    epochs=1,
+    epochs=2,
     validation_data=dgen_test,
     # callbacks=[
     #     analysis_callback,

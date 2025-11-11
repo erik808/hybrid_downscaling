@@ -1,7 +1,7 @@
 # Set True if the encoder and decoder weights are allowed to get
 # updated during training
-trainable_encoder = True
-trainable_decoder = True
+trainable_encoder = False
+trainable_decoder = False
 
 # learning rate
 learning_rate = 1e-4

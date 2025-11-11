@@ -48,20 +48,16 @@ class Predictor(base_model.BaseModel):
         self.encoder = keras.Model(
             inputs=encoder_input,
             outputs=mean,
-            name="encoder_pred",
+            name="encoder",
         )
+        self.encoder.build(encoder_input.shape)
 
         self.decoder = keras.Model(
             inputs=sampled,
-            outputs=decoder_output,
-            name="decoder_pred",
+            outputs=[decoder_output, decoder_skip_output],
+            name="decoder",
         )
-
-        self.decoder_skip_output = keras.Model(
-            inputs=sampled,
-            outputs=decoder_skip_output,
-            name="decoder_skip",
-        )
+        self.decoder.build(sampled.shape)
 
         self.encoder.trainable = self.trainable_encoder
         self.decoder.trainable = self.trainable_decoder
@@ -182,14 +178,14 @@ class Predictor(base_model.BaseModel):
         timeseries.pop()
 
         # use most recent lookback for reconstruction loss
-        if self.trainable_VAE:
-            ae_reconstruction = \
-                self.decoder(
-                    self.encoder(ops.squeeze(timeseries[-1],
-                                             axis=1)))
-        else:
-            ae_reconstruction = ops.squeeze(timeseries[-1],
-                                            axis=1)
+        # if self.trainable_VAE:
+        ae_reconstruction, _ = \
+            self.decoder(
+                self.encoder(ops.squeeze(timeseries[-1],
+                                         axis=1)))
+        # else:
+        #     ae_reconstruction = ops.squeeze(timeseries[-1],
+        #                                     axis=1)
 
         # encode timeseries
         encoded_series = [self.encoder(ops.squeeze(sample,
@@ -201,8 +197,7 @@ class Predictor(base_model.BaseModel):
                                  name="latent_predictor",
                                  )(encoded_series)
 
-        prediction_decoded = self.decoder(prediction)
-        skipped = self.decoder_skip_output(prediction)
+        prediction_decoded, skipped = self.decoder(prediction)
         outputs = {
             'decoded': prediction_decoded,
             'ls_pred': prediction,

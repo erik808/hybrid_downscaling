@@ -25,26 +25,22 @@ class Hybrid(base_model.BaseModel):
         super().__init__(**kwargs)
         tools.load_config(self, config_name='hybrid_model')
 
-        self.resnet_model = resnet_model
-        self.predictor_model = predictor_model
-
-        self.resnet_input = resnet_model.get_layer("ResNet").input
+        self.resnet_input = resnet_model.model.input
         self.resnet_output = \
-            resnet_model.get_layer("ResNet")\
+            resnet_model.model\
                         .get_layer('resnet_output_conv')\
                         .input
 
         self.predictor_input = \
-            predictor_model.get_layer('predictor').input
+            predictor_model.model.input
 
         self.predictor_output = \
-            self.predictor_model.get_layer('predictor')\
-                                .get_layer('decoder_skip').output
+            predictor_model.model.output['skip_vae_output']
 
         self.ae_recons = \
-            self.predictor_model.get_layer('predictor').output['ae_recons']
+            predictor_model.model.output['ae_recons']
         self.ls_pred = \
-            self.predictor_model.get_layer('predictor').output['ls_pred']
+            predictor_model.model.output['ls_pred']
 
         self.resnet_layers = keras.Model(
             inputs=self.resnet_input,
@@ -52,27 +48,21 @@ class Hybrid(base_model.BaseModel):
             name="ResNet_submodel",
         )
 
+        self.encoder = predictor_model.model.get_layer('encoder')
+
         self.predictor_layers = keras.Model(
             inputs=self.predictor_input,
             outputs=self.predictor_output,
             name="predictor_submodel",
         )
 
-        # set encoder/decoder trainable
-        self.predictor_model.get_layer('predictor')\
-                            .get_layer('encoder_pred')\
-                            .trainable = self.predictor_model.trainable_encoder
-        self.predictor_model.get_layer('predictor')\
-                            .get_layer('decoder_pred')\
-                            .trainable = self.predictor_model.trainable_decoder
-
-        breakpoint()
-
-        self.trainable_VAE = self.predictor_model.trainable_VAE
-
         self.resnet_layers.trainable = self.trainable_resnet
-        self.predictor_layers.trainable = self.trainable_predictor
+        # Only allow disabling of predictor. Enabling would also
+        # enable possibly disabled encoder and decoder.
+        if not self.trainable_predictor:
+            self.predictor_layers.trainable = self.trainable_predictor
 
+        self.trainable_VAE = predictor_model.trainable_VAE
         self.compiler = keras.optimizers.Adam(
             learning_rate=self.learning_rate)
 
@@ -97,7 +87,7 @@ class Hybrid(base_model.BaseModel):
             self.zero_grad()
 
         y_ls = \
-            self.predictor_model.get_layer('encoder_pred')(
+            self.encoder(
                 ops.nan_to_num(
                     ops.squeeze(
                         y[self.input_name_HR][:,
@@ -116,11 +106,6 @@ class Hybrid(base_model.BaseModel):
                                self.masking.cols,
                                :]
 
-        z_ae_recons = z['ae_recons'][:,
-                                     self.masking.rows,
-                                     self.masking.cols,
-                                     :]
-
         z_ls_pred = z['ls_pred']
         lspred_loss = self.loss_fn(z_ls_pred, y_ls)
 
@@ -131,6 +116,11 @@ class Hybrid(base_model.BaseModel):
                                       self.masking.rows,
                                       self.masking.cols,
                                       :]
+
+        z_ae_recons = z['ae_recons'][:,
+                                     self.masking.rows,
+                                     self.masking.cols,
+                                     :]
 
         if self.trainable_VAE:
             re_loss = self.loss_fn(z_ae_recons, y_k(1))
@@ -160,6 +150,12 @@ class Hybrid(base_model.BaseModel):
             if metric.name == "reconstruction":
                 metric.update_state(re_loss)
 
+        # for name, param in self.model.named_parameters():
+        #     print(name)
+
+        # for var in self.trainable_variables:
+        #     print(var)
+
         return {m.name: m.result() for m in self.metrics}
 
     def builder(self):
@@ -180,11 +176,6 @@ class Hybrid(base_model.BaseModel):
             "implement some reshaping/upsampling/downsampling here"
         x = layers.Multiply()([resnet_result, predictor_result])
 
-        x = rm.ResidualBlock(
-            filters=64,
-            kernel_size=3,
-        )(x)
-
         out = layers.Conv2D(
             filters=self.num_vars,
             kernel_size=9,
@@ -193,6 +184,13 @@ class Hybrid(base_model.BaseModel):
             activation='sigmoid')(x)
 
         out = self.masking(out)
+
+        # #  dummy model
+        # out1 = layers.Dense(units=10)(layers.Flatten()(input_HR))
+        # out2 = layers.Dense(units=10)(layers.Flatten()(input_LR))
+        # out = layers.Dense(units=ops.prod(input_HR.shape[2:]))(
+        #     layers.Concatenate()([out1, out2]))
+        # out = layers.Reshape(input_HR.shape[2:])(out)
 
         outputs = {'hybrid': out,
                    'ae_recons': self.ae_recons,

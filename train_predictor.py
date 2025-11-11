@@ -54,6 +54,7 @@ analysis_callback = callbacks.AnalysisPredictor(data_gen=dgen_test,
                                                 plot=[
                                                     # 'reconstruction',
                                                     # 'spectra',
+                                                    'timestepping', # TODO
                                                 ]
                                                 )
 

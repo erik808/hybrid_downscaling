@@ -1224,7 +1224,6 @@ class CustomValidation(keras.callbacks.Callback):
             logs['error'] = self.final_error
             logs['base']  = self.final_base
 
-
     def predict_cmems(self, epoch, logs=None):
         self.predictions = np.zeros_like(self.test_data)
 

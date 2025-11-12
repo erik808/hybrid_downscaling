@@ -191,6 +191,41 @@ class PlotMachine():
 
         return postfix
 
+    def plot_timestepping(self,
+                          results,
+                          truths,
+                          epoch,
+                          masking,
+                          add_name='',
+                          ):
+        results_HR = np.concatenate([r['HR_data'] for r in results], 0)
+        truths_HR = np.concatenate([t['HR_data'] for t in truths], 0)
+        time_arr = [r['time'] for r in results]
+
+        result_norms = [np.linalg.norm(t[0,
+                                         masking['rows'],
+                                         masking['cols'],])
+                        for t in results_HR]
+
+        truth_norms = [np.linalg.norm(t[0,
+                                        masking['rows'],
+                                        masking['cols'],])
+                       for t in truths_HR]
+
+        plt.figure()
+        plt.plot(time_arr, result_norms, '.-', label='timestepping')
+        plt.plot(time_arr, truth_norms, '.-', label='truths')
+        plt.legend()
+        plt.grid(which='both')
+        plt.gca().tick_params(axis='x', labelrotation=45)
+        plt.tight_layout()
+
+        postfix = self.create_postfix(add_name)
+        fig_name = \
+            f'{self.results_dir}/timestepping_epoch{epoch}{postfix}.png'
+        print('\n saving to ', fig_name)
+        plt.savefig(fig_name)
+
     def plot_enstrophy_spectrum(self,
                                 data,
                                 epoch,

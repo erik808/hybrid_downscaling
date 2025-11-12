@@ -70,7 +70,7 @@ class AnalysisBase(keras.callbacks.Callback, ABC):
             if 'spectra' in self.plot_instructions:
                 self.plot_spectra(epoch)
             if 'timestepping' in self.plot_instructions:
-                self.timestepping(epoch)
+                self.timestepping(epoch, logs)
 
     def random_prediction(self, epoch):
         n = self.dgen.__len__()
@@ -219,9 +219,10 @@ class AnalysisBase(keras.callbacks.Callback, ABC):
     def plot_history(self, hist):
         self.plot_machine.plot_history(hist)
 
-    def timestepping(self, epoch):
+    def timestepping(self, epoch, logs=None):
 
         def x_(batch_x, b_i, x_old=None):
+            """ create timestepping model input from batch """
             x_HR = np.expand_dims(batch_x['HR_data'][b_i,].copy(), 0)
             x_LR = np.expand_dims(batch_x['LR_data'][b_i,].copy(), 0)
             time = pd.to_datetime(batch_x['meta']['time'][b_i, 0], unit="s")
@@ -229,7 +230,8 @@ class AnalysisBase(keras.callbacks.Callback, ABC):
             # remove truth (just to be sure)
             x_HR[0, 0, ] = np.zeros_like(x_HR[0, 0, ])
 
-            # update x with previous time step
+            # update x lookback dimension with previous time step if
+            # available
             if x_old is not None:
                 x_HR[0, 1:, ] = x_old['HR_data'][0, :-1, ]
 
@@ -241,40 +243,54 @@ class AnalysisBase(keras.callbacks.Callback, ABC):
 
         num_batches = self.dgen.__len__()
 
+        # initialization
         x_km1 = None
-        xk_arr = []
-        y_arr = []
-        time_arr = []
-        plt.switch_backend('qtagg')
-        plt.close('all')
-        # plt.figure()
+        results = []
+        truths = []
+        losses = []
         for b in range(num_batches):
             batch_x, batch_y = self.dgen.__getitem__(b)
             batch_size = batch_x['HR_data'].shape[0]
 
+            batch_results = []
             for k in range(batch_size):
+                # create kth model input
                 x_k = x_(batch_x, k, x_km1)
+                # perform time step and update x_k
                 x_k['HR_data'][0, 0, ] = self.call_model(x_k)
+                batch_results.append(x_k)
                 x_km1 = x_k
 
-                xk_arr.append(
-                    np.linalg.norm(np.nan_to_num(x_k['HR_data'][0, 0, ])))
-                time_arr.append(x_k['time'])
-                y_arr.append(
-                    np.linalg.norm(np.nan_to_num(batch_y['HR_data'][k, 2, ])))
+            batch_results_HR = \
+                np.concatenate([br['HR_data'] for br in batch_results], 0)
 
-                # plt.pcolormesh(x_k['HR_data'][0, 0, ..., 0])
-                # plt.pause(0.2)
+            results += batch_results
+            truths.append(batch_y)
 
-        plt.figure()
-        plt.plot(time_arr, xk_arr, '.-', label='xk')
-        plt.plot(time_arr, y_arr, '.-', label='truth')
-        plt.legend()
-        plt.grid(which='both')
-        plt.gca().tick_params(axis='x', labelrotation=45)
-        plt.tight_layout()
-        plt.pause(1)
-        breakpoint()
+            batch_loss = \
+                self.model.loss_fn(
+                    batch_results_HR[:,
+                                     0,
+                                     self.model.masking.rows,
+                                     self.model.masking.cols,
+                                     ],
+                    batch_y['HR_data'][:,
+                                       0,
+                                       self.model.masking.rows,
+                                       self.model.masking.cols,
+                                       ])
+            losses.append(batch_loss)
+
+        logs['timestepper'] = np.mean(losses)
+
+        self.plot_machine.plot_timestepping(
+            results,
+            truths,
+            epoch,
+            {'rows': self.model.masking.rows,
+             'cols': self.model.masking.cols,
+             }
+        )
 
 
 class AnalysisResNet(AnalysisBase):

@@ -25,7 +25,7 @@ dmgr_cmems.create_training_data(force_rebuild=False)
 
 dgen_args = {
     'dm': dmgr_cmems,
-    'batch_size': 1,
+    'batch_size': 4,
     'lookback': 3,
     'shuffle': True,
     'use_multiprocessing': True,
@@ -77,7 +77,7 @@ hist = predictor.fit(
     validation_data=dgen_test,
     callbacks=[
         analysis_callback,
-        # model_checkpoint_callback,
+        model_checkpoint_callback,
     ]
 )
 

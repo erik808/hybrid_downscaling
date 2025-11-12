@@ -82,15 +82,16 @@ class Predictor(base_model.BaseModel):
             self.lspred_loss_tracker,
         ]
 
+    def create_input(self, inputs):
+        return {self.input_name_HR:
+                ops.nan_to_num(inputs[self.input_name_HR])}
+
     def train_step(self, data, training=True):
         x, y = data
         if training:
             self.zero_grad()
 
-        z = self(
-            {self.input_name_HR:
-             ops.nan_to_num(x[self.input_name_HR])},
-            training=training)
+        z = self(self.create_input(x), training=training)
 
         z_decoded = z['decoded'][:,
                                  self.masking.rows,

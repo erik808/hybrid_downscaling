@@ -38,13 +38,15 @@ class VAE(base_model.BaseModel):
             self.KL_loss_tracker,
         ]
 
+    def create_input(self, x):
+        return {'HR_data': ops.nan_to_num(x['HR_data'])}
+
     def train_step(self, data, training=True):
         x, y = data
         if training:
             self.zero_grad()
 
-        z = self({'HR_data': ops.nan_to_num(x['HR_data'])},
-                 training=training)
+        z = self(self.create_input(x), training=training)
 
         z_decoded = z['decoded']
         z_mean = z['mean']

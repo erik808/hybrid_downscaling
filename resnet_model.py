@@ -25,12 +25,15 @@ class ResNet(base_model.BaseModel):
         self.compiler = keras.optimizers.Adam(
             learning_rate=self.learning_rate)
 
+    def create_input(self, inputs):
+        return {'LR_data': inputs['LR_data']}
+
     def train_step(self, data, training=True):
         x, y = data
         if training:
             self.zero_grad()
 
-        z = self({'LR_data': x['LR_data']}, training=training)
+        z = self(self.create_input(x), training=training)
         y = y['HR_data'][:,
                          0,
                          self.masking.rows,

@@ -46,24 +46,19 @@ dgen_train, dgen_test = \
 
 resnet = resnet_model.ResNet(data_gen=dgen_train)
 resnet.build_model("ResNet")
-resnet.summary()
-
-resnet_checkpoint = \
-    'experiments/train_resnet/checkpoints/checkpoint.resnet.keras'
+resnet_checkpoint = 'models/resnet/checkpoint.resnet.keras'
 resnet.load_weights(resnet_checkpoint)
 
 vae = vae_model.VAE(data_gen=dgen_train)
 vae.build_model("betaVAE")
-vae.summary()
-
-vae_checkpoint = \
-    'experiments/train_vae/checkpoints/checkpoint.vae.keras'
+vae_checkpoint = 'models/vae/checkpoint.vae.keras'
 vae.load_weights(vae_checkpoint)
 
 predictor = predictor_model.Predictor(data_gen=dgen_train,
                                       vae_model=vae)
 predictor.build_model("predictor")
-predictor.summary()
+predictor_checkpoint = 'models/predictor/checkpoint.predictor.keras'
+predictor.load_weights(predictor_checkpoint)
 
 # create hybrid
 hybrid = hybrid_model.Hybrid(data_gen=dgen_train,
@@ -77,12 +72,20 @@ hybrid.summary(
 )
 # breakpoint()
 
+analysis_callback = callbacks.AnalysisHybrid(data_gen=dgen_test,
+                                             plot=[
+                                                 # 'reconstruction',
+                                                 # 'spectra',
+                                                 'timestepping',  # TODO
+                                             ]
+                                             )
+
 hist = hybrid.fit(
     x=dgen_train,
     epochs=2,
     validation_data=dgen_test,
-    # callbacks=[
-    #     analysis_callback,
-    #     model_checkpoint_callback,
-    # ]
+    callbacks=[
+        analysis_callback,
+        #     model_checkpoint_callback,
+    ]
 )

@@ -60,11 +60,15 @@ class BaseModel(keras.Model):
 
         # use random batch as test input
         test_x, test_y = self.get_random_item()
-        self.build(test_x)
+        input_x = self.create_input(test_x)
+        self.build(input_x)
         return self.model
 
     def build(self, *args, **kwargs):
         self.model.build(*args, **kwargs)
+
+    def create_input(self, inputs):
+        return inputs
 
     def get_coarsening_factor(self, test_x):
         # number of necessary upsampling blocks is inferred from LR
@@ -102,7 +106,7 @@ class Masking(layers.Layer):
     ):
         super().__init__(**kwargs)
         mask = ops.convert_to_tensor(mask)
-        self.rows, self.cols = ops.where(mask==1)
+        self.rows, self.cols = ops.where(mask == 1)
         self.num_vars = num_vars
 
         # usable mask for multiply

@@ -3,6 +3,7 @@ import importlib
 import data_manager_cmems
 from keras import backend as K
 import data_generator_cmems
+import base_model
 import resnet_model
 import vae_model
 import predictor_model
@@ -15,6 +16,7 @@ importlib.reload(data_generator_cmems)
 importlib.reload(resnet_model)
 importlib.reload(vae_model)
 importlib.reload(predictor_model)
+importlib.reload(base_model)
 importlib.reload(hybrid_model)
 importlib.reload(callbacks)
 
@@ -66,11 +68,10 @@ hybrid = hybrid_model.Hybrid(data_gen=dgen_train,
                              predictor_model=predictor)
 
 hybrid.build_model("hybrid")
-hybrid.compile(hybrid.compiler, loss=hybrid.loss_fn)
+hybrid.compile(hybrid.compiler)
 hybrid.summary(
     # expand_nested=True,
 )
-# breakpoint()
 
 analysis_callback = callbacks.AnalysisHybrid(data_gen=dgen_test,
                                              plot=[
@@ -79,7 +80,6 @@ analysis_callback = callbacks.AnalysisHybrid(data_gen=dgen_test,
                                                  'timestepping',  # TODO
                                              ]
                                              )
-
 hist = hybrid.fit(
     x=dgen_train,
     epochs=2,

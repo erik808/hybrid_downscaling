@@ -81,6 +81,12 @@ class Hybrid(base_model.BaseModel):
             self.lspred_loss_tracker,
         ]
 
+    def create_input(self, inputs):
+        return {self.input_name_HR:
+                ops.nan_to_num(inputs[self.input_name_HR]),
+                self.input_name_LR:
+                ops.nan_to_num(inputs[self.input_name_LR])}
+
     def train_step(self, data, training=True):
         x, y = data
         if training:
@@ -95,11 +101,7 @@ class Hybrid(base_model.BaseModel):
                                               ...],
                         axis=1)))
 
-        z = self.model({self.input_name_HR:
-                        ops.nan_to_num(x[self.input_name_HR]),
-                        self.input_name_LR:
-                        ops.nan_to_num(x[self.input_name_LR])},
-                       training=training)
+        z = self.model(self.create_input(x), training=training)
 
         z_hybrid = z['hybrid'][:,
                                self.masking.rows,
@@ -184,20 +186,13 @@ class Hybrid(base_model.BaseModel):
             activation='sigmoid')(x)
 
         out = self.masking(out)
-
-        # #  dummy model
-        # out1 = layers.Dense(units=10)(layers.Flatten()(input_HR))
-        # out2 = layers.Dense(units=10)(layers.Flatten()(input_LR))
-        # out = layers.Dense(units=ops.prod(input_HR.shape[2:]))(
-        #     layers.Concatenate()([out1, out2]))
-        # out = layers.Reshape(input_HR.shape[2:])(out)
-
         outputs = {'hybrid': out,
                    'ae_recons': self.ae_recons,
                    'ls_pred': self.ls_pred,
                    }
 
         inputs = {self.input_name_HR: input_HR,
-                  self.input_name_LR: input_LR}
+                  self.input_name_LR: input_LR,
+                  }
 
         return inputs, outputs

@@ -14,9 +14,8 @@ gamma = 1
 
 # model that does the actual prediction in the latent space
 # options: 'simpleRNN', 'dense', 'conv3d', 'convlstm'
-predictor = 'conv3d'
+predictor = 'simpleRNN'
 
 activation = 'leaky_relu'
 
-from keras import regularizers
-kernel_regularizer = regularizers.L2(1e-2)
+kernel_regularizer = None

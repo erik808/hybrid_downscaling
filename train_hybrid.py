@@ -36,7 +36,7 @@ dmgr_cmems.create_training_data(force_rebuild=False)
 dgen_args = {
     'dm': dmgr_cmems,
     'batch_size': 4,
-    'lookback': 3,
+    'lookback': 5,
     'shuffle': True,
     'use_multiprocessing': True,
     'workers': 4,
@@ -60,7 +60,10 @@ predictor = predictor_model.Predictor(data_gen=dgen_train,
                                       vae_model=vae)
 predictor.build_model("predictor")
 predictor_checkpoint = 'models/predictor/checkpoint.predictor.keras'
-predictor.load_weights(predictor_checkpoint)
+# try:
+#     predictor.load_weights(predictor_checkpoint)
+# except Exception as e:
+#     print('\nError loading checkpoint weights:', e)
 
 # create hybrid
 hybrid = hybrid_model.Hybrid(data_gen=dgen_train,
@@ -73,19 +76,20 @@ hybrid.summary(
     # expand_nested=True,
 )
 
-analysis_callback = callbacks.AnalysisHybrid(data_gen=dgen_test,
-                                             plot=[
-                                                 # 'reconstruction',
-                                                 # 'spectra',
-                                                 'timestepping',  # TODO
-                                             ]
-                                             )
+analysis_callback = callbacks.AnalysisHybrid(
+    data_gen=dgen_test,
+    plot=[
+        'timestepping_spectrum',
+    ]
+)
+
 hist = hybrid.fit(
     x=dgen_train,
-    epochs=2,
+    epochs=10,
     validation_data=dgen_test,
     callbacks=[
         analysis_callback,
         #     model_checkpoint_callback,
     ]
 )
+analysis_callback.plot_history(hist)

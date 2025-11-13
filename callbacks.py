@@ -27,6 +27,14 @@ class AnalysisBase(keras.callbacks.Callback, ABC):
         super().__init__(**kwargs)
         self.dgen = data_gen
         self.plot_instructions = plot
+
+        if (
+                'spectra' in self.plot_instructions and
+                'timestepping_spectrum' in self.plot_instructions
+        ):
+            raise Exception("can't do both single step and "
+                            "full timestepping spectra")
+
         self.output_path = self.dgen.dm.dirs['results']
         self.plot_machine = \
             plot_utils.PlotMachine(dm=self.dgen.dm)
@@ -70,7 +78,9 @@ class AnalysisBase(keras.callbacks.Callback, ABC):
             if 'spectra' in self.plot_instructions:
                 self.plot_spectra(epoch)
             if 'timestepping' in self.plot_instructions:
-                self.timestepping(epoch, logs)
+                self.timestepping(epoch, logs, spectra=False)
+            if 'timestepping_spectrum' in self.plot_instructions:
+                self.timestepping(epoch, logs, spectra=True)
 
     def random_prediction(self, epoch):
         n = self.dgen.__len__()
@@ -82,6 +92,14 @@ class AnalysisBase(keras.callbacks.Callback, ABC):
         z = self.call_model(x)
         x, y = self.restrict_xy(x, y)
         self.plot_reconstruction(x[0,], y[0,], z[0,], epoch)
+
+    def unscale_var(self, var, scaler):
+        """ unscale variables """
+        var_shape = var.shape
+        Tdim = var_shape[0] if len(var_shape) > 3 else 1
+        return scaler\
+            .inverse_transform(var.reshape(Tdim, -1))\
+            .reshape(var_shape)
 
     def plot_spectra(self, epoch):
         n = self.dgen.__len__()
@@ -98,50 +116,7 @@ class AnalysisBase(keras.callbacks.Callback, ABC):
         y = np.concatenate(y_list, axis=0)
         z = np.concatenate(z_list, axis=0)
 
-        # unscale variables
-        def unscale_var(var, scaler):
-            var_shape = var.shape
-            Tdim = var_shape[0] if len(var_shape) > 3 else 1
-            return scaler\
-                .inverse_transform(var.reshape(Tdim, -1))\
-                .reshape(var_shape)
-
-        x_unscaled, y_unscaled, z_unscaled = \
-            [unscale_var(d, self.dgen.dm.scalers[res])
-             for d, res in zip([x, y, z], self.scaler_list)]
-
-        if x.shape != y.shape:
-            # upsample unscaled x (bilinear interpolation)
-            x_unscaled = \
-                np.ascontiguousarray(x_unscaled.transpose((0, 3, 1, 2)))
-            x_unscaled = \
-                self.dgen.dm.bilin_upsampler(x_unscaled)\
-                            .transpose((0, 2, 3, 1))
-
-        data = {
-            'lowres': np.nan_to_num(x_unscaled),
-            'scaler_lowres': None,
-            'truth': np.nan_to_num(y_unscaled),
-            'scaler_truth': None,
-            'pred': np.nan_to_num(z_unscaled),
-        }
-
-        self.plot_machine\
-            .plot_energy_spectrum(data,
-                                  epoch,
-                                  transect_name='along_flow')
-        self.plot_machine\
-            .plot_energy_spectrum(data,
-                                  epoch,
-                                  transect_name='across_flow')
-        self.plot_machine\
-            .plot_enstrophy_spectrum(data,
-                                     epoch,
-                                     transect_name='along_flow')
-        self.plot_machine\
-            .plot_enstrophy_spectrum(data,
-                                     epoch,
-                                     transect_name='across_flow')
+        self.spectra_wrapper(x, y, z, epoch)
 
     def plot_reconstruction(self, x, y, z, epoch):
         assert y.shape == z.shape
@@ -219,7 +194,7 @@ class AnalysisBase(keras.callbacks.Callback, ABC):
     def plot_history(self, hist):
         self.plot_machine.plot_history(hist)
 
-    def timestepping(self, epoch, logs=None):
+    def timestepping(self, epoch, logs=None, spectra=False):
 
         def x_(batch_x, b_i, x_old=None):
             """ create timestepping model input from batch """
@@ -271,26 +246,74 @@ class AnalysisBase(keras.callbacks.Callback, ABC):
                 self.model.loss_fn(
                     batch_results_HR[:,
                                      0,
-                                     self.model.masking.rows,
-                                     self.model.masking.cols,
+                                     self.model.masking.rows.cpu(),
+                                     self.model.masking.cols.cpu(),
                                      ],
                     batch_y['HR_data'][:,
                                        0,
-                                       self.model.masking.rows,
-                                       self.model.masking.cols,
+                                       self.model.masking.rows.cpu(),
+                                       self.model.masking.cols.cpu(),
                                        ])
             losses.append(batch_loss)
 
-        logs['timestepper'] = np.mean(losses)
+        logs['timestepper'] = np.mean([ll.cpu() for ll in losses])
 
         self.plot_machine.plot_timestepping(
             results,
             truths,
             epoch,
-            {'rows': self.model.masking.rows,
-             'cols': self.model.masking.cols,
-             }
+            {'rows': self.model.masking.rows.cpu(),
+             'cols': self.model.masking.cols.cpu(),
+             },
+            spectra=spectra,
         )
+
+        if spectra:
+            x = \
+                np.concatenate([r['LR_data'] for r in results], 0)[:, 0,]
+            y = \
+                np.concatenate([t['HR_data'] for t in truths], 0)[:, 0,]
+            z = \
+                np.concatenate([r['HR_data'] for r in results], 0)[:, 0,]
+            self.spectra_wrapper(x, y, z, epoch)
+
+    def spectra_wrapper(self, x, y, z, epoch):
+
+        x_unscaled, y_unscaled, z_unscaled = \
+            [self.unscale_var(d, self.dgen.dm.scalers[res])
+             for d, res in zip([x, y, z], self.scaler_list)]
+
+        # upsample unscaled x (bilinear interpolation)
+        x_unscaled = \
+            np.ascontiguousarray(x_unscaled.transpose((0, 3, 1, 2)))
+        x_unscaled = \
+            self.dgen.dm.bilin_upsampler(x_unscaled)\
+                        .transpose((0, 2, 3, 1))
+
+        data = {
+            'lowres': np.nan_to_num(x_unscaled),
+            'scaler_lowres': None,
+            'truth': np.nan_to_num(y_unscaled),
+            'scaler_truth': None,
+            'pred': np.nan_to_num(z_unscaled),
+        }
+
+        self.plot_machine\
+            .plot_energy_spectrum(data,
+                                  epoch,
+                                  transect_name='along_flow')
+        self.plot_machine\
+            .plot_energy_spectrum(data,
+                                  epoch,
+                                  transect_name='across_flow')
+        self.plot_machine\
+            .plot_enstrophy_spectrum(data,
+                                     epoch,
+                                     transect_name='along_flow')
+        self.plot_machine\
+            .plot_enstrophy_spectrum(data,
+                                     epoch,
+                                     transect_name='across_flow')
 
 
 class AnalysisResNet(AnalysisBase):
@@ -416,5 +439,5 @@ class AnalysisHybrid(AnalysisBase):
         input, y: truth, z: model prediction
 
         """
-        # return ['HR', 'HR', 'HR']
+        return ['LR', 'HR', 'HR']
         pass

@@ -1,10 +1,16 @@
 # Set True if resnet and/or predictor weights are allowed to get
 # updated during training
-trainable_resnet = False
-trainable_predictor = False
+trainable_resnet = True
+trainable_predictor = True
 
 # learning rate
 learning_rate = 1e-4
+
+# weight on KL loss
+beta = 1e-4
+
+# weight on reconstruction loss
+gamma = 1
 
 # hybridization: 'product',
 hybridization = 'product'

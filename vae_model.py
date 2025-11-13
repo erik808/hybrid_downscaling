@@ -65,22 +65,8 @@ class VAE(base_model.BaseModel):
 
         re_loss = self.loss_fn(z_decoded, y) * self.gamma
 
-        # compute KL loss (sigma formulation)
-        # kl_loss = \
-        #     -self.beta / 2 * \
-        #     ops.mean(1 + 2 * z_logsigma -
-        #              ops.exp(2 * z_logsigma) -
-        #              ops.square(z_mean))
-
         # kl loss variance formulation
-        kl_loss = \
-            -self.beta / 2 * \
-            ops.mean(1 + z_logvar -
-                     ops.exp(z_logvar) -
-                     ops.square(z_mean))
-
-        # # sum over latent dimension, mean over batch size
-        # kl_loss = ops.mean(kl_loss)
+        kl_loss = self.loss_KL(z_mean, z_logvar, beta=self.beta)
 
         # combine losses
         loss = re_loss + kl_loss
@@ -103,6 +89,14 @@ class VAE(base_model.BaseModel):
                 metric.update_state(kl_loss)
 
         return {m.name: m.result() for m in self.metrics}
+
+    def loss_KL(self, mean, logvar, beta=1):
+        """Kullback Leibler loss, Gaussian prior, logvar formulation"""
+        return \
+            -beta / 2 * \
+            ops.mean(1 + logvar -
+                     ops.exp(logvar) -
+                     ops.square(mean))
 
     def builder(self):
         inputs = layers.Input(
@@ -242,12 +236,11 @@ class Split(layers.Layer):
 
 class Sampling(layers.Layer):
     """
-    Sampling layer
+    Sampling layer, Gaussian, logvar formulation
     """
 
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
-        # optional seed here
 
     def call(self, mean, log_var):
         eps = keras.random.normal(

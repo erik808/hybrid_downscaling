@@ -197,6 +197,7 @@ class PlotMachine():
                           epoch,
                           masking,
                           add_name='',
+                          spectra=False
                           ):
         results_HR = np.concatenate([r['HR_data'] for r in results], 0)
         truths_HR = np.concatenate([t['HR_data'] for t in truths], 0)
@@ -212,7 +213,7 @@ class PlotMachine():
                                         masking['cols'],])
                        for t in truths_HR]
 
-        plt.figure()
+        plt.figure(figsize=self.figsize)
         plt.plot(time_arr, result_norms, '.-', label='timestepping')
         plt.plot(time_arr, truth_norms, '.-', label='truths')
         plt.legend()

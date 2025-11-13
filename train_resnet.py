@@ -48,6 +48,7 @@ analysis_callback = callbacks.AnalysisResNet(data_gen=dgen_test,
                                              plot=[
                                                  'reconstruction',
                                                  'spectra',
+                                                 'timestepping',
                                              ]
                                              )
 
@@ -61,7 +62,7 @@ model_checkpoint_callback = keras.callbacks.ModelCheckpoint(
 
 hist = resnet.fit(
     x=dgen_train,
-    epochs=20,
+    epochs=2,
     validation_data=dgen_test,
     callbacks=[
         analysis_callback,

@@ -37,6 +37,10 @@ class Hybrid(base_model.BaseModel):
         self.predictor_output = \
             predictor_model.model.output['skip_vae_output']
 
+        self.ae_mean = \
+            predictor_model.model.output['mean']
+        self.ae_logvar = \
+            predictor_model.model.output['logvar']
         self.ae_recons = \
             predictor_model.model.output['ae_recons']
         self.ls_pred = \
@@ -67,8 +71,10 @@ class Hybrid(base_model.BaseModel):
             learning_rate=self.learning_rate)
 
         self.loss_fn = keras.losses.MeanSquaredError()
+        self.loss_KL = predictor_model.loss_KL
         self.loss_tracker = keras.metrics.Mean(name="loss")
         self.re_loss_tracker = keras.metrics.Mean(name="reconstruction")
+        self.KL_loss_tracker = keras.metrics.Mean(name="KLloss")
         self.pred_loss_tracker = keras.metrics.Mean(name="prediction")
         self.lspred_loss_tracker = keras.metrics.Mean(name="ls_pred")
 
@@ -77,6 +83,7 @@ class Hybrid(base_model.BaseModel):
         return [
             self.loss_tracker,
             self.re_loss_tracker,
+            self.KL_loss_tracker,
             self.pred_loss_tracker,
             self.lspred_loss_tracker,
         ]
@@ -99,7 +106,7 @@ class Hybrid(base_model.BaseModel):
                         y[self.input_name_HR][:,
                                               0,  # target lookback index
                                               ...],
-                        axis=1)))
+                        axis=1)))[0]  # use only the mean
 
         z = self.model(self.create_input(x), training=training)
 
@@ -110,6 +117,11 @@ class Hybrid(base_model.BaseModel):
 
         z_ls_pred = z['ls_pred']
         lspred_loss = self.loss_fn(z_ls_pred, y_ls)
+
+        z_mean = z['mean']
+        z_logvar = z['logvar']
+        # kl loss variance formulation
+        kl_loss = self.loss_KL(z_mean, z_logvar, beta=self.beta)
 
         def y_k(k):
             return \
@@ -125,13 +137,13 @@ class Hybrid(base_model.BaseModel):
                                      :]
 
         if self.trainable_VAE:
-            re_loss = self.loss_fn(z_ae_recons, y_k(1))
+            re_loss = self.loss_fn(z_ae_recons, y_k(1)) * self.gamma
         else:
             re_loss = 0.0
 
         # total loss
         pred_loss = self.loss_fn(z_hybrid, y_k(0))
-        loss = pred_loss + re_loss + lspred_loss
+        loss = pred_loss + re_loss + lspred_loss + kl_loss
 
         if training:
             loss.backward()
@@ -151,12 +163,8 @@ class Hybrid(base_model.BaseModel):
                 metric.update_state(lspred_loss)
             if metric.name == "reconstruction":
                 metric.update_state(re_loss)
-
-        # for name, param in self.model.named_parameters():
-        #     print(name)
-
-        # for var in self.trainable_variables:
-        #     print(var)
+            if metric.name == "KLloss":
+                metric.update_state(kl_loss)
 
         return {m.name: m.result() for m in self.metrics}
 
@@ -187,6 +195,8 @@ class Hybrid(base_model.BaseModel):
 
         out = self.masking(out)
         outputs = {'hybrid': out,
+                   'mean': self.ae_mean,
+                   'logvar': self.ae_logvar,
                    'ae_recons': self.ae_recons,
                    'ls_pred': self.ls_pred,
                    }

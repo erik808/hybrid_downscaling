@@ -27,30 +27,32 @@ class Predictor(base_model.BaseModel):
 
         # get input and output layers to isolate encoder+decoder
         mean, logsigma = \
-            vae_model.get_layer('betaVAE')\
+            vae_model.model\
                      .get_layer('vae_splitter').output
         sampled = \
-            vae_model.get_layer('betaVAE')\
+            vae_model.model\
                      .get_layer('vae_sampling').output
         encoder_input = \
-            vae_model.get_layer('betaVAE')\
+            vae_model.model\
                      .get_layer('vae_input_transform').input
         decoder_output = \
-            vae_model.get_layer('betaVAE')\
+            vae_model.model\
                      .get_layer('vae_masking').output
 
         decoder_skip_output = \
-            vae_model.get_layer('betaVAE')\
+            vae_model.model\
                      .get_layer('skip_output').output
 
-        self.vae_input = vae_model.get_layer('betaVAE').input
+        self.vae_input = vae_model.model.input
 
         self.encoder = keras.Model(
             inputs=encoder_input,
-            outputs=mean,
+            outputs=[mean, logsigma],
             name="encoder",
         )
         self.encoder.build(encoder_input.shape)
+
+        self.sampler = vae_model.model.get_layer('vae_sampling')
 
         self.decoder = keras.Model(
             inputs=sampled,
@@ -68,8 +70,10 @@ class Predictor(base_model.BaseModel):
             learning_rate=self.learning_rate)
 
         self.loss_fn = keras.losses.MeanSquaredError()
+        self.loss_KL = vae_model.loss_KL
         self.loss_tracker = keras.metrics.Mean(name="loss")
         self.re_loss_tracker = keras.metrics.Mean(name="reconstruction")
+        self.KL_loss_tracker = keras.metrics.Mean(name="KLloss")
         self.pred_loss_tracker = keras.metrics.Mean(name="prediction")
         self.lspred_loss_tracker = keras.metrics.Mean(name="ls_pred")
 
@@ -78,6 +82,7 @@ class Predictor(base_model.BaseModel):
         return [
             self.loss_tracker,
             self.re_loss_tracker,
+            self.KL_loss_tracker,
             self.pred_loss_tracker,
             self.lspred_loss_tracker,
         ]
@@ -102,6 +107,10 @@ class Predictor(base_model.BaseModel):
                                      self.masking.rows,
                                      self.masking.cols,
                                      :]
+        z_mean = z['mean']
+        z_logvar = z['logvar']
+        # kl loss variance formulation
+        kl_loss = self.loss_KL(z_mean, z_logvar, beta=self.beta)
 
         y_ls = \
             self.encoder(
@@ -110,7 +119,7 @@ class Predictor(base_model.BaseModel):
                         y[self.input_name_HR][:,
                                               0,  # target lookback index
                                               ...],
-                        axis=1)))
+                        axis=1)))[0]  # take only the mean
 
         # prediction loss in the latent space
         lspred_loss = self.loss_fn(z_ls_pred, y_ls)
@@ -129,12 +138,12 @@ class Predictor(base_model.BaseModel):
         # reconstruction loss, compare using most recent, only used
         # when the VAE weights are trainable
         if self.trainable_VAE:
-            re_loss = self.loss_fn(z_ae_recons, y_k(1))
+            re_loss = self.loss_fn(z_ae_recons, y_k(1)) * self.gamma
         else:
             re_loss = 0.0
 
         # combine losses
-        loss = pred_loss + lspred_loss + re_loss
+        loss = pred_loss + lspred_loss + re_loss + kl_loss
 
         if training:
             loss.backward()
@@ -154,6 +163,8 @@ class Predictor(base_model.BaseModel):
                 metric.update_state(lspred_loss)
             if metric.name == "reconstruction":
                 metric.update_state(re_loss)
+            if metric.name == "KLloss":
+                metric.update_state(kl_loss)
 
         return {m.name: m.result() for m in self.metrics}
 
@@ -179,21 +190,17 @@ class Predictor(base_model.BaseModel):
         timeseries.pop()
 
         # use most recent lookback for reconstruction loss
-        # if self.trainable_VAE:
-        ae_reconstruction, _ = \
-            self.decoder(
-                self.encoder(ops.squeeze(timeseries[-1],
-                                         axis=1)))
-        # else:
-        #     ae_reconstruction = ops.squeeze(timeseries[-1],
-        #                                     axis=1)
+        mean, logvar = self.encoder(ops.squeeze(timeseries[-1],
+                                                axis=1))
+        sampled = self.sampler(mean, logvar)
+        ae_reconstruction, _ = self.decoder(sampled)
 
-        # encode timeseries
-        encoded_series = [self.encoder(ops.squeeze(sample,
-                                                   axis=1))
-                          for sample in timeseries]
+        # encode timeseries using mean output of encoder
+        encoded_series = [self.encoder(ops.squeeze(snapshot,
+                                                   axis=1))[0]
+                          for snapshot in timeseries]
 
-        # do prediction
+        # do prediction in latent space
         prediction = LSPredictor(self.predictor,
                                  name="latent_predictor",
                                  )(encoded_series)
@@ -202,6 +209,8 @@ class Predictor(base_model.BaseModel):
         outputs = {
             'decoded': prediction_decoded,
             'ls_pred': prediction,
+            'mean': mean,
+            'logvar': logvar,
             'ae_recons': ae_reconstruction,
             'skip_vae_output': skipped,
         }

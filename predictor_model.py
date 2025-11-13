@@ -2,6 +2,7 @@ import torch
 import keras
 from keras import ops
 from keras import layers
+from keras import regularizers
 
 import numpy as np
 import importlib
@@ -225,6 +226,9 @@ class LSPredictor(layers.Layer):
         super().__init__(**kwargs)
         tools.load_config(self, config_name='predictor_model')
 
+        key, value = next(iter(self.kernel_regularizer.items()))
+        self.kernel_regularizer = getattr(regularizers, key)(value)
+
     def build(self, input_shape):
         dims = input_shape[0][1:]  # ignore batch dim
         lb_dim = len(input_shape)
@@ -262,7 +266,6 @@ class LSPredictor(layers.Layer):
 
         elif self.predictor == 'conv3d':
             self.input_transf = Stack()
-
             self.predictorl = keras.Sequential([
                 layers.Conv3D(
                     filters=256,

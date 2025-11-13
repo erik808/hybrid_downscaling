@@ -19,7 +19,7 @@ else:
 dmgr_cmems = \
     data_manager_cmems.DataManagerCMEMS(
         experiment_id=experiment_id,
-        testing=False,
+        testing=True,
     )
 dmgr_cmems.create_training_data(force_rebuild=False)
 
@@ -48,7 +48,7 @@ analysis_callback = callbacks.AnalysisResNet(data_gen=dgen_test,
                                              plot=[
                                                  'reconstruction',
                                                  'spectra',
-                                                 # 'timestepping',
+                                                 'timestepping',
                                              ]
                                              )
 

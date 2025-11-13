@@ -116,7 +116,9 @@ class Hybrid(base_model.BaseModel):
                                :]
 
         z_ls_pred = z['ls_pred']
-        lspred_loss = self.loss_fn(z_ls_pred, y_ls)
+
+        # laten space prediction
+        lspred_loss = self.loss_fn(z_ls_pred, y_ls) * self.alpha_ls
 
         z_mean = z['mean']
         z_logvar = z['logvar']
@@ -141,8 +143,10 @@ class Hybrid(base_model.BaseModel):
         else:
             re_loss = 0.0
 
+        # actual prediction
+        pred_loss = self.loss_fn(z_hybrid, y_k(0)) * self.alpha
+
         # total loss
-        pred_loss = self.loss_fn(z_hybrid, y_k(0))
         loss = pred_loss + re_loss + lspred_loss + kl_loss
 
         if training:
@@ -181,10 +185,22 @@ class Hybrid(base_model.BaseModel):
         resnet_result = self.resnet_layers(input_LR)
         predictor_result = self.predictor_layers(input_HR)
 
-        # if self.hybridization == 'product':
-        assert resnet_result.shape == predictor_result.shape, \
-            "implement some reshaping/upsampling/downsampling here"
-        x = layers.Multiply()([resnet_result, predictor_result])
+        assert resnet_result.shape[1:-1] == predictor_result.shape[1:-1], \
+            "resnet and predictor have different rows/cols"
+
+        if self.hybridization == 'product':
+            # multiplicative skip connection
+            assert resnet_result.shape == predictor_result.shape, \
+                "resnet and predictor have different #filters"
+            x = layers.Multiply()([resnet_result, predictor_result])
+        elif self.hybridization == 'add':
+            assert resnet_result.shape == predictor_result.shape, \
+                "resnet and predictor have different #filters"
+            x = layers.Add()([resnet_result, predictor_result])
+        elif self.hybridization == 'concat':
+            x = layers.Concatenate()(
+                [resnet_result, predictor_result], axis=-1
+            )
 
         out = layers.Conv2D(
             filters=self.num_vars,

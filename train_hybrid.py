@@ -30,13 +30,13 @@ else:
 dmgr_cmems = \
     data_manager_cmems.DataManagerCMEMS(
         experiment_id=experiment_id,
-        testing=False)
+        testing=True)
 dmgr_cmems.create_training_data(force_rebuild=False)
 
 dgen_args = {
     'dm': dmgr_cmems,
     'batch_size': 4,
-    'lookback': 5,
+    'lookback': 3,
     'shuffle': True,
     'use_multiprocessing': True,
     'workers': 4,
@@ -48,8 +48,8 @@ dgen_train, dgen_test = \
 
 resnet = resnet_model.ResNet(data_gen=dgen_train)
 resnet.build_model("ResNet")
-resnet_checkpoint = 'models/resnet/checkpoint.resnet.keras'
-resnet.load_weights(resnet_checkpoint)
+# resnet_checkpoint = 'models/resnet/checkpoint.resnet.keras'
+# resnet.load_weights(resnet_checkpoint)
 
 vae = vae_model.VAE(data_gen=dgen_train)
 vae.build_model("betaVAE")
@@ -79,13 +79,14 @@ hybrid.summary(
 analysis_callback = callbacks.AnalysisHybrid(
     data_gen=dgen_test,
     plot=[
+        'reconstruction',
         'timestepping_spectrum',
     ]
 )
 
 hist = hybrid.fit(
     x=dgen_train,
-    epochs=10,
+    epochs=20,
     validation_data=dgen_test,
     callbacks=[
         analysis_callback,

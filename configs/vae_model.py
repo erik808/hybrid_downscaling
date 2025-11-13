@@ -11,10 +11,10 @@ gamma = 1
 activation = 'leaky_relu'
 
 # number of filters in conv layers
-filters = 32  # tested: 64
+filters = 64  # tested: 64
 
 # number of down and upsampling convolutions
-num_layers = 2  # tested: 4
+num_layers = 4  # tested: 4
 
 # deterministic mode bypasses the sampling layer and uses the mean
 # only

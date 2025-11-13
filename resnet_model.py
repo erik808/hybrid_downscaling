@@ -108,6 +108,14 @@ class ResNet(base_model.BaseModel):
                 scale=2,
             )(y)
 
+        # layer to couple to other models
+        y = layers.Conv2D(filters=self.num_filters_hybrid,
+                          kernel_size=3,
+                          padding='same',
+                          name='hybrid_coupling',
+                          activation='relu',
+                          )(y)
+
         outputs = layers.Conv2D(filters=self.num_vars,
                                 kernel_size=9,
                                 padding='same',

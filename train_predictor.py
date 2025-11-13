@@ -40,26 +40,26 @@ vae = vae_model.VAE(data_gen=dgen_train)
 vae.build_model("betaVAE")
 
 # load existing weights
-vae_checkpoint = \
-    'experiments/train_vae/checkpoints/checkpoint.vae.keras'
-vae.load_weights(vae_checkpoint)
+# vae_checkpoint = \
+#     'experiments/train_vae/checkpoints/checkpoint.vae.keras'
+# vae.load_weights(vae_checkpoint)
 
 predictor = predictor_model.Predictor(data_gen=dgen_train,
                                       vae_model=vae)
 
 predictor.build_model("predictor")
-predictor.summary(line_length=80, expand_nested=True)
+predictor.summary(line_length=80)
 predictor.compile(predictor.compiler)
 
-predictor_checkpoint = \
-    'experiments/train_predictor/checkpoints/checkpoint.predictor.keras'
-predictor.load_weights(predictor_checkpoint)
+# predictor_checkpoint = \
+#     'experiments/train_predictor/checkpoints/checkpoint.predictor.keras'
+# predictor.load_weights(predictor_checkpoint)
 
 analysis_callback = callbacks.AnalysisPredictor(data_gen=dgen_test,
                                                 plot=[
                                                     # 'reconstruction',
                                                     # 'spectra',
-                                                    'timestepping',  # TODO
+                                                    'timestepping_spectrum',
                                                 ]
                                                 )
 

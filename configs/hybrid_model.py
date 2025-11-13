@@ -6,13 +6,19 @@ trainable_predictor = True
 # learning rate
 learning_rate = 1e-4
 
-# weight on KL loss
+# weight on prediction loss
+alpha = 1
+
+# weight on prediction loss in the latent space
+alpha_ls = 1
+
+# weight on VAE KL loss
 beta = 1e-4
 
-# weight on reconstruction loss
+# weight on VAE reconstruction loss
 gamma = 1
 
-# hybridization: 'product',
+# hybridization: 'product', 'concat', 'add'
 hybridization = 'product'
 
 # activation after hybridization

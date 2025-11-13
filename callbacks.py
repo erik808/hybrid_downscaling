@@ -396,7 +396,7 @@ class AnalysisPredictor(AnalysisBase):
 
     def restrict_xy(self, x, y):
         # keep relevant keys, ignore lookback
-        x, y = x['HR_data'][:, 0,], y['HR_data'][:, 0,]
+        x, y = x['LR_data'][:, 0,], y['HR_data'][:, 0,]
         return x, y
 
     @property
@@ -405,7 +405,7 @@ class AnalysisPredictor(AnalysisBase):
         input, y: truth, z: model prediction
 
         """
-        return ['HR', 'HR', 'HR']
+        return ['LR', 'HR', 'HR']
 
 
 class AnalysisHybrid(AnalysisBase):
@@ -429,9 +429,8 @@ class AnalysisHybrid(AnalysisBase):
 
     def restrict_xy(self, x, y):
         # keep relevant keys, ignore lookback
-        # x, y = x['HR_data'][:, 0,], y['HR_data'][:, 0,]
-        # return x, y
-        pass
+        x, y = x['LR_data'][:, 0,], y['HR_data'][:, 0,]
+        return x, y
 
     @property
     def scaler_list(self):

@@ -7,18 +7,14 @@ beta = 1e-4
 # weight on reconstruction loss
 gamma = 1
 
-# multiplying factors number of filters
-filter_mult_start = 4
-filter_mult_rest = 2
-
 # activation type ('prelu', 'relu', 'leaky_relu', 'elu')
-activation='leaky_relu'
+activation = 'leaky_relu'
 
-# dense dimension
-dense_dim = 256
+# number of filters in conv layers
+filters = 32  # tested: 64
 
-# latent space dimension
-latent_space_dim = 64
+# number of down and upsampling convolutions
+num_layers = 2  # tested: 4
 
 # deterministic mode bypasses the sampling layer and uses the mean
 # only

@@ -240,7 +240,7 @@ class LSPredictor(layers.Layer):
             self.output_transf = \
                 keras.Sequential([
                     layers.Dense(units=np.prod(dims),
-                                 activation='leaky_relu'),
+                                 activation=self.activation),
                     layers.Reshape(dims),
                 ])
 
@@ -252,11 +252,11 @@ class LSPredictor(layers.Layer):
             self.model = keras.Sequential([
                 layers.Dense(
                     units=128,
-                    activation='leaky_relu',
+                    activation=self.activation,
                 ),
                 layers.Dense(
                     units=np.prod(dims),
-                    activation='leaky_relu',
+                    activation=self.activation,
                 )
             ])
             self.output_transf = layers.Reshape(dims)
@@ -270,21 +270,24 @@ class LSPredictor(layers.Layer):
                     kernel_size=(int(lb_dim / 2), 3, 3),
                     strides=1,
                     padding='same',
-                    activation='leaky_relu',
+                    activation=self.activation,
+                    kernel_regularizer=self.kernel_regularizer,
                 ),
                 layers.Conv3D(
                     filters=128,
                     kernel_size=(lb_dim, 2, 2),
                     strides=1,
                     padding='same',
-                    activation='leaky_relu',
+                    activation=self.activation,
+                    kernel_regularizer=self.kernel_regularizer,
                 ),
                 layers.Conv3D(
                     filters=dims[-1],
                     kernel_size=(lb_dim, 2, 2),
                     strides=1,
                     padding='same',
-                    activation='leaky_relu',
+                    activation=self.activation,
+                    kernel_regularizer=self.kernel_regularizer,
                 ),
             ])
 

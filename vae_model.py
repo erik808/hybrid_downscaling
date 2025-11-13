@@ -111,8 +111,7 @@ class VAE(base_model.BaseModel):
                 axis=1)[0],
             axis=1)  # squeeze only axis=1 to support batch_size=1
 
-        # -------------------------------------------------------
-        # Encoder
+        # Input transform
         x = layers.Conv2D(
             filters=32,
             strides=1,
@@ -123,81 +122,28 @@ class VAE(base_model.BaseModel):
         )(input_k)
         x = self.create_activation(x)
 
-        x = layers.Conv2D(
-            filters=64,
-            strides=2,
-            kernel_size=3,
-            padding='same',
-            activation=None,
-        )(x)
-        x = self.create_activation(x)
+        # Downsampling layers
+        for i in range(self.num_layers):
+            mult = 2 if i == self.num_layers - 1 else 1
+            x = self.conv_downsampling(x, mult)
 
-        x = layers.Conv2D(
-            filters=64,
-            strides=2,
-            kernel_size=3,
-            padding='same',
-            activation=None,
-        )(x)
-        x = self.create_activation(x)
-
-        x = layers.Conv2D(
-            filters=64,
-            strides=2,
-            kernel_size=3,
-            padding='same',
-            activation=None,
-        )(x)
-        x = self.create_activation(x)
-
-        x = layers.Conv2D(
-            filters=128,
-            strides=2,
-            kernel_size=3,
-            padding='same',
-            activation=None,
-        )(x)
-        x = self.create_activation(x)
-
+        # Sampling layer
         if not self.deterministic_mode:
             mean, logvar = Split(name="vae_splitter")(x)
-            # Sampling
             x = Sampling(name="vae_sampling")(mean, logvar)
         else:
             mean = x
             logvar = x
 
-        y = resnet_model.SubPixelConv(
-            filters_out=64,
-            kernel_size=3,
-            scale=2,
-            activation=self.activation
-        )(x)
-
-        y = resnet_model.SubPixelConv(
-            filters_out=64,
-            kernel_size=3,
-            scale=2,
-            activation=self.activation,
-        )(y)
-
-        y = resnet_model.SubPixelConv(
-            filters_out=64,
-            kernel_size=3,
-            scale=2,
-            activation=self.activation,
-        )(y)
-
-        y = resnet_model.SubPixelConv(
-            filters_out=64,
-            kernel_size=3,
-            scale=2,
-            activation=self.activation,
-        )(y)
+        # Upsampling layers
+        y = x
+        for i in range(self.num_layers):
+            y = self.conv_upsampling(y)
 
         # connection to skip the output convolution
         skip_output = layers.Identity(name='skip_output')(y)
 
+        # output transform
         y = layers.Conv2D(
             filters=self.num_vars,
             kernel_size=9,
@@ -214,6 +160,31 @@ class VAE(base_model.BaseModel):
                    'skip_output': skip_output,
                    }
         return inputs, outputs
+
+    def conv_downsampling(
+            self,
+            inputs,
+            multiple=1
+    ):
+        out = layers.Conv2D(
+            filters=self.filters * multiple,
+            strides=2,
+            kernel_size=3,
+            padding='same',
+            activation=None,
+        )(inputs)
+        return self.create_activation(out)
+
+    def conv_upsampling(
+            self,
+            inputs,
+    ):
+        return resnet_model.SubPixelConv(
+            filters_out=self.filters,
+            kernel_size=3,
+            scale=2,
+            activation=self.activation
+        )(inputs)
 
     def create_activation(self, inputs):
         if self.activation == 'prelu':

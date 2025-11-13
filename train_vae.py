@@ -38,8 +38,8 @@ vae = vae_model.VAE(data_gen=dgen_train)
 vae.build_model("betaVAE")
 vae.summary(line_length=80, expand_nested=True)
 vae.compile(vae.compiler)
-vae_checkpoint = 'models/vae/checkpoint.vae.keras'
-vae.load_weights(vae_checkpoint)
+# vae_checkpoint = 'models/vae/checkpoint.vae.keras'
+# vae.load_weights(vae_checkpoint)
 
 analysis_callback = callbacks.AnalysisVAE(data_gen=dgen_test,
                                           plot=[

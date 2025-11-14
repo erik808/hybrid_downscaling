@@ -159,6 +159,7 @@ class VAE(base_model.BaseModel):
                    'logvar': logvar,
                    'skip_output': skip_output,
                    }
+        inputs = {self.input_name_HR: inputs}
         return inputs, outputs
 
     def conv_downsampling(

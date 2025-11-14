@@ -439,4 +439,3 @@ class AnalysisHybrid(AnalysisBase):
 
         """
         return ['LR', 'HR', 'HR']
-        pass

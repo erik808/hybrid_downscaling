@@ -128,8 +128,7 @@ class ResNet(base_model.BaseModel):
 
         # masking
         outputs = self.masking(outputs)
-
-        return inputs, outputs
+        return {'LR_data': inputs}, outputs
 
 
 class InputTransform(layers.Layer):

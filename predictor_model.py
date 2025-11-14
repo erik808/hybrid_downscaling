@@ -237,7 +237,6 @@ class LSPredictor(layers.Layer):
 
     def build(self, input_shape):
         dims = input_shape[0][1:]  # ignore batch dim
-        inp_filters = input_shape[0][-1]
         lb_dim = len(input_shape)
 
         if self.predictor == 'simpleRNN':
@@ -257,7 +256,7 @@ class LSPredictor(layers.Layer):
                     layers.Reshape(dims),
                 ])
 
-        if self.predictor == 'lstm':
+        elif self.predictor == 'lstm':
             self.input_transf = FlattenAndStack()
             self.predictmod = layers.LSTM(
                 units=self.dense_units,
@@ -296,14 +295,14 @@ class LSPredictor(layers.Layer):
             self.predictmod = keras.Sequential([
                 layers.Conv3D(
                     filters=256,
-                    kernel_size=(int(lb_dim / 2), 3, 3),
+                    kernel_size=(np.ceil(lb_dim / 2), 3, 3),
                     strides=1,
                     padding='same',
                     activation=self.activation,
                     kernel_regularizer=self.kernel_regularizer,
                 ),
                 layers.Conv3D(
-                    filters=self.dense_units,
+                    filters=128,
                     kernel_size=(lb_dim, 2, 2),
                     strides=1,
                     padding='same',
@@ -330,17 +329,20 @@ class LSPredictor(layers.Layer):
         elif self.predictor == 'convlstm':
             self.input_transf = Stack()
             self.predictmod = layers.ConvLSTM2D(
-                filters=64,
+                filters=self.convlstm_filters,
                 kernel_size=3,
                 strides=1,
                 padding='same',
             )
             self.output_transf = layers.Conv2D(
-                filters=inp_filters,
+                filters=dims[-1],
                 kernel_size=3,
                 strides=1,
                 padding='same',
                 activation=self.activation)
+
+        else:
+            raise Exception("Invalid predictor")
 
     def call(self, inputs):
         x = self.input_transf(inputs)

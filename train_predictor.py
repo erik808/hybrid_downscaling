@@ -26,7 +26,7 @@ dmgr_cmems.create_training_data(force_rebuild=False)
 dgen_args = {
     'dm': dmgr_cmems,
     'batch_size': 4,
-    'lookback': 5,
+    'lookback': 3,
     'shuffle': True,
     'use_multiprocessing': True,
     'workers': 4,

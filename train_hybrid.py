@@ -49,13 +49,15 @@ dgen_train, dgen_test = \
 resnet = resnet_model.ResNet(data_gen=dgen_train)
 resnet.build_model("ResNet")
 resnet.summary()
-resnet_checkpoint = 'experiments/resnet_nf8_nfh32/checkpoints/checkpoint.resnet.keras'
+resnet_checkpoint = \
+    'experiments/resnet_nf8_nfh16/checkpoints/checkpoint.resnet.keras'
 resnet.load_weights(resnet_checkpoint)
 
 vae = vae_model.VAE(data_gen=dgen_train)
 vae.build_model("betaVAE")
 vae.summary()
-vae_checkpoint = 'experiments/vae_nl5_filt32_beta1e-5/checkpoints/checkpoint.vae.keras'
+vae_checkpoint = \
+    'experiments/vae_nl3_filt16_beta1e-5/checkpoints/checkpoint.vae.keras'
 vae.load_weights(vae_checkpoint)
 
 predictor = predictor_model.Predictor(data_gen=dgen_train,

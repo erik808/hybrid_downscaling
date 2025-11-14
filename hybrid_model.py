@@ -25,7 +25,7 @@ class Hybrid(base_model.BaseModel):
         super().__init__(**kwargs)
         tools.load_config(self, config_name='hybrid_model')
 
-        self.resnet_input = resnet_model.model.input
+        self.resnet_input = resnet_model.model.input['LR_data']
         self.resnet_output = \
             resnet_model.model\
                         .get_layer('resnet_output_conv')\

@@ -13,7 +13,7 @@ alpha = 1
 alpha_ls = 1
 
 # weight on VAE KL loss
-beta = 1e-4
+beta = 1e-5
 
 # weight on VAE reconstruction loss
 gamma = 1

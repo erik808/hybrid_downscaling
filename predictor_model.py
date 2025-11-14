@@ -240,7 +240,7 @@ class LSPredictor(layers.Layer):
 
         if self.predictor == 'simpleRNN':
             self.input_transf = FlattenAndStack()
-            self.predictorl = layers.SimpleRNN(
+            self.predictmod = layers.SimpleRNN(
                 units=self.dense_units,
                 recurrent_dropout=self.recurrent_dropout,
                 kernel_regularizer=self.kernel_regularizer,
@@ -250,6 +250,24 @@ class LSPredictor(layers.Layer):
             self.output_transf = \
                 keras.Sequential([
                     layers.Dense(units=np.prod(dims),
+                                 kernel_regularizer=self.kernel_regularizer,
+                                 activation=self.activation),
+                    layers.Reshape(dims),
+                ])
+
+        if self.predictor == 'lstm':
+            self.input_transf = FlattenAndStack()
+            self.predictmod = layers.LSTM(
+                units=self.dense_units,
+                recurrent_dropout=self.recurrent_dropout,
+                kernel_regularizer=self.kernel_regularizer,
+                recurrent_regularizer=self.recurrent_regularizer,
+                unroll=False
+            )
+            self.output_transf = \
+                keras.Sequential([
+                    layers.Dense(units=np.prod(dims),
+                                 kernel_regularizer=self.kernel_regularizer,
                                  activation=self.activation),
                     layers.Reshape(dims),
                 ])
@@ -259,7 +277,7 @@ class LSPredictor(layers.Layer):
                 FlattenAndStack(),
                 layers.Flatten(),
             ])
-            self.predictorl = keras.Sequential([
+            self.predictmod = keras.Sequential([
                 layers.Dense(
                     units=self.dense_units,
                     activation=self.activation,
@@ -273,7 +291,7 @@ class LSPredictor(layers.Layer):
 
         elif self.predictor == 'conv3d':
             self.input_transf = Stack()
-            self.predictorl = keras.Sequential([
+            self.predictmod = keras.Sequential([
                 layers.Conv3D(
                     filters=256,
                     kernel_size=(int(lb_dim / 2), 3, 3),
@@ -309,7 +327,7 @@ class LSPredictor(layers.Layer):
 
         elif self.predictor == 'convlstm':
             self.input_transf = Stack()
-            self.predictorl = layers.ConvLSTM2D(
+            self.predictmod = layers.ConvLSTM2D(
                 filters=64,
                 kernel_size=3,
                 strides=1,
@@ -319,7 +337,7 @@ class LSPredictor(layers.Layer):
 
     def call(self, inputs):
         x = self.input_transf(inputs)
-        x = self.predictorl(x)
+        x = self.predictmod(x)
         out = self.output_transf(x)
         return out
 

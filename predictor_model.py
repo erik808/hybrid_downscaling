@@ -226,8 +226,13 @@ class LSPredictor(layers.Layer):
         super().__init__(**kwargs)
         tools.load_config(self, config_name='predictor_model')
 
-        key, value = next(iter(self.kernel_regularizer.items()))
-        self.kernel_regularizer = getattr(regularizers, key)(value)
+        if self.kernel_regularizer is not None:
+            key, value = next(iter(self.kernel_regularizer.items()))
+            self.kernel_regularizer = getattr(regularizers, key)(value)
+
+        if self.recurrent_regularizer is not None:
+            key, value = next(iter(self.recurrent_regularizer.items()))
+            self.recurrent_regularizer = getattr(regularizers, key)(value)
 
     def build(self, input_shape):
         dims = input_shape[0][1:]  # ignore batch dim
@@ -236,8 +241,10 @@ class LSPredictor(layers.Layer):
         if self.predictor == 'simpleRNN':
             self.input_transf = FlattenAndStack()
             self.predictorl = layers.SimpleRNN(
-                units=128,
-                recurrent_dropout=0.4,
+                units=self.dense_units,
+                recurrent_dropout=self.recurrent_dropout,
+                kernel_regularizer=self.kernel_regularizer,
+                recurrent_regularizer=self.recurrent_regularizer,
                 unroll=False
             )
             self.output_transf = \
@@ -254,7 +261,7 @@ class LSPredictor(layers.Layer):
             ])
             self.predictorl = keras.Sequential([
                 layers.Dense(
-                    units=128,
+                    units=self.dense_units,
                     activation=self.activation,
                 ),
                 layers.Dense(
@@ -276,7 +283,7 @@ class LSPredictor(layers.Layer):
                     kernel_regularizer=self.kernel_regularizer,
                 ),
                 layers.Conv3D(
-                    filters=128,
+                    filters=self.dense_units,
                     kernel_size=(lb_dim, 2, 2),
                     strides=1,
                     padding='same',

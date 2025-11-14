@@ -14,8 +14,11 @@ gamma = 1
 
 # model that does the actual prediction in the latent space
 # options: 'simpleRNN', 'dense', 'conv3d', 'convlstm'
-predictor = 'conv3d'
+predictor = 'simpleRNN'
 
 activation = 'leaky_relu'
 
-kernel_regularizer = {'L2': 1e-2}
+kernel_regularizer = None  # {'L2': 1e-2}
+recurrent_regularizer = None  # {'L2': 1e-2}
+recurrent_dropout = 0.0  # 0.4
+dense_units = 128

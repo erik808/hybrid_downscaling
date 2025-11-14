@@ -41,7 +41,6 @@ class AnalysisBase(keras.callbacks.Callback, ABC):
 
         # create a nan-mask
         self.mask_constructed = False
-        plt.close('all')
 
     @abstractmethod
     def call_model(self, x):
@@ -71,6 +70,7 @@ class AnalysisBase(keras.callbacks.Callback, ABC):
         return None
 
     def on_epoch_end(self, epoch, logs=None):
+        plt.close('all')
         self.construct_mask()
         if epoch % 1 == 0 or epoch == self.params['epochs'] - 1:
             if 'reconstruction' in self.plot_instructions:

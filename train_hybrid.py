@@ -48,22 +48,20 @@ dgen_train, dgen_test = \
 
 resnet = resnet_model.ResNet(data_gen=dgen_train)
 resnet.build_model("ResNet")
-# resnet_checkpoint = 'models/resnet/checkpoint.resnet.keras'
-# resnet.load_weights(resnet_checkpoint)
+resnet.summary()
+resnet_checkpoint = 'experiments/resnet_nf8_nfh32/checkpoints/checkpoint.resnet.keras'
+resnet.load_weights(resnet_checkpoint)
 
 vae = vae_model.VAE(data_gen=dgen_train)
 vae.build_model("betaVAE")
-vae_checkpoint = 'models/vae/checkpoint.vae.keras'
+vae.summary()
+vae_checkpoint = 'experiments/vae_nl5_filt32_beta1e-5/checkpoints/checkpoint.vae.keras'
 vae.load_weights(vae_checkpoint)
 
 predictor = predictor_model.Predictor(data_gen=dgen_train,
                                       vae_model=vae)
 predictor.build_model("predictor")
-predictor_checkpoint = 'models/predictor/checkpoint.predictor.keras'
-# try:
-#     predictor.load_weights(predictor_checkpoint)
-# except Exception as e:
-#     print('\nError loading checkpoint weights:', e)
+predictor.summary()
 
 # create hybrid
 hybrid = hybrid_model.Hybrid(data_gen=dgen_train,
@@ -72,9 +70,7 @@ hybrid = hybrid_model.Hybrid(data_gen=dgen_train,
 
 hybrid.build_model("hybrid")
 hybrid.compile(hybrid.compiler)
-hybrid.summary(
-    # expand_nested=True,
-)
+hybrid.summary()
 
 analysis_callback = callbacks.AnalysisHybrid(
     data_gen=dgen_test,

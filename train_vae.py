@@ -17,7 +17,9 @@ else:
     experiment_id = sys.argv[1]
 
 dmgr_cmems = \
-    data_manager_cmems.DataManagerCMEMS(experiment_id=experiment_id)
+    data_manager_cmems.DataManagerCMEMS(
+        experiment_id=experiment_id,
+        testing=True)
 dmgr_cmems.create_training_data(force_rebuild=False)
 
 dgen_args = {
@@ -43,8 +45,8 @@ vae.compile(vae.compiler)
 
 analysis_callback = callbacks.AnalysisVAE(data_gen=dgen_test,
                                           plot=[
-                                              'reconstruction',
-                                              'spectra',
+                                              # 'reconstruction',
+                                              # 'spectra',
                                           ]
                                           )
 

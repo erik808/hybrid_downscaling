@@ -85,6 +85,7 @@ class BaseModel(keras.Model):
         return self.model.summary(**kwargs)
 
     def call(self, inputs, training=True):
+        inputs = self.create_input(inputs)
         return self.model(inputs, training=training)
 
     def builder(self):

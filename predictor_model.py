@@ -97,7 +97,7 @@ class Predictor(base_model.BaseModel):
         if training:
             self.zero_grad()
 
-        z = self(self.create_input(x), training=training)
+        z = self(x, training=training)
 
         z_decoded = z['decoded'][:,
                                  self.masking.rows,
@@ -172,14 +172,14 @@ class Predictor(base_model.BaseModel):
     def builder(self):
 
         # reusing the vae input layer
-        inputs = self.vae_input
+        input_HR = self.vae_input
 
         # check dimensions
-        _, lbdim, _, _, _ = inputs.shape
+        _, lbdim, _, _, _ = input_HR.shape
         assert lbdim > 1, "need at least lookback=2 to make predictions"
 
         timeseries = ops.split(
-            inputs,
+            input_HR,
             self.input_shape_LR[0],
             axis=1)
 
@@ -215,6 +215,7 @@ class Predictor(base_model.BaseModel):
             'ae_recons': ae_reconstruction,
             'skip_vae_output': skipped,
         }
+        inputs = {self.input_name_HR: input_HR}
         return inputs, outputs
 
 
@@ -236,6 +237,7 @@ class LSPredictor(layers.Layer):
 
     def build(self, input_shape):
         dims = input_shape[0][1:]  # ignore batch dim
+        inp_filters = input_shape[0][-1]
         lb_dim = len(input_shape)
 
         if self.predictor == 'simpleRNN':
@@ -333,7 +335,12 @@ class LSPredictor(layers.Layer):
                 strides=1,
                 padding='same',
             )
-            self.output_transf = layers.Identity()
+            self.output_transf = layers.Conv2D(
+                filters=inp_filters,
+                kernel_size=3,
+                strides=1,
+                padding='same',
+                activation=self.activation)
 
     def call(self, inputs):
         x = self.input_transf(inputs)

@@ -2,7 +2,7 @@
 learning_rate = 1e-4
 
 # weight on KL loss
-beta = 1e-4
+beta = 1e-5
 
 # weight on reconstruction loss
 gamma = 1
@@ -11,10 +11,10 @@ gamma = 1
 activation = 'leaky_relu'
 
 # number of filters in conv layers
-filters = 64  # tested: 64
+filters = 16  # tested: 64
 
 # number of down and upsampling convolutions
-num_layers = 4  # tested: 4
+num_layers = 3  # tested: 4
 
 # deterministic mode bypasses the sampling layer and uses the mean
 # only

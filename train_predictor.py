@@ -20,7 +20,7 @@ else:
 
 dmgr_cmems = \
     data_manager_cmems.DataManagerCMEMS(experiment_id=experiment_id,
-                                        testing=False)
+                                        testing=True)
 dmgr_cmems.create_training_data(force_rebuild=False)
 
 dgen_args = {
@@ -38,11 +38,11 @@ dgen_train, dgen_test = \
 
 vae = vae_model.VAE(data_gen=dgen_train)
 vae.build_model("betaVAE")
-
+vae.summary(line_length=80)
 # load existing weights
-# vae_checkpoint = \
-#     'experiments/train_vae/checkpoints/checkpoint.vae.keras'
-# vae.load_weights(vae_checkpoint)
+vae_checkpoint = \
+    'experiments/vae_nl3_filt16_beta1e-5/checkpoints/checkpoint.vae.keras'
+vae.load_weights(vae_checkpoint)
 
 predictor = predictor_model.Predictor(data_gen=dgen_train,
                                       vae_model=vae)
@@ -73,7 +73,7 @@ model_checkpoint_callback = keras.callbacks.ModelCheckpoint(
 
 hist = predictor.fit(
     x=dgen_train,
-    epochs=2,
+    epochs=10,
     validation_data=dgen_test,
     callbacks=[
         analysis_callback,

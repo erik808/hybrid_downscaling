@@ -44,7 +44,7 @@ class Predictor(base_model.BaseModel):
             vae_model.model\
                      .get_layer('skip_output').output
 
-        self.vae_input = vae_model.model.input
+        self.vae_input = vae_model.model.input['HR_data']
 
         self.encoder = keras.Model(
             inputs=encoder_input,

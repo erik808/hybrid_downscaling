@@ -32,7 +32,7 @@ class Hybrid(base_model.BaseModel):
                         .input
 
         self.predictor_input = \
-            predictor_model.model.input
+            predictor_model.model.input['HR_data']
 
         self.predictor_output = \
             predictor_model.model.output['skip_vae_output']

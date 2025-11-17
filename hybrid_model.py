@@ -221,14 +221,8 @@ class Hybrid(base_model.BaseModel):
                 [resnet_result, predictor_result], axis=-1
             )
 
-        out = layers.Conv2D(
-            filters=self.num_vars,
-            kernel_size=9,
-            padding='same',
-            name='hybrid_output_conv',
-            activation='sigmoid')(x)
-
-        out = self.masking(out)
+        # reusing resnet output block
+        out = self.output_block(x)
 
         outputs = {'hybrid': out,
                    'mean': self.ae_mean,

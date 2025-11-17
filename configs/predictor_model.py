@@ -18,9 +18,9 @@ predictor = 'dense'
 
 convlstm_filters = 64
 
-activation = 'leaky_relu'
+activation = 'relu'
 
-kernel_regularizer = None  #{'L2': 1e-2}
+kernel_regularizer = None  # {'L2': 1e-2}
 recurrent_regularizer = None  # {'L2': 1e-2}
-recurrent_dropout = 0.4 # 0.4  # 0.4
-dense_units = 128
+recurrent_dropout = 0.0  # 0.4
+dense_units = 4

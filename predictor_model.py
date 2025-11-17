@@ -191,8 +191,8 @@ class Predictor(base_model.BaseModel):
         timeseries.pop()
 
         # use most recent lookback for reconstruction loss
-        mean, logvar = self.encoder(ops.squeeze(timeseries[-1],
-                                                axis=1))
+        mean, logvar = self.encoder(
+            ops.squeeze(timeseries[-1], axis=1))
         sampled = self.sampler(mean, logvar)
         ae_reconstruction, _ = self.decoder(sampled)
 

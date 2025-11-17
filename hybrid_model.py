@@ -69,8 +69,6 @@ class Hybrid(base_model.BaseModel):
             outputs=self.resnet_output,
             name="output_block",
         )
-        self.output_block.summary(expand_nested=True)
-        breakpoint()
 
         self.resnet_layers.trainable = self.trainable_resnet
         # Only allow disabling of predictor. Enabling would also
@@ -83,22 +81,22 @@ class Hybrid(base_model.BaseModel):
             learning_rate=self.learning_rate)
 
         self.loss_fn = keras.losses.MeanSquaredError()
-        self.loss_KL = predictor_model.loss_KL
-        self.loss_tracker = keras.metrics.Mean(name="loss")
-        self.re_loss_tracker = keras.metrics.Mean(name="reconstruction")
-        self.KL_loss_tracker = keras.metrics.Mean(name="KLloss")
-        self.pred_loss_tracker = keras.metrics.Mean(name="prediction")
-        self.lspred_loss_tracker = keras.metrics.Mean(name="ls_pred")
+        self.loss_fn_KL = predictor_model.loss_KL
+
+        self.trackers = []
+        self.trackers.append(keras.metrics.Mean(name="loss"))
+        if 'reconstruction' in self.loss_list:
+            self.trackers.append(keras.metrics.Mean(name="recon"))
+        if 'KL' in self.loss_list:
+            self.trackers.append(keras.metrics.Mean(name="KL"))
+        if 'outer_pred' in self.loss_list:
+            self.trackers.append(keras.metrics.Mean(name="outer_pred"))
+        if 'inner_pred' in self.loss_list:
+            self.trackers.append(keras.metrics.Mean(name="inner_pred"))
 
     @property
     def metrics(self):
-        return [
-            self.loss_tracker,
-            self.re_loss_tracker,
-            self.KL_loss_tracker,
-            self.pred_loss_tracker,
-            self.lspred_loss_tracker,
-        ]
+        return self.trackers
 
     def create_input(self, inputs):
         return {self.input_name_HR:
@@ -130,12 +128,18 @@ class Hybrid(base_model.BaseModel):
         z_ls_pred = z['ls_pred']
 
         # laten space prediction
-        lspred_loss = self.loss_fn(z_ls_pred, y_ls) * self.alpha_ls
+        if 'inner_pred' in self.loss_list:
+            lspred_loss = self.loss_fn(z_ls_pred, y_ls) * self.alpha_ls
+        else:
+            lspred_loss = 0.0
 
-        z_mean = z['mean']
-        z_logvar = z['logvar']
-        # kl loss variance formulation
-        kl_loss = self.loss_KL(z_mean, z_logvar, beta=self.beta)
+        if 'KL' in self.loss_list:
+            z_mean = z['mean']
+            z_logvar = z['logvar']
+            # kl loss variance formulation
+            kl_loss = self.loss_fn_KL(z_mean, z_logvar, beta=self.beta)
+        else:
+            kl_loss = 0.0
 
         def y_k(k):
             return \
@@ -150,13 +154,16 @@ class Hybrid(base_model.BaseModel):
                                      self.masking.cols,
                                      :]
 
-        if self.trainable_VAE:
+        if 'reconstruction' in self.loss_list:
             re_loss = self.loss_fn(z_ae_recons, y_k(1)) * self.gamma
         else:
             re_loss = 0.0
 
-        # actual prediction
-        pred_loss = self.loss_fn(z_hybrid, y_k(0)) * self.alpha
+        if 'outer_pred' in self.loss_list:
+            # actual prediction
+            pred_loss = self.loss_fn(z_hybrid, y_k(0)) * self.alpha
+        else:
+            pred_loss = 0.0
 
         # total loss
         loss = pred_loss + re_loss + lspred_loss + kl_loss
@@ -173,13 +180,13 @@ class Hybrid(base_model.BaseModel):
         for metric in self.metrics:
             if metric.name == "loss":
                 metric.update_state(loss)
-            if metric.name == "prediction":
+            if metric.name == "outer_pred":
                 metric.update_state(pred_loss)
-            if metric.name == "ls_pred":
+            if metric.name == "inner_pred":
                 metric.update_state(lspred_loss)
-            if metric.name == "reconstruction":
+            if metric.name == "recon":
                 metric.update_state(re_loss)
-            if metric.name == "KLloss":
+            if metric.name == "KL":
                 metric.update_state(kl_loss)
 
         return {m.name: m.result() for m in self.metrics}

@@ -3,6 +3,9 @@
 trainable_resnet = True
 trainable_predictor = True
 
+# select losses to include
+loss_list = ['outer_pred', 'inner_pred', 'reconstruction', 'KL']
+
 # learning rate
 learning_rate = 1e-4
 

@@ -36,7 +36,7 @@ dmgr_cmems.create_training_data(force_rebuild=False)
 dgen_args = {
     'dm': dmgr_cmems,
     'batch_size': 4,
-    'lookback': 3,
+    'lookback': 2,
     'shuffle': True,
     'use_multiprocessing': True,
     'workers': 4,
@@ -48,16 +48,16 @@ dgen_train, dgen_test = \
 
 resnet = resnet_model.ResNet(data_gen=dgen_train)
 resnet.build_model("ResNet")
-resnet.summary()
+resnet.summary(expand_nested=True)
 
 vae = vae_model.VAE(data_gen=dgen_train)
 vae.build_model("betaVAE")
-vae.summary()
+vae.summary(expand_nested=True)
 
 predictor = predictor_model.Predictor(data_gen=dgen_train,
                                       vae_model=vae)
 predictor.build_model("predictor")
-predictor.summary()
+predictor.summary(expand_nested=True)
 
 # create hybrid
 hybrid = hybrid_model.Hybrid(data_gen=dgen_train,
@@ -66,7 +66,7 @@ hybrid = hybrid_model.Hybrid(data_gen=dgen_train,
 
 hybrid.build_model("hybrid")
 hybrid.compile(hybrid.compiler)
-hybrid.summary()
+hybrid.summary(expand_nested=False)
 
 analysis_callback = callbacks.AnalysisHybrid(
     data_gen=dgen_test,

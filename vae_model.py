@@ -124,7 +124,10 @@ class VAE(base_model.BaseModel):
 
         # Downsampling layers
         for i in range(self.num_layers):
-            mult = 2 if i == self.num_layers - 1 else 1
+            # doubling #filters when used for mean and logvar
+            mult = 2 if (i == self.num_layers - 1 and
+                         not self.deterministic_mode) else 1
+
             x = self.conv_downsampling(x, mult)
 
         # Sampling layer

@@ -20,7 +20,7 @@ hyper_params = {
     'num_output_layers' : 2,
     'optimizer' : 'adam',
     'L2_lambda' : 0.0,
-    'kernel_size' : (3,3),
+    'kernel_size' : (3, 3),
     'latent_space_model' : 'VAE',
     'latent_space_dim' : 4,
     'learning_rate' : 0.002,

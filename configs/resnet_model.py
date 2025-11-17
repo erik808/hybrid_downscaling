@@ -8,6 +8,9 @@ residual_blocks = 1
 num_filters = 8
 
 # number of filters for hybridization layer
-num_filters_hybrid = 16
+num_filters_hybrid = 128
+
+# number of output layers
+num_output_layers = 2
 
 # number of necessary upsampling blocks is inferred from LR and HR grids

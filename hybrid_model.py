@@ -26,9 +26,13 @@ class Hybrid(base_model.BaseModel):
         tools.load_config(self, config_name='hybrid_model')
 
         self.resnet_input = resnet_model.model.input['LR_data']
-        self.resnet_output = \
+        self.resnet_output = resnet_model.model.output
+
+        # coupling point where we choose to do the hybridization in
+        # resnet
+        self.resnet_coupling = \
             resnet_model.model\
-                        .get_layer('resnet_output_conv')\
+                        .get_layer('resnet_output_block')\
                         .input
 
         self.predictor_input = \
@@ -48,7 +52,7 @@ class Hybrid(base_model.BaseModel):
 
         self.resnet_layers = keras.Model(
             inputs=self.resnet_input,
-            outputs=self.resnet_output,
+            outputs=self.resnet_coupling,
             name="ResNet_submodel",
         )
 
@@ -59,6 +63,14 @@ class Hybrid(base_model.BaseModel):
             outputs=self.predictor_output,
             name="predictor_submodel",
         )
+
+        self.output_block = keras.Model(
+            inputs=self.resnet_coupling,
+            outputs=self.resnet_output,
+            name="output_block",
+        )
+        self.output_block.summary(expand_nested=True)
+        breakpoint()
 
         self.resnet_layers.trainable = self.trainable_resnet
         # Only allow disabling of predictor. Enabling would also
@@ -210,6 +222,7 @@ class Hybrid(base_model.BaseModel):
             activation='sigmoid')(x)
 
         out = self.masking(out)
+
         outputs = {'hybrid': out,
                    'mean': self.ae_mean,
                    'logvar': self.ae_logvar,

@@ -108,7 +108,7 @@ class ResNet(base_model.BaseModel):
                 scale=2,
             )(y)
 
-        # layer to couple to other models
+        # layers to couple to other models
         y = layers.Conv2D(filters=self.num_filters_hybrid,
                           kernel_size=3,
                           padding='same',
@@ -116,19 +116,74 @@ class ResNet(base_model.BaseModel):
                           activation='relu',
                           )(y)
 
-        outputs = layers.Conv2D(filters=self.num_vars,
-                                kernel_size=9,
-                                padding='same',
-                                name='resnet_output_conv',
-                                # Todo # Different output activations
-                                # should be tested. Output values need
-                                # to be mapped to [0,1].
-                                activation='sigmoid',
-                                )(y)
+        outputs = OutputBlock(
+            num_filters=self.num_filters_hybrid,
+            num_filters_out=self.num_vars,
+            kernel_size=3,
+            kernel_size_out=9,
+            activation='relu',
+            activation_out='sigmoid',
+            padding='same',
+            num_output_layers=self.num_output_layers,
+            name="resnet_output_block",
+        )(y)
 
         # masking
         outputs = self.masking(outputs)
         return {'LR_data': inputs}, outputs
+
+
+class OutputBlock(layers.Layer):
+    def __init__(
+            self,
+            num_filters=64,
+            num_filters_out=9,
+            kernel_size=3,
+            kernel_size_out=9,
+            activation='relu',
+            activation_out='sigmoid',
+            padding='same',
+            num_output_layers=2,
+            **kwargs,
+    ):
+        super().__init__(**kwargs)
+        self.num_output_layers = num_output_layers
+        self.num_filters = num_filters
+        self.num_filters_out = num_filters_out
+        self.kernel_size = kernel_size
+        self.kernel_size_out = kernel_size_out
+        self.activation = activation
+        self.activation_out = activation_out
+        self.padding = padding
+
+    def build(self, input_shape):
+        self.layers = []
+        for i in range(self.num_output_layers):
+            self.layers.append(
+                layers.Conv2D(filters=self.num_filters,
+                              kernel_size=self.kernel_size,
+                              padding=self.padding,
+                              name='l' + str(i),
+                              activation=self.activation,
+                              )
+            )
+
+        self.output_conv = layers.Conv2D(
+            filters=self.num_filters_out,
+            kernel_size=self.kernel_size_out,
+            padding=self.padding,
+            name='output_block_last',
+            # Todo # Different output activations
+            # should be tested. Output values need
+            # to be mapped to [0,1].
+            activation=self.activation_out,
+        )
+
+    def call(self, inputs):
+        for layer in self.layers:
+            inputs = layer(inputs)
+
+        return self.output_conv(inputs)
 
 
 class InputTransform(layers.Layer):

@@ -8,7 +8,7 @@ trainable_predictor = True
 loss_list = ['outer_pred']
 
 # learning rate
-learning_rate = 2e-3
+learning_rate = 1e-4
 
 # weight on outer prediction loss
 alpha = 1

@@ -36,7 +36,7 @@ dmgr_cmems.create_training_data(force_rebuild=False)
 dgen_args = {
     'dm': dmgr_cmems,
     'batch_size': 4,
-    'lookback': 2,
+    'lookback': 3,
     'shuffle': True,
     'use_multiprocessing': True,
     'workers': 4,
@@ -78,7 +78,7 @@ analysis_callback = callbacks.AnalysisHybrid(
 
 hist = hybrid.fit(
     x=dgen_train,
-    epochs=20,
+    epochs=10,
     validation_data=dgen_test,
     callbacks=[
         analysis_callback,

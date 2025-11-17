@@ -27,9 +27,10 @@ class Predictor(base_model.BaseModel):
         tools.load_config(self, config_name='predictor_model')
 
         # get input and output layers to isolate encoder+decoder
-        mean, logsigma = \
+        mean, lvar =\
             vae_model.model\
                      .get_layer('vae_splitter').output
+
         sampled = \
             vae_model.model\
                      .get_layer('vae_sampling').output
@@ -48,7 +49,7 @@ class Predictor(base_model.BaseModel):
 
         self.encoder = keras.Model(
             inputs=encoder_input,
-            outputs=[mean, logsigma],
+            outputs=[mean, lvar],
             name="encoder",
         )
         self.encoder.build(encoder_input.shape)

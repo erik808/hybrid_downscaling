@@ -131,12 +131,14 @@ class VAE(base_model.BaseModel):
             x = self.conv_downsampling(x, mult)
 
         # Sampling layer
-        if not self.deterministic_mode:
-            mean, logvar = Split(name="vae_splitter")(x)
-            x = Sampling(name="vae_sampling")(mean, logvar)
-        else:
-            mean = x
-            logvar = x
+        mean, logvar = Split(
+            name="vae_splitter",
+            bypass=self.deterministic_mode
+        )(x)
+        x = Sampling(
+            name="vae_sampling",
+            bypass=self.deterministic_mode
+        )(mean, logvar)
 
         # Upsampling layers
         y = x
@@ -202,11 +204,19 @@ class Split(layers.Layer):
     Split layer (wrapping ops call as a layer)
     """
 
-    def __init__(self, **kwargs):
+    def __init__(
+            self,
+            bypass=False,
+            **kwargs
+    ):
         super().__init__(**kwargs)
+        self.bypass = bypass
 
     def call(self, x):
-        return ops.split(x, 2, axis=-1)
+        if not self.bypass:
+            return ops.split(x, 2, axis=-1)
+        else:
+            return (x, x)
 
 
 class Sampling(layers.Layer):
@@ -214,12 +224,20 @@ class Sampling(layers.Layer):
     Sampling layer, Gaussian, logvar formulation
     """
 
-    def __init__(self, **kwargs):
+    def __init__(
+            self,
+            bypass=False,
+            **kwargs,
+    ):
         super().__init__(**kwargs)
+        self.bypass = bypass
 
     def call(self, mean, log_var):
-        eps = keras.random.normal(
-            shape=ops.shape(mean)
-        )
-        out = mean + ops.exp(0.5 * log_var) * eps
+        if not self.bypass:
+            eps = keras.random.normal(
+                shape=ops.shape(mean)
+            )
+            out = mean + ops.exp(0.5 * log_var) * eps
+        else:
+            out = mean
         return out

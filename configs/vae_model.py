@@ -18,4 +18,4 @@ num_layers = 1  # tested: 4
 
 # deterministic mode bypasses the sampling layer and uses the mean
 # only
-deterministic_mode = False
+deterministic_mode = True

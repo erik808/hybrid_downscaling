@@ -75,7 +75,7 @@ analysis_callback = callbacks.AnalysisHybrid(
         'timestepping_spectrum',
     ]
 )
-breakpoint()
+
 hist = hybrid.fit(
     x=dgen_train,
     epochs=20,

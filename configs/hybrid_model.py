@@ -4,15 +4,16 @@ trainable_resnet = True
 trainable_predictor = True
 
 # select losses to include
-loss_list = ['outer_pred', 'inner_pred', 'reconstruction', 'KL']
+# loss_list = ['outer_pred', 'inner_pred', 'reconstruction', 'KL']
+loss_list = ['outer_pred']
 
 # learning rate
-learning_rate = 1e-4
+learning_rate = 2e-3
 
-# weight on prediction loss
+# weight on outer prediction loss
 alpha = 1
 
-# weight on prediction loss in the latent space
+# weight on prediction loss in the latent space (inner prediction)
 alpha_ls = 1
 
 # weight on VAE KL loss
@@ -23,6 +24,3 @@ gamma = 1
 
 # hybridization: 'product', 'concat', 'add'
 hybridization = 'product'
-
-# activation after hybridization
-activation = 'leaky_relu'

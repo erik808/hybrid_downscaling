@@ -109,26 +109,19 @@ class Hybrid(base_model.BaseModel):
         if training:
             self.zero_grad()
 
-        y_ls = \
-            self.encoder(
-                ops.nan_to_num(
-                    ops.squeeze(
-                        y[self.input_name_HR][:,
-                                              0,  # target lookback index
-                                              ...],
-                        axis=1)))[0]  # use only the mean
-
         z = self.model(self.create_input(x), training=training)
 
-        z_hybrid = z['hybrid'][:,
-                               self.masking.rows,
-                               self.masking.cols,
-                               :]
-
-        z_ls_pred = z['ls_pred']
-
-        # laten space prediction
+        # latent space prediction
         if 'inner_pred' in self.loss_list:
+            z_ls_pred = z['ls_pred']
+            y_ls = \
+                self.encoder(
+                    ops.nan_to_num(
+                        ops.squeeze(
+                            y[self.input_name_HR][:,
+                                                  0,  # target lookback index
+                                                  ...],
+                            axis=1)))[0]  # use only the mean
             lspred_loss = self.loss_fn(z_ls_pred, y_ls) * self.alpha_ls
         else:
             lspred_loss = 0.0
@@ -149,17 +142,20 @@ class Hybrid(base_model.BaseModel):
                                       self.masking.cols,
                                       :]
 
-        z_ae_recons = z['ae_recons'][:,
-                                     self.masking.rows,
-                                     self.masking.cols,
-                                     :]
-
         if 'reconstruction' in self.loss_list:
+            z_ae_recons = z['ae_recons'][:,
+                                         self.masking.rows,
+                                         self.masking.cols,
+                                         :]
             re_loss = self.loss_fn(z_ae_recons, y_k(1)) * self.gamma
         else:
             re_loss = 0.0
 
         if 'outer_pred' in self.loss_list:
+            z_hybrid = z['hybrid'][:,
+                                   self.masking.rows,
+                                   self.masking.cols,
+                                   :]
             # actual prediction
             pred_loss = self.loss_fn(z_hybrid, y_k(0)) * self.alpha
         else:

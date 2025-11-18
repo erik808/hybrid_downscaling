@@ -34,9 +34,9 @@ lon_crop = slice(0, -1)
 
 # Coarsening
 # parameters for Gaussian filter
-sigma = [1, 1.5, 1.5]
+sigma = [2, 2, 2]
 # coarsening factor for latitude and longitude
-coarsening_factor = 4
+coarsening_factor = 32
 # file manip
 coarse_data_prefix = \
     (f"data_LR_r{coarsening_factor}_sigm"

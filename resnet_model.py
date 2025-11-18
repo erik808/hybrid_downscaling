@@ -163,9 +163,9 @@ class OutputBlock(layers.Layer):
         self.padding = padding
 
     def build(self, input_shape):
-        self.layers = []
+        self.lrs = []
         for i in range(self.num_output_layers):
-            self.layers.append(
+            self.lrs.append(
                 layers.Conv2D(filters=self.num_filters,
                               kernel_size=self.kernel_size,
                               padding=self.padding,
@@ -173,7 +173,7 @@ class OutputBlock(layers.Layer):
                               activation=None,
                               )
             )
-            self.layers.append(Activation(self.activation))
+            self.lrs.append(Activation(self.activation))
 
         self.output_conv = layers.Conv2D(
             filters=self.num_filters_out,
@@ -187,9 +187,8 @@ class OutputBlock(layers.Layer):
         )
 
     def call(self, inputs):
-        for layer in self.layers:
+        for layer in self.lrs:
             inputs = layer(inputs)
-
         return self.output_conv(inputs)
 
 

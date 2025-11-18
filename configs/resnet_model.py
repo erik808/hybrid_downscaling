@@ -13,7 +13,8 @@ num_filters = 4
 # number of filters for hybridization layer
 num_filters_hybrid = 128
 
-# number of output layers
-num_output_layers = 2
+# number of additional layers in output block (not including output
+# sigmoid)
+num_output_layers = 0
 
 # number of necessary upsampling blocks is inferred from LR and HR grids

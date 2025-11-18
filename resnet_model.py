@@ -79,8 +79,11 @@ class ResNet(base_model.BaseModel):
                 axis=1)[0],
             axis=1)  # squeeze only axis=1 to support batch_size=1
 
-        y = InputTransform(filters=self.num_filters,
-                           kernel_size=9)(input_k)
+        y = InputTransform(
+            filters=self.num_filters,
+            kernel_size=9,
+            activation=self.activation,
+        )(input_k)
 
         skip = y
 
@@ -89,6 +92,7 @@ class ResNet(base_model.BaseModel):
             y = ResidualBlock(
                 filters=self.num_filters,
                 kernel_size=3,
+                activation=self.activation,
             )(y)
 
         # Conv - BN - Add
@@ -105,6 +109,7 @@ class ResNet(base_model.BaseModel):
             y = SubPixelConv(
                 filters_out=self.num_filters,
                 kernel_size=3,
+                activation=self.activation,
                 scale=2,
             )(y)
 
@@ -115,13 +120,14 @@ class ResNet(base_model.BaseModel):
                           name='hybrid_coupling',
                           activation=None,
                           )(y)
-        y = layers.PReLU()(y)
+        y = Activation(self.activation)(y)
 
         outputs = OutputBlock(
             num_filters=self.num_filters_hybrid,
             num_filters_out=self.num_vars,
             kernel_size=3,
             kernel_size_out=9,
+            activation=self.activation,
             activation_out='sigmoid',
             padding='same',
             num_output_layers=self.num_output_layers,
@@ -140,6 +146,7 @@ class OutputBlock(layers.Layer):
             num_filters_out=9,
             kernel_size=3,
             kernel_size_out=9,
+            activation='prelu',
             activation_out='sigmoid',
             padding='same',
             num_output_layers=2,
@@ -151,6 +158,7 @@ class OutputBlock(layers.Layer):
         self.num_filters_out = num_filters_out
         self.kernel_size = kernel_size
         self.kernel_size_out = kernel_size_out
+        self.activation = activation
         self.activation_out = activation_out
         self.padding = padding
 
@@ -165,7 +173,7 @@ class OutputBlock(layers.Layer):
                               activation=None,
                               )
             )
-            self.layers.append(layers.PReLU())
+            self.layers.append(Activation(self.activation))
 
         self.output_conv = layers.Conv2D(
             filters=self.num_filters_out,
@@ -190,11 +198,13 @@ class InputTransform(layers.Layer):
             self,
             filters,
             kernel_size,
+            activation='prelu',
             **kwargs,
     ):
         super().__init__(**kwargs)
         self.filters = filters
         self.kernel_size = kernel_size
+        self.activation = activation
 
     def build(self, input_shape):
         self.conv = layers.Conv2D(filters=self.filters,
@@ -202,7 +212,7 @@ class InputTransform(layers.Layer):
                                   padding='same',
                                   activation=None,
                                   )
-        self.actv = layers.PReLU()
+        self.actv = Activation(self.activation)
 
     def call(self, inputs):
         x = self.conv(inputs)
@@ -215,11 +225,13 @@ class ResidualBlock(layers.Layer):
             self,
             filters,
             kernel_size,
+            activation='prelu',
             **kwargs,
     ):
         super().__init__(**kwargs)
         self.filters = filters
         self.kernel_size = kernel_size
+        self.activation = activation
 
     def build(self, input_shape):
         self.conv2d_1 = layers.Conv2D(filters=self.filters,
@@ -228,14 +240,14 @@ class ResidualBlock(layers.Layer):
                                       activation=None,
                                       )
         self.BN_1 = layers.BatchNormalization()
-        self.actv_1 = layers.PReLU()
+        self.actv_1 = Activation(self.activation)
         self.conv2d_2 = layers.Conv2D(filters=self.filters,
                                       kernel_size=self.kernel_size,
                                       padding='same',
                                       activation=None,
                                       )
         self.BN_2 = layers.BatchNormalization()
-        self.actv_2 = layers.PReLU()
+        self.actv_2 = Activation(self.activation)
         self.add = layers.Add()
 
     def call(self, inputs):
@@ -255,8 +267,8 @@ class SubPixelConv(layers.Layer):
             self,
             filters_out,
             kernel_size,
-            scale,
             activation='prelu',
+            scale=2,
             **kwargs,
     ):
         super().__init__(**kwargs)
@@ -280,10 +292,7 @@ class SubPixelConv(layers.Layer):
         self.reshape2 = layers.Reshape(
             (M * self.scale, N * self.scale, self.filters_out))
 
-        if self.activation == 'prelu':
-            self.actv = layers.PReLU()
-        else:
-            self.actv = layers.Activation(self.activation)
+        self.actv = Activation(self.activation)
 
     def call(self, inputs):
         s = self.conv2d(inputs)
@@ -291,3 +300,22 @@ class SubPixelConv(layers.Layer):
         s = self.permute(s)
         s = self.reshape2(s)
         return self.actv(s)
+
+
+class Activation(layers.Layer):
+    def __init__(
+            self,
+            activation,
+            **kwargs,
+    ):
+        super().__init__(**kwargs)
+        self.activation = activation
+
+    def build(self, input_shape):
+        if self.activation == 'prelu':
+            self.actv_lr = layers.PReLU()
+        else:
+            self.actv = layers.Activation(self.activation)
+
+    def call(self, inputs):
+        return self.actv(inputs)

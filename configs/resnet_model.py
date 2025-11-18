@@ -1,6 +1,9 @@
 # learning rate in Adam optimizer
 learning_rate = 2e-3
 
+# activation function  (except output sigmoid)
+activation = 'leaky_relu'
+
 # number of residual blocks
 residual_blocks = 1
 

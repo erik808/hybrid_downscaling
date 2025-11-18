@@ -41,8 +41,8 @@ resnet = resnet_model.ResNet(data_gen=dgen_train)
 resnet.build_model("ResNet")
 resnet.summary()
 resnet.compile(resnet.compiler)
-# resnet_checkpoint = 'models/resnet/checkpoint.resnet.keras'
-# resnet.load_weights(resnet_checkpoint)
+# resnet_checkpoint = 'models/resnet/b1f4fh128o2/checkpoint.resnet.keras'
+# resnet.load_weights(resnet_checkpoint, skip_mismatch=True)
 
 analysis_callback = callbacks.AnalysisResNet(data_gen=dgen_test,
                                              plot=[

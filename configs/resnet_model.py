@@ -2,7 +2,7 @@
 learning_rate = 2e-3
 
 # activation function  (except output sigmoid)
-activation = 'leaky_relu'
+activation = 'relu'
 
 # number of residual blocks
 residual_blocks = 1
@@ -11,7 +11,7 @@ residual_blocks = 1
 num_filters = 4
 
 # number of filters for hybridization layer
-num_filters_hybrid = 128
+num_filters_hybrid = 64
 
 # number of additional layers in output block (not including output
 # sigmoid)

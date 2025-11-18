@@ -18,7 +18,7 @@ predictor = 'simpleRNN'
 
 convlstm_filters = 64
 
-activation = 'relu'
+activation = 'leaky_relu'
 
 kernel_regularizer = None  # {'L2': 1e-2}
 recurrent_regularizer = None  # {'L2': 1e-2}

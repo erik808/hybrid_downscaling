@@ -113,15 +113,15 @@ class ResNet(base_model.BaseModel):
                           kernel_size=3,
                           padding='same',
                           name='hybrid_coupling',
-                          activation='relu',
+                          activation=None,
                           )(y)
+        y = layers.PReLU()(y)
 
         outputs = OutputBlock(
             num_filters=self.num_filters_hybrid,
             num_filters_out=self.num_vars,
             kernel_size=3,
             kernel_size_out=9,
-            activation='relu',
             activation_out='sigmoid',
             padding='same',
             num_output_layers=self.num_output_layers,
@@ -140,7 +140,6 @@ class OutputBlock(layers.Layer):
             num_filters_out=9,
             kernel_size=3,
             kernel_size_out=9,
-            activation='relu',
             activation_out='sigmoid',
             padding='same',
             num_output_layers=2,
@@ -152,7 +151,6 @@ class OutputBlock(layers.Layer):
         self.num_filters_out = num_filters_out
         self.kernel_size = kernel_size
         self.kernel_size_out = kernel_size_out
-        self.activation = activation
         self.activation_out = activation_out
         self.padding = padding
 
@@ -164,9 +162,10 @@ class OutputBlock(layers.Layer):
                               kernel_size=self.kernel_size,
                               padding=self.padding,
                               name='l' + str(i),
-                              activation=self.activation,
+                              activation=None,
                               )
             )
+            self.layers.append(layers.PReLU())
 
         self.output_conv = layers.Conv2D(
             filters=self.num_filters_out,

@@ -43,7 +43,7 @@ class Predictor(base_model.BaseModel):
 
         decoder_skip_output = \
             vae_model.model\
-                     .get_layer('skip_output').output
+                     .get_layer('vae_hybrid_coupling').output
 
         self.vae_input = vae_model.model.input['HR_data']
 
@@ -293,6 +293,7 @@ class LSPredictor(layers.Layer):
 
         elif self.predictor == 'conv3d':
             self.input_transf = Stack()
+
             self.predictmod = keras.Sequential([
                 layers.Conv3D(
                     filters=256,
@@ -304,15 +305,15 @@ class LSPredictor(layers.Layer):
                 ),
                 layers.Conv3D(
                     filters=128,
-                    kernel_size=(lb_dim, 2, 2),
+                    kernel_size=(lb_dim, 3, 3),
                     strides=1,
                     padding='same',
                     activation=self.activation,
                     kernel_regularizer=self.kernel_regularizer,
                 ),
                 layers.Conv3D(
-                    filters=dims[-1],
-                    kernel_size=(lb_dim, 2, 2),
+                    filters=self.output_filters,
+                    kernel_size=(lb_dim, 3, 3),
                     strides=1,
                     padding='same',
                     activation=self.activation,
@@ -336,11 +337,16 @@ class LSPredictor(layers.Layer):
                 padding='same',
             )
             self.output_transf = layers.Conv2D(
-                filters=dims[-1],
+                filters=self.output_filters,
                 kernel_size=3,
                 strides=1,
                 padding='same',
                 activation=self.activation)
+
+        elif self.predictor == 'identity':
+            self.input_transf = Last()
+            self.predictmod = layers.Identity()
+            self.output_transf = layers.Identity()
 
         else:
             raise Exception("Invalid predictor")
@@ -358,6 +364,14 @@ class Stack(layers.Layer):
 
     def call(self, x):
         return ops.stack(x, axis=1)
+
+
+class Last(layers.Layer):
+    def __init__(self, **kwargs):
+        super().__init__(**kwargs)
+
+    def call(self, x):
+        return x[-1]
 
 
 class Squeeze(layers.Layer):

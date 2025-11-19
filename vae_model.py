@@ -30,6 +30,9 @@ class VAE(base_model.BaseModel):
         self.re_loss_tracker = keras.metrics.Mean(name="recons")
         self.KL_loss_tracker = keras.metrics.Mean(name="KLloss")
 
+        # disable layers when bypass enabled
+        self.num_layers = 0 if self.bypass_vae else self.num_layers
+
     @property
     def metrics(self):
         return [
@@ -51,7 +54,6 @@ class VAE(base_model.BaseModel):
         z_decoded = z['decoded']
         z_mean = z['mean']
         z_logvar = z['logvar']
-
         # compute reconstruction loss
         z_decoded = z_decoded[:,
                               self.masking.rows,
@@ -113,10 +115,11 @@ class VAE(base_model.BaseModel):
 
         # Input transform
         x = layers.Conv2D(
-            filters=32,
+            filters=self.input_filters,
             strides=1,
-            kernel_size=9,
+            kernel_size=3,
             padding='same',
+            kernel_initializer="glorot_uniform",
             activation=None,
             name='vae_input_transform',
         )(input_k)
@@ -129,6 +132,9 @@ class VAE(base_model.BaseModel):
                          not self.deterministic_mode) else 1
 
             x = self.conv_downsampling(x, mult)
+
+        if self.bypass_vae:
+            x = layers.Identity(name='vae_input_transform')(input_k)
 
         # Sampling layer
         mean, logvar = Split(
@@ -145,24 +151,34 @@ class VAE(base_model.BaseModel):
         for i in range(self.num_layers):
             y = self.conv_upsampling(y)
 
-        # connection to skip the output convolution
-        skip_output = layers.Identity(name='skip_output')(y)
+        # layer to couple to other models
+        y = layers.Conv2D(filters=self.num_filters_hybrid,
+                          kernel_size=3,
+                          padding='same',
+                          name='vae_hybrid_coupling',
+                          activation=None,
+                          )(y)
+        y = self.create_activation(y)
 
         # output transform
-        y = layers.Conv2D(
+        z = layers.Conv2D(
             filters=self.num_vars,
-            kernel_size=9,
+            kernel_size=3,
             padding='same',
+            kernel_initializer="glorot_uniform",
             name='vae_output_conv',
-            activation='sigmoid')(y)
+            activation=None)(y)
+        z = self.create_activation(z, 'out')
+
+        if self.bypass_vae:
+            z = layers.Identity(name='vae_output_conv')(y)
 
         # activation and masking
-        z = self.masking(y)
+        z = self.masking(z)
 
         outputs = {'decoded': z,
                    'mean': mean,
                    'logvar': logvar,
-                   'skip_output': skip_output,
                    }
         inputs = {self.input_name_HR: inputs}
         return inputs, outputs
@@ -192,11 +208,9 @@ class VAE(base_model.BaseModel):
             activation=self.activation
         )(inputs)
 
-    def create_activation(self, inputs):
-        if self.activation == 'prelu':
-            return layers.PReLU()(inputs)
-        else:
-            return layers.Activation(self.activation)(inputs)
+    def create_activation(self, inputs, mode='normal'):
+        activation = self.activation_out if mode == 'out' else self.activation
+        return base_model.Activation(activation)(inputs)
 
 
 class Split(layers.Layer):

@@ -19,9 +19,11 @@ class DataManagerCMEMS(data_manager_base.DataManagerBase):
             self,
             experiment_id="test",
             testing=False,
+            force_rebuild=False,
     ):
         super().__init__()
         tools.load_config(self, config_name='data_config_cmems')
+        self.force_rebuild = force_rebuild
         self.dirs, self.files = self.setup_directories(
             experiment_id=experiment_id)
 
@@ -36,11 +38,11 @@ class DataManagerCMEMS(data_manager_base.DataManagerBase):
         # create_training_data needs to be called
         self.ready = False
 
-    def create_training_data(self, force_rebuild=False):
+    def create_training_data(self):
         print('load HR data')
         self.load_HR_data()
         print('load LR data')
-        self.load_LR_data(force_rebuild=force_rebuild)
+        self.load_LR_data(force_rebuild=self.force_rebuild)
         self.create_ranges()
         self.ready = True
 
@@ -78,8 +80,7 @@ class DataManagerCMEMS(data_manager_base.DataManagerBase):
         return coords
 
     def load_HR_data(self):
-        self.ds_HR = xr.open_zarr(self.data_files,
-                                  consolidated=True)
+        self.ds_HR = xr.open_zarr(self.data_files, consolidated=True)
         self.ds_HR = self.process_ds(self.ds_HR)
 
     def load_LR_data(self, force_rebuild=False):
@@ -130,6 +131,7 @@ class DataManagerCMEMS(data_manager_base.DataManagerBase):
             with ProgressBar():
                 self.ds_LR.to_zarr(self.coarse_data_file,
                                    encoding=encoding,
+                                   consolidated=True,
                                    mode='w')
 
         return self.ds_LR
@@ -154,8 +156,8 @@ class DataManagerCMEMS(data_manager_base.DataManagerBase):
 
     def load_scalers(self):
         self.scalers = None
-        if not os.path.exists(self.scalers_file):
-            print('No scalers available')
+        if not os.path.exists(self.scalers_file) or self.force_rebuild:
+            print('Creating scalers')
             self.create_scalers(export=True)
 
         with open(self.scalers_file, 'rb') as file:

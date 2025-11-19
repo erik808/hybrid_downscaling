@@ -1,14 +1,18 @@
 # learning rate in Adam optimizer
-learning_rate = 2e-3
+learning_rate = 1e-4
+
+# upsampling method: 'subpixel', 'bilinear'
+upsampling_method = 'bilinear'
 
 # activation function  (except output sigmoid)
-activation = 'relu'
+activation = 'prelu'
+activation_out = 'tanh_scaled'
 
 # number of residual blocks
-residual_blocks = 1
+residual_blocks = 6
 
 # standard number of filters
-num_filters = 4
+num_filters = 64
 
 # number of filters for hybridization layer
 num_filters_hybrid = 64

@@ -20,7 +20,7 @@ class ResNet(base_model.BaseModel):
 
         tools.load_config(self, config_name='resnet_model')
 
-        self.sub_pixel_blocks = int(np.log2(self.coarsening_factor))
+        self.upsampling_blocks = int(np.log2(self.coarsening_factor))
 
         self.compiler = keras.optimizers.Adam(
             learning_rate=self.learning_rate)
@@ -105,13 +105,24 @@ class ResNet(base_model.BaseModel):
         y = layers.Add()([y, skip])
 
         # subpixel convolutions
-        for sp_block in range(self.sub_pixel_blocks):
-            y = SubPixelConv(
-                filters_out=self.num_filters,
-                kernel_size=3,
-                activation=self.activation,
-                scale=2,
-            )(y)
+        for ups_block in range(self.upsampling_blocks):
+            if self.upsampling_method == 'subpixel':
+                y = SubPixelConv(
+                    filters_out=self.num_filters,
+                    kernel_size=3,
+                    activation=self.activation,
+                    scale=2,
+                )(y)
+            elif self.upsampling_method == 'bilinear':
+                y = UpSampling(
+                    filters=self.num_filters,
+                    kernel_size=3,
+                    activation=self.activation,
+                    scale=2,
+                    method='bilinear'
+                )(y)
+            else:
+                raise Exception('invalid upsampling method')
 
         # layers to couple to other models
         y = layers.Conv2D(filters=self.num_filters_hybrid,
@@ -120,7 +131,8 @@ class ResNet(base_model.BaseModel):
                           name='hybrid_coupling',
                           activation=None,
                           )(y)
-        y = base_model.Activation(self.activation)(y)
+        y = base_model.Activation(self.activation,
+                                  name='hybrid_coupling_actv')(y)
 
         outputs = OutputBlock(
             num_filters=self.num_filters_hybrid,
@@ -307,4 +319,41 @@ class SubPixelConv(layers.Layer):
         s = self.reshape1(s)
         s = self.permute(s)
         s = self.reshape2(s)
+        return self.actv(s)
+
+
+class UpSampling(layers.Layer):
+    def __init__(
+            self,
+            filters,
+            kernel_size,
+            activation='prelu',
+            method='bilinear',
+            scale=2,
+            **kwargs,
+    ):
+        super().__init__(**kwargs)
+        self.filters = filters
+        self.kernel_size = kernel_size
+        self.scale = scale
+        self.method = method
+        self.activation = activation
+
+    def build(self, input_shape):
+        _, M, N, C = input_shape
+
+        self.upsample = layers.UpSampling2D(
+            size=(self.scale, self.scale),
+            interpolation=self.method)
+        self.conv2d = layers.Conv2D(
+            filters=self.filters,
+            kernel_size=self.kernel_size,
+            padding='same',
+            activation=None,
+        )
+        self.actv = base_model.Activation(self.activation)
+
+    def call(self, inputs):
+        s = self.upsample(inputs)
+        s = self.conv2d(s)
         return self.actv(s)

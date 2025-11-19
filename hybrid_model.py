@@ -8,6 +8,7 @@ import tools
 import base_model
 import resnet_model as rm
 import predictor_model as pm
+import matplotlib.pyplot as plt
 
 importlib.reload(base_model)
 importlib.reload(rm)
@@ -21,19 +22,22 @@ class Hybrid(base_model.BaseModel):
             predictor_model,
             **kwargs,
     ):
-
         super().__init__(**kwargs)
         tools.load_config(self, config_name='hybrid_model')
 
         self.resnet_input = resnet_model.model.input['LR_data']
         self.resnet_output = resnet_model.model.output
 
+        plt.switch_backend('qtagg')
+
+        plt.close('all')
+
         # coupling point where we choose to do the hybridization in
         # resnet
         self.resnet_coupling = \
             resnet_model.model\
-                        .get_layer('resnet_output_block')\
-                        .input
+                        .get_layer('hybrid_coupling')\
+                        .output
 
         self.predictor_input = \
             predictor_model.model.input['HR_data']
@@ -161,6 +165,47 @@ class Hybrid(base_model.BaseModel):
         else:
             pred_loss = 0.0
 
+        if False:
+            ztest_hybrid = z['hybrid'][0, ..., 0].cpu().detach().numpy()
+            ztest_resnet = z['resnet'][0, ..., 0].cpu().detach().numpy()
+            ztest_predictor = z['predictor'][0, ..., 0].cpu().detach().numpy()
+            ztest_comb = z['combination'][0, ..., 0].cpu().detach().numpy()
+            xtest = x['HR_data'][0, 0, ..., 0].cpu().detach().numpy()
+            dtest = ztest_hybrid - xtest
+            self.nanmask = ops.not_equal(self.masking.mask, 0.0)
+            self.nanmask = \
+                (self.masking.mask /
+                 ops.cast(self.nanmask, self.masking.mask.dtype)
+                 )
+            self.nanmask = self.nanmask[..., 0].cpu().detach().numpy()
+            plt.clf()
+            plt.subplot(3, 3, 1)
+            a = plt.pcolormesh(ztest_hybrid * self.nanmask)
+            plt.colorbar(a)
+            plt.subplot(3, 3, 2)
+            a = plt.pcolormesh(ztest_resnet * self.nanmask)
+            plt.colorbar(a)
+            plt.subplot(3, 3, 3)
+            a = plt.pcolormesh(ztest_predictor * self.nanmask)
+            plt.colorbar(a)
+            plt.subplot(3, 3, 4)
+            a = plt.pcolormesh(xtest)  # , vmin=0, vmax=1)
+            plt.colorbar(a)
+            plt.subplot(3, 3, 5)
+            a = plt.pcolormesh(ztest_comb * self.nanmask)
+            plt.colorbar(a)
+            plt.subplot(3, 3, 7)
+            a = plt.pcolormesh(dtest)
+            plt.colorbar(a)
+            plt.pause(0.1)
+
+        # denselr = self.model.\
+        #     get_layer('encoder').\
+        #     get_layer('vae_input_transform')
+
+        # print(denselr.get_weights())
+        # breakpoint()
+
         # total loss
         loss = pred_loss + re_loss + lspred_loss + kl_loss
 
@@ -197,8 +242,12 @@ class Hybrid(base_model.BaseModel):
         # reusing resnet input
         input_LR = self.resnet_input
 
-        resnet_result = self.resnet_layers(input_LR)
-        predictor_result = self.predictor_layers(input_HR)
+        resnet_result = \
+            base_model.Activation('linear')(
+                self.resnet_layers(input_LR))
+        predictor_result = \
+            base_model.Activation('linear')(
+                self.predictor_layers(input_HR))
 
         assert resnet_result.shape[1:-1] == predictor_result.shape[1:-1], \
             "resnet and predictor have different rows/cols"
@@ -213,18 +262,27 @@ class Hybrid(base_model.BaseModel):
                 "resnet and predictor have different #filters"
             x = layers.Add()([resnet_result, predictor_result])
         elif self.hybridization == 'concat':
-            x = layers.Concatenate()(
-                [resnet_result, predictor_result], axis=-1
-            )
+            x = layers.Concatenate(axis=-1)(
+                [resnet_result, predictor_result])
+        elif self.hybridization == 'predictor':
+            x = predictor_result
+        else:
+            raise Exception('invalid hybridization parameter')
 
-        # reusing resnet output block
+        # reusing resnet output bplock
+        x = layers.BatchNormalization()(x)
+        x = base_model.Activation('leaky_relu')(x)
         out = self.output_block(x)
 
         outputs = {'hybrid': out,
+                   'resnet': resnet_result,
+                   'predictor': predictor_result,
+                   'combination': x,
                    'mean': self.ae_mean,
                    'logvar': self.ae_logvar,
                    'ae_recons': self.ae_recons,
                    'ls_pred': self.ls_pred,
+
                    }
 
         inputs = {self.input_name_HR: input_HR,

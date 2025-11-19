@@ -14,11 +14,13 @@ gamma = 1
 
 # model that does the actual prediction in the latent space
 # options: 'simpleRNN', 'dense', 'lstm', 'conv3d', 'convlstm'
-predictor = 'dense'
+predictor = 'identity'
+
+output_filters = 64
 
 convlstm_filters = 64
 
-activation = 'relu'
+activation = 'leaky_relu'
 
 kernel_regularizer = None  # {'L2': 1e-2}
 recurrent_regularizer = None  # {'L2': 1e-2}

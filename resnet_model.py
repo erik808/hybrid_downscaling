@@ -120,7 +120,7 @@ class ResNet(base_model.BaseModel):
                           name='hybrid_coupling',
                           activation=None,
                           )(y)
-        y = Activation(self.activation)(y)
+        y = base_model.Activation(self.activation)(y)
 
         outputs = OutputBlock(
             num_filters=self.num_filters_hybrid,
@@ -128,10 +128,11 @@ class ResNet(base_model.BaseModel):
             kernel_size=3,
             kernel_size_out=9,
             activation=self.activation,
-            activation_out='sigmoid',
+            activation_out=self.activation_out,
             padding='same',
             num_output_layers=self.num_output_layers,
             name="resnet_output_block",
+            bypass=False,
         )(y)
 
         # masking
@@ -150,6 +151,7 @@ class OutputBlock(layers.Layer):
             activation_out='sigmoid',
             padding='same',
             num_output_layers=2,
+            bypass=False,
             **kwargs,
     ):
         super().__init__(**kwargs)
@@ -161,6 +163,8 @@ class OutputBlock(layers.Layer):
         self.activation = activation
         self.activation_out = activation_out
         self.padding = padding
+        self.bypass = bypass
+        self.num_output_layers = 0 if self.bypass else self.num_output_layers
 
     def build(self, input_shape):
         self.lrs = []
@@ -173,23 +177,28 @@ class OutputBlock(layers.Layer):
                               activation=None,
                               )
             )
-            self.lrs.append(Activation(self.activation))
+            self.lrs.append(base_model.Activation(self.activation))
 
         self.output_conv = layers.Conv2D(
             filters=self.num_filters_out,
             kernel_size=self.kernel_size_out,
             padding=self.padding,
             name='output_block_last',
-            # Todo # Different output activations
-            # should be tested. Output values need
-            # to be mapped to [0,1].
-            activation=self.activation_out,
         )
+
+        # Todo # Different output activations
+        # should be tested. Output values need
+        # to be mapped to [0,1].
+        self.output_actv = base_model.Activation(self.activation_out)
+
+        if self.bypass:
+            self.output_conv = layers.Identity()
 
     def call(self, inputs):
         for layer in self.lrs:
             inputs = layer(inputs)
-        return self.output_conv(inputs)
+        inputs = self.output_conv(inputs)
+        return self.output_actv(inputs)
 
 
 class InputTransform(layers.Layer):
@@ -211,7 +220,7 @@ class InputTransform(layers.Layer):
                                   padding='same',
                                   activation=None,
                                   )
-        self.actv = Activation(self.activation)
+        self.actv = base_model.Activation(self.activation)
 
     def call(self, inputs):
         x = self.conv(inputs)
@@ -239,14 +248,14 @@ class ResidualBlock(layers.Layer):
                                       activation=None,
                                       )
         self.BN_1 = layers.BatchNormalization()
-        self.actv_1 = Activation(self.activation)
+        self.actv_1 = base_model.Activation(self.activation)
         self.conv2d_2 = layers.Conv2D(filters=self.filters,
                                       kernel_size=self.kernel_size,
                                       padding='same',
                                       activation=None,
                                       )
         self.BN_2 = layers.BatchNormalization()
-        self.actv_2 = Activation(self.activation)
+        self.actv_2 = base_model.Activation(self.activation)
         self.add = layers.Add()
 
     def call(self, inputs):
@@ -291,7 +300,7 @@ class SubPixelConv(layers.Layer):
         self.reshape2 = layers.Reshape(
             (M * self.scale, N * self.scale, self.filters_out))
 
-        self.actv = Activation(self.activation)
+        self.actv = base_model.Activation(self.activation)
 
     def call(self, inputs):
         s = self.conv2d(inputs)
@@ -299,22 +308,3 @@ class SubPixelConv(layers.Layer):
         s = self.permute(s)
         s = self.reshape2(s)
         return self.actv(s)
-
-
-class Activation(layers.Layer):
-    def __init__(
-            self,
-            activation,
-            **kwargs,
-    ):
-        super().__init__(**kwargs)
-        self.activation = activation
-
-    def build(self, input_shape):
-        if self.activation == 'prelu':
-            self.actv_lr = layers.PReLU()
-        else:
-            self.actv = layers.Activation(self.activation)
-
-    def call(self, inputs):
-        return self.actv(inputs)

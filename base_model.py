@@ -117,3 +117,45 @@ class Masking(layers.Layer):
 
     def call(self, inputs):
         return ops.multiply(inputs, self.mask)
+
+
+class Activation(layers.Layer):
+    def __init__(
+            self,
+            activation,
+            **kwargs,
+    ):
+        super().__init__(**kwargs)
+        self.activation = activation
+
+    def build(self, input_shape):
+        if self.activation == 'prelu':
+            self.actv_lr = layers.PReLU()
+        elif self.activation == 'tanh_scaled':
+            self.actv_lr = layers.Activation('tanh')
+        elif self.activation == 'relu1':
+            self.actv_lr = layers.Identity()
+        else:
+            self.actv_lr = layers.Activation(self.activation)
+
+    def call(self, inputs):
+        activated = self.actv_lr(inputs)
+        if self.activation == 'tanh_scaled':
+            activated = ScaleAndShift()(activated)
+        elif self.activation == 'relu1':
+            activated = keras.activations.relu(inputs, max_value=1)
+        return activated
+
+
+class ScaleAndShift(layers.Layer):
+    def __init__(
+            self,
+            **kwargs,
+    ):
+        super().__init__(**kwargs)
+
+    def build(self, input_shape):
+        pass
+
+    def call(self, inputs):
+        return (inputs + 1) / 2

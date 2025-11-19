@@ -20,8 +20,9 @@ dmgr_cmems = \
     data_manager_cmems.DataManagerCMEMS(
         experiment_id=experiment_id,
         testing=True,
+        force_rebuild=False,
     )
-dmgr_cmems.create_training_data(force_rebuild=False)
+dmgr_cmems.create_training_data()
 
 dgen_args = {
     'dm': dmgr_cmems,
@@ -63,6 +64,7 @@ model_checkpoint_callback = keras.callbacks.ModelCheckpoint(
 hist = resnet.fit(
     x=dgen_train,
     epochs=10,
+    shuffle=False,
     validation_data=dgen_test,
     callbacks=[
         analysis_callback,

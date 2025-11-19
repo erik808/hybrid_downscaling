@@ -201,12 +201,23 @@ class VAE(base_model.BaseModel):
             self,
             inputs,
     ):
-        return resnet_model.SubPixelConv(
-            filters_out=self.filters,
-            kernel_size=3,
-            scale=2,
-            activation=self.activation
-        )(inputs)
+        if self.upsampling_method == 'subpixel':
+            return resnet_model.SubPixelConv(
+                filters_out=self.filters,
+                kernel_size=3,
+                scale=2,
+                activation=self.activation
+            )(inputs)
+        elif self.upsampling_method == 'bilinear':
+            return resnet_model.UpSampling(
+                filters=self.filters,
+                kernel_size=3,
+                scale=2,
+                activation=self.activation,
+                method='bilinear',
+            )(inputs)
+        else:
+            raise Exception('invalid upsampling method')
 
     def create_activation(self, inputs, mode='normal'):
         activation = self.activation_out if mode == 'out' else self.activation

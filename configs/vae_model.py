@@ -7,6 +7,9 @@ beta = 1e-5
 # weight on reconstruction loss
 gamma = 1
 
+#
+upsampling_method = 'bilinear'
+
 # activation type ('prelu', 'relu', 'leaky_relu', 'elu')
 activation = 'prelu'
 activation_out = 'linear'
@@ -17,11 +20,11 @@ filters = 64  # tested: 64
 num_filters_hybrid = 64
 
 # number of down and upsampling convolutions
-num_layers = 0  # tested: 4
+num_layers = 4  # tested: 4
 
 # deterministic mode bypasses the sampling layer and uses the mean
 # only
-deterministic_mode = True
+deterministic_mode = False
 
 # bypass the whole vae
 bypass_vae = False

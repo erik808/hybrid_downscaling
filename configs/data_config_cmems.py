@@ -8,7 +8,7 @@ time_range = slice('2023-01-01', '2023-12-31')
 
 # short range for integration tests
 # time_range_testing = slice('2023-09-01', '2023-12-31')
-time_range_testing = slice('2023-09-01', '2023-09-01')
+time_range_testing = slice('2023-09-01', '2023-11-01')
 
 # important directories and files
 data_dir = 'data'

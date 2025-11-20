@@ -8,7 +8,7 @@ import tools
 import base_model
 import resnet_model as rm
 import predictor_model as pm
-import matplotlib.pyplot as plt
+# import matplotlib.pyplot as plt
 
 importlib.reload(base_model)
 importlib.reload(rm)
@@ -28,9 +28,9 @@ class Hybrid(base_model.BaseModel):
         self.resnet_input = resnet_model.model.input['LR_data']
         self.resnet_output = resnet_model.model.output
 
-        plt.switch_backend('qtagg')
+        # plt.switch_backend('qtagg')
 
-        plt.close('all')
+        # plt.close('all')
 
         # coupling point where we choose to do the hybridization in
         # resnet

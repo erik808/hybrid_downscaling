@@ -5,6 +5,7 @@ import matplotlib.pyplot as plt
 import importlib
 import data_utils
 import dill
+from scipy.stats import binned_statistic
 
 from transectpicker.transectpicker import TransectPicker
 
@@ -68,19 +69,24 @@ class ComputeTool():
             scaler=None,
             transect_name='along_flow',
             spectrum_type='energy',
+            mode='spatial',
     ):
         self.construct_regridder(transect_name)
 
         if spectrum_type == 'energy':
             transect_data = self.invert_and_regrid(data, scaler)
-            spectrum = self.compute_energy_spectrum(transect_data)
+            k, S = self.compute_energy_spectrum(
+                transect_data,
+                mode=mode)
         elif spectrum_type == 'enstrophy':
             zeta = self.vorticity(data, scaler, crop=False)
             zeta_tr = self.do_regridding(zeta)
-            spectrum = self.compute_enstrophy_spectrum(zeta_tr)
+            k, S = self.compute_enstrophy_spectrum(
+                zeta_tr,
+                mode=mode)
         else:
             raise Exception('Not implemented yet')
-        return spectrum
+        return k, S
 
     def taper_data(self, data):
         # taper the boundaries
@@ -98,7 +104,11 @@ class ComputeTool():
 
         return data
 
-    def compute_energy_spectrum(self, data):
+    def compute_energy_spectrum(
+            self,
+            data,
+            mode='spatial',
+    ):
         """ normalized energy spectrum
         """
         # take only u and v
@@ -110,13 +120,31 @@ class ComputeTool():
         if data.shape[0] > 1:
             data = data - np.mean(data, axis=0)
 
-        data = self.taper_data(data)
-        H = np.fft.rfft(data, axis=1)
+        data_tp = self.taper_data(data)
+        # H = np.fft.rfft(data_tp, axis=1)
+        # S = 0.5 * np.sum(np.square(np.abs(H)), axis=2)
+        # S = S / np.max(S)
+        mode = 'temporal'
+        fftdim = 1 if mode == 'spatial' else 0
+        remdim = (fftdim + 1) % 2
+        H = np.fft.fft(data_tp, axis=fftdim)
         S = 0.5 * np.sum(np.square(np.abs(H)), axis=2)
-        S = S / np.max(S)
-        return S
+        S = S.transpose(remdim, fftdim)
+        n = S.shape[-1]
+        freqs = np.abs(np.fft.fftfreq(n) * n)
 
-    def compute_enstrophy_spectrum(self, data):
+        kbins = np.arange(0.5, n / 2, 1.)
+        k = 0.5 * (kbins[1:] + kbins[:-1])
+        S, _, _ = binned_statistic(freqs, S,
+                                   statistic='mean',
+                                   bins=kbins)
+        return k, S
+
+    def compute_enstrophy_spectrum(
+            self,
+            data,
+            mode='spatial',
+    ):
         """ normalized enstrophy spectrum
         """
 
@@ -127,11 +155,25 @@ class ComputeTool():
         if data.shape[0] > 1:
             data = data - np.mean(data, axis=0)
 
-        data = self.taper_data(data)
-        H = np.fft.rfft(data, axis=1)
+        data_tp = self.taper_data(data)
+
+        mode = 'temporal'
+        fftdim = 1 if mode == 'spatial' else 0
+        remdim = (fftdim + 1) % 2
+
+        H = np.fft.fft(data_tp, axis=fftdim)
         S = 0.5 * np.square(np.abs(H))
-        S = S / np.max(S)
-        return S
+        # S = S / np.max(S)
+        S = S.transpose(remdim, fftdim)
+        n = S.shape[-1]
+        freqs = np.abs(np.fft.fftfreq(n) * n)
+        kbins = np.arange(0.5, n / 2, 1.)
+        k = 0.5 * (kbins[1:] + kbins[:-1])
+        S, _, _ = binned_statistic(freqs, S,
+                                   statistic='mean',
+                                   bins=kbins)
+
+        return k, S
 
     def do_regridding(self, field):
         # regrid

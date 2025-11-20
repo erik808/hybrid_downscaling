@@ -83,7 +83,7 @@ analysis_callback = callbacks.AnalysisHybrid(
 )
 hist = hybrid.fit(
     x=dgen_train,
-    epochs=5,
+    epochs=1,
     shuffle=False,
     validation_data=dgen_test,
     callbacks=[

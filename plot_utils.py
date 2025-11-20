@@ -231,23 +231,30 @@ class PlotMachine():
                                 data,
                                 epoch,
                                 transect_name='along_flow',
+                                mode='spatial',
                                 ):
 
-        S_truth = self.ct.compute_spectrum_along_transect(
+        k_truth, S_truth = self.ct.compute_spectrum_along_transect(
             data['truth'],
             data['scaler_truth'],
             transect_name=transect_name,
-            spectrum_type='enstrophy')
-        S_pred = self.ct.compute_spectrum_along_transect(
+            spectrum_type='enstrophy',
+            mode=mode,
+        )
+        k_pred, S_pred = self.ct.compute_spectrum_along_transect(
             data['pred'],
             data['scaler_truth'],
             transect_name=transect_name,
-            spectrum_type='enstrophy')
-        S_lowres = self.ct.compute_spectrum_along_transect(
+            spectrum_type='enstrophy',
+            mode=mode,
+        )
+        k_lowres, S_lowres = self.ct.compute_spectrum_along_transect(
             data['lowres'],
             data['scaler_lowres'],
             transect_name=transect_name,
-            spectrum_type='enstrophy')
+            spectrum_type='enstrophy',
+            mode=mode,
+        )
 
         # compute mean
         S_truth_mn = np.mean(S_truth, axis=0)
@@ -255,18 +262,20 @@ class PlotMachine():
         S_lowres_mn = np.mean(S_lowres, axis=0)
 
         plt.figure()
-        plt.loglog(S_truth_mn, 's-', markersize=3, label='HR truth')
-        plt.loglog(S_pred_mn, '.-', label='Model prediction')
-        plt.loglog(S_lowres_mn, '--', label='LR forcing/control')
+        plt.loglog(k_truth, S_truth_mn, 's-', markersize=3, label='HR truth')
+        plt.loglog(k_pred, S_pred_mn, '.-', label='Model prediction')
+        plt.loglog(k_lowres, S_lowres_mn, '--', label='LR forcing/control')
         plt.legend()
         plt.grid()
-        plt.gca().set_ylim([1e-5, 1])
-        plt.gca().set_title(f'Mean eddy enstrophy spectrum, {transect_name}')
+        # plt.gca().set_ylim([1e-5, 1])
+        plt.gca().set_title(
+            f'Mean eddy enstrophy spectrum, {transect_name} {mode}')
 
         postfix = self.create_postfix()
         fig_name = \
             (f'{self.results_dir}/'
-             f'enstrophy_spectrum_epoch{epoch}_{transect_name}{postfix}.png')
+             f'enstrophy_spectrum_epoch{epoch}_'
+             f'{transect_name}_{mode}{postfix}.png')
         print(fig_name)
         plt.tight_layout()
         plt.savefig(fig_name)
@@ -275,25 +284,32 @@ class PlotMachine():
                              data,
                              epoch,
                              transect_name='along_flow',
+                             mode='spatial',
                              ):
 
-        S_truth = self.ct.compute_spectrum_along_transect(
+        k_truth, S_truth = self.ct.compute_spectrum_along_transect(
             data['truth'],
             data['scaler_truth'],
             transect_name=transect_name,
-            spectrum_type='energy')
+            spectrum_type='energy',
+            mode=mode,
+        )
 
-        S_pred = self.ct.compute_spectrum_along_transect(
+        k_pred, S_pred = self.ct.compute_spectrum_along_transect(
             data['pred'],
             data['scaler_truth'],
             transect_name=transect_name,
-            spectrum_type='energy')
+            spectrum_type='energy',
+            mode=mode,
+        )
 
-        S_lowres = self.ct.compute_spectrum_along_transect(
+        k_lowres, S_lowres = self.ct.compute_spectrum_along_transect(
             data['lowres'],
             data['scaler_lowres'],
             transect_name=transect_name,
-            spectrum_type='energy')
+            spectrum_type='energy',
+            mode=mode,
+        )
 
         # compute mean
         S_truth_mn = np.mean(S_truth, axis=0)
@@ -309,22 +325,22 @@ class PlotMachine():
             else 1e1 * np.max(S_truth_mn)
 
         plt.figure()
-        plt.loglog(S_truth_mn, 's-', markersize=3, label='HR truth')
-        plt.loglog(S_pred_mn, '.-', label='Model prediction')
-        plt.loglog(S_lowres_mn, '--', label='LR forcing/control')
+        plt.loglog(k_truth, S_truth_mn, 's-', markersize=3, label='HR truth')
+        plt.loglog(k_pred, S_pred_mn, '.-', label='Model prediction')
+        plt.loglog(k_lowres, S_lowres_mn, '--', label='LR forcing/control')
         plt.loglog(k_1, offset_1 * k_1**(-5 / 3), '--', label='k^-5/3')
         plt.loglog(k_2, offset_2 * k_2**(-3), ':', label='k^-3')
         plt.legend()
-        plt.gca().set_ylim([1e-7, 1])
+        # plt.gca().set_ylim([1e-7, 1])
         plt.gca().set_title(
-            f'Mean eddy kinetic energy spectrum, {transect_name}'
+            f'Mean eddy kinetic energy spectrum, {transect_name}, {mode}'
         )
         plt.grid()
 
         postfix = self.create_postfix()
         fig_name = \
             (f'{self.results_dir}/'
-             f'energy_spectrum_epoch{epoch}_{transect_name}'
+             f'energy_spectrum_epoch{epoch}_{transect_name}_{mode}'
              f'{postfix}.png'
              )
         print(fig_name)

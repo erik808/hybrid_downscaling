@@ -26,14 +26,11 @@ class AnalysisBase(keras.callbacks.Callback, ABC):
     ):
         super().__init__(**kwargs)
         self.dgen = data_gen
-        self.plot_instructions = plot
 
-        if (
-                'spectra' in self.plot_instructions and
-                'timestepping_spectrum' in self.plot_instructions
-        ):
-            raise Exception("can't do both single step and "
-                            "full timestepping spectra")
+        self.plot_instructions = plot
+        self.reconstruction = 'reconstruction' in self.plot_instructions
+        self.spectra = ('spectra' in self.plot_instructions or
+                        'spectrum' in self.plot_instructions)
 
         self.output_path = self.dgen.dm.dirs['results']
         self.plot_machine = \
@@ -73,14 +70,12 @@ class AnalysisBase(keras.callbacks.Callback, ABC):
         plt.close('all')
         self.construct_mask()
         if epoch % 1 == 0 or epoch == self.params['epochs'] - 1:
-            if 'reconstruction' in self.plot_instructions:
-                self.random_prediction(epoch)
-            if 'spectra' in self.plot_instructions:
-                self.plot_spectra(epoch)
-            if 'timestepping' in self.plot_instructions:
-                self.timestepping(epoch, logs, spectra=False)
-            if 'timestepping_spectrum' in self.plot_instructions:
-                self.timestepping(epoch, logs, spectra=True)
+            self.timestepping(
+                epoch,
+                logs,
+                spectra=self.spectra,
+                reconstruction=self.reconstruction,
+            )
 
     def random_prediction(self, epoch):
         n = self.dgen.__len__()
@@ -194,7 +189,13 @@ class AnalysisBase(keras.callbacks.Callback, ABC):
     def plot_history(self, hist):
         self.plot_machine.plot_history(hist)
 
-    def timestepping(self, epoch, logs=None, spectra=False):
+    def timestepping(
+            self,
+            epoch,
+            logs=None,
+            spectra=False,
+            reconstruction=False
+    ):
 
         def x_(batch_x, b_i, x_old=None):
             """ create timestepping model input from batch """
@@ -223,7 +224,10 @@ class AnalysisBase(keras.callbacks.Callback, ABC):
         results = []
         truths = []
         losses = []
+        print('\ntimestepping')
+        pb_i = keras.utils.Progbar(num_batches, interval=0.5)
         for b in range(num_batches):
+            pb_i.add(1)
             batch_x, batch_y = self.dgen.__getitem__(b)
             batch_size = batch_x['HR_data'].shape[0]
 
@@ -265,7 +269,6 @@ class AnalysisBase(keras.callbacks.Callback, ABC):
             {'rows': self.model.masking.rows.cpu(),
              'cols': self.model.masking.cols.cpu(),
              },
-            spectra=spectra,
         )
 
         if spectra:
@@ -276,6 +279,15 @@ class AnalysisBase(keras.callbacks.Callback, ABC):
             z = \
                 np.concatenate([r['HR_data'] for r in results], 0)[:, 0,]
             self.spectra_wrapper(x, y, z, epoch)
+
+        if reconstruction:
+            x = \
+                np.concatenate([r['LR_data'] for r in results], 0)[:, 0,]
+            y = \
+                np.concatenate([t['HR_data'] for t in truths], 0)[:, 0,]
+            z = \
+                np.concatenate([r['HR_data'] for r in results], 0)[:, 0,]
+            self.plot_reconstruction(x[-1,], y[-1,], z[-1,], epoch)
 
     def spectra_wrapper(self, x, y, z, epoch):
 

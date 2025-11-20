@@ -165,7 +165,7 @@ class Hybrid(base_model.BaseModel):
         else:
             pred_loss = 0.0
 
-        if True:
+        if False:
             ztest_hybrid = z['hybrid'][0, ..., 0].cpu().detach().numpy()
             ztest_resnet = z['resnet'][0, ..., 0].cpu().detach().numpy()
             ztest_predictor = z['predictor'][0, ..., 0].cpu().detach().numpy()

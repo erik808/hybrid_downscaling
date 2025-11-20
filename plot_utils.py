@@ -197,7 +197,6 @@ class PlotMachine():
                           epoch,
                           masking,
                           add_name='',
-                          spectra=False
                           ):
         results_HR = np.concatenate([r['HR_data'] for r in results], 0)
         truths_HR = np.concatenate([t['HR_data'] for t in truths], 0)

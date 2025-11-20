@@ -14,7 +14,7 @@ gamma = 1
 
 # model that does the actual prediction in the latent space
 # options: 'simpleRNN', 'dense', 'lstm', 'conv3d', 'convlstm'
-predictor = 'dense'
+predictor = 'identity'
 
 output_filters = 64
 

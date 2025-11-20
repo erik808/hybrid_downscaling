@@ -86,7 +86,7 @@ class AnalysisBase(keras.callbacks.Callback, ABC):
         x, y = self.dgen.__getitem__(idx)
         z = self.call_model(x)
         x, y = self.restrict_xy(x, y)
-        self.plot_reconstruction(x[0,], y[0,], z[0,], epoch)
+        self.plot_reconstruction(x, y, z, epoch)
 
     def unscale_var(self, var, scaler):
         """ unscale variables """
@@ -113,8 +113,18 @@ class AnalysisBase(keras.callbacks.Callback, ABC):
 
         self.spectra_wrapper(x, y, z, epoch)
 
-    def plot_reconstruction(self, x, y, z, epoch):
+    def plot_reconstruction(
+            self,
+            x,
+            y,
+            z,
+            epoch,
+            time=0
+    ):
         assert y.shape == z.shape
+        x = x[time,]
+        y = y[time,]
+        z = z[time,]
 
         def wrapper(update):
             data_template = {
@@ -130,6 +140,7 @@ class AnalysisBase(keras.callbacks.Callback, ABC):
 
         plot_dict = {
             'meta': {'epoch': epoch,
+                     'time': time,
                      'prefix': 'model_',
                      'subplot_shape': [2, 4]},
             'input uo': wrapper(
@@ -163,6 +174,7 @@ class AnalysisBase(keras.callbacks.Callback, ABC):
 
             plot_dict = {
                 'meta': {'epoch': epoch,
+                         'time': time,
                          'prefix': 'bilin_',
                          'subplot_shape': [2, 4]},
                 'input uo': wrapper(
@@ -287,7 +299,10 @@ class AnalysisBase(keras.callbacks.Callback, ABC):
                 np.concatenate([t['HR_data'] for t in truths], 0)[:, 0,]
             z = \
                 np.concatenate([r['HR_data'] for r in results], 0)[:, 0,]
-            self.plot_reconstruction(x[-1,], y[-1,], z[-1,], epoch)
+
+            t_range = np.linspace(0, x.shape[0] - 1, 4).astype(int)
+            for t in t_range:
+                self.plot_reconstruction(x, y, z, epoch, t)
 
     def spectra_wrapper(self, x, y, z, epoch):
 

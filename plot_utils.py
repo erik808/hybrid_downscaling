@@ -41,7 +41,8 @@ class PlotMachine():
         metadata = plot_dict['meta']
         plot_dict.pop('meta', None)
         postfix = \
-            self.create_postfix(add_name=f"epoch{metadata['epoch']}")
+            self.create_postfix(
+                add_name=f"epoch{metadata['epoch']}t{metadata['time']}")
         prefix = metadata['prefix']
         fig_name = (f"{self.dirs['results']}/"
                     f"{prefix}reconstructions{postfix}.png")

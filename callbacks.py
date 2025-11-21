@@ -323,20 +323,18 @@ class AnalysisBase(keras.callbacks.Callback, ABC):
             'truth': np.nan_to_num(y_unscaled),
             'scaler_truth': None,
             'pred': np.nan_to_num(z_unscaled),
+            'scaler_pred': None,
         }
 
         for transect in ['along_flow', 'across_flow']:
-            for mode in ['spatial', 'temporal']:
-                self.plot_machine\
-                    .plot_energy_spectrum(data,
-                                          epoch,
-                                          transect_name=transect,
-                                          mode=mode)
-                self.plot_machine\
-                    .plot_enstrophy_spectrum(data,
-                                             epoch,
-                                             transect_name='along_flow',
-                                             mode=mode)
+            for spectype in ['energy', 'enstrophy']:
+                for direction in ['spatial', 'temporal']:
+                    self.plot_machine\
+                        .plot_spectrum(data,
+                                       epoch,
+                                       transect_name=transect,
+                                       spectrum_type=spectype,
+                                       direction=direction)
 
 
 class AnalysisResNet(AnalysisBase):

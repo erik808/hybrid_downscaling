@@ -73,20 +73,25 @@ class ComputeTool():
             direction='spatial',
     ):
         self.get_regridder(transect_name)
+
         if spectrum_type == 'energy':
             transect_data = self.invert_and_regrid(data, scaler)
-            k, S = self.compute_energy_spectrum(
+            k, S = self.compute_spectrum(
                 transect_data,
-                direction=direction)
+                spectrum_type=spectrum_type,
+                direction=direction,
+            )
 
         elif spectrum_type == 'enstrophy':
             zeta = self.vorticity(data, scaler, crop=False)
             zeta_tr = self.do_regridding(zeta)
-            k, S = self.compute_enstrophy_spectrum(
+            k, S = self.compute_spectrum(
                 zeta_tr,
+                spectrum_type=spectrum_type,
                 direction=direction)
         else:
-            raise Exception('Not implemented yet')
+            raise Exception('invalid spectrum type')
+
         return k, S
 
     def taper_data(self, data):
@@ -105,67 +110,42 @@ class ComputeTool():
 
         return data
 
-    def compute_energy_spectrum(
+    def compute_spectrum(
             self,
             data,
+            spectrum_type,
             direction='spatial',
     ):
-        """ normalized energy spectrum
-        """
-        # take only u and v
-        data = data[..., :2]
-        data = (data.transpose(1, 0, 2) - np.mean(data, axis=1))\
-            .transpose(1, 0, 2)  # remove spatial average
+        if spectrum_type == 'energy':
+            # take only u and v
+            data = data[..., :2]
+            data = (data.transpose(1, 0, 2) - np.mean(data, axis=1))\
+                .transpose(1, 0, 2)  # remove spatial average
+        elif spectrum_type == 'enstrophy':
+            # remove spatial average
+            data = (data.T - np.mean(data, axis=1)).T
 
         # remove time average
         if data.shape[0] > 1:
             data = data - np.mean(data, axis=0)
 
-        data_tp = self.taper_data(data)
         # H = np.fft.rfft(data_tp, axis=1)
         # S = 0.5 * np.sum(np.square(np.abs(H)), axis=2)
         # S = S / np.max(S)
-        mode = 'temporal'
-        fftdim = 1 if mode == 'spatial' else 0
+
+        fftdim = 1 if direction == 'spatial' else 0
         remdim = (fftdim + 1) % 2
-        H = np.fft.fft(data_tp, axis=fftdim)
-        S = 0.5 * np.sum(np.square(np.abs(H)), axis=2)
-        S = S.transpose(remdim, fftdim)
-        n = S.shape[-1]
-        freqs = np.abs(np.fft.fftfreq(n) * n)
-
-        kbins = np.arange(0.5, n / 2, 1.)
-        k = 0.5 * (kbins[1:] + kbins[:-1])
-        S, _, _ = binned_statistic(freqs, S,
-                                   statistic='mean',
-                                   bins=kbins)
-        return k, S
-
-    def compute_enstrophy_spectrum(
-            self,
-            data,
-            direction='spatial',
-    ):
-        """ normalized enstrophy spectrum
-        """
-
-        # remove spatial average
-        data = (data.T - np.mean(data, axis=1)).T
-
-        # remove time average
-        if data.shape[0] > 1:
-            data = data - np.mean(data, axis=0)
+        reorder = (remdim, fftdim) + tuple(range(2, len(data.shape)))
+        data = data.transpose(reorder)
 
         data_tp = self.taper_data(data)
 
-        mode = 'temporal'
-        fftdim = 1 if mode == 'spatial' else 0
-        remdim = (fftdim + 1) % 2
+        H = np.fft.fft(data_tp, axis=1)
+        if spectrum_type == 'energy':
+            S = 0.5 * np.sum(np.square(np.abs(H)), axis=2)
+        elif spectrum_type == 'enstrophy':
+            S = 0.5 * np.square(np.abs(H))
 
-        H = np.fft.fft(data_tp, axis=fftdim)
-        S = 0.5 * np.square(np.abs(H))
-        # S = S / np.max(S)
-        S = S.transpose(remdim, fftdim)
         n = S.shape[-1]
         freqs = np.abs(np.fft.fftfreq(n) * n)
         kbins = np.arange(0.5, n / 2, 1.)
@@ -173,7 +153,6 @@ class ComputeTool():
         S, _, _ = binned_statistic(freqs, S,
                                    statistic='mean',
                                    bins=kbins)
-
         return k, S
 
     def do_regridding(self, field):

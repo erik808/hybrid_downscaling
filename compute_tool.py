@@ -26,24 +26,25 @@ class ComputeTool():
         self.e1 = self.grid.e1t.data  # in m
         self.e2 = self.grid.e2t.data  # in m
         self.tdim = 60 * 60 * 24  # seconds to days
+        self.transect_regridders = {}
 
-        self.transect_regridder = 'none'
+    def get_regridder(self, transect_name):
 
-    def construct_regridder(self, transect_name):
-
-        if self.transect_regridder == transect_name:
-            return
-        else:
-            self.transect_regridder = transect_name
+        if transect_name not in self.transect_regridders:
+            key = transect_name
             dill_file = f'{self.dm.transect_dir}/{transect_name}.dill'
             print(f'Loading transect from {dill_file}')
             with open(dill_file, 'rb') as file:
                 tpicker = dill.load(file)['tpicker']
 
                 transect_res=len(tpicker.x_trans)
-                self.regridder = \
+                regridder = \
                     self.regrid_to_transect(tpicker,
                                             resolution=transect_res)
+
+            self.transect_regridders.update({key: regridder})
+
+        self.regridder = self.transect_regridders[transect_name]
 
     def regrid_to_transect(self, tpicker, resolution=1e2):
 
@@ -69,21 +70,21 @@ class ComputeTool():
             scaler=None,
             transect_name='along_flow',
             spectrum_type='energy',
-            mode='spatial',
+            direction='spatial',
     ):
-        self.construct_regridder(transect_name)
-
+        self.get_regridder(transect_name)
         if spectrum_type == 'energy':
             transect_data = self.invert_and_regrid(data, scaler)
             k, S = self.compute_energy_spectrum(
                 transect_data,
-                mode=mode)
+                direction=direction)
+
         elif spectrum_type == 'enstrophy':
             zeta = self.vorticity(data, scaler, crop=False)
             zeta_tr = self.do_regridding(zeta)
             k, S = self.compute_enstrophy_spectrum(
                 zeta_tr,
-                mode=mode)
+                direction=direction)
         else:
             raise Exception('Not implemented yet')
         return k, S
@@ -107,7 +108,7 @@ class ComputeTool():
     def compute_energy_spectrum(
             self,
             data,
-            mode='spatial',
+            direction='spatial',
     ):
         """ normalized energy spectrum
         """
@@ -143,7 +144,7 @@ class ComputeTool():
     def compute_enstrophy_spectrum(
             self,
             data,
-            mode='spatial',
+            direction='spatial',
     ):
         """ normalized enstrophy spectrum
         """

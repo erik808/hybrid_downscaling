@@ -68,6 +68,8 @@ class AnalysisBase(keras.callbacks.Callback, ABC):
 
     def on_epoch_end(self, epoch, logs=None):
         plt.close('all')
+        self.plot_machine.create_postfix()
+        self.plot_machine.create_results_dir(epoch)
         self.construct_mask()
         if epoch % 1 == 0 or epoch == self.params['epochs'] - 1:
             self.timestepping(
@@ -329,7 +331,8 @@ class AnalysisBase(keras.callbacks.Callback, ABC):
                 self.plot_machine.plot_hovmöller(
                     T,
                     plot_type=spectype,
-                    transect=transect
+                    transect=transect,
+                    epoch=epoch,
                 )
 
 

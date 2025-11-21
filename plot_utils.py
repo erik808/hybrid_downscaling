@@ -25,7 +25,7 @@ class PlotMachine():
 
         self.dm = dm
         self.dirs = dm.dirs
-        self.results_dir = self.dirs['results']
+        self.results_dir = []
         self.figsize = figsize
         self.output_dict = output_dict
         self.time_array = time_array
@@ -33,19 +33,21 @@ class PlotMachine():
         self.frame_stride = 4
         self.pool_size = 1
         self.trial_id = trial_id
+        self.postfix = ''
 
         # create compute tool object
         self.ct = compute_tool.ComputeTool(dm=self.dm)
 
+    def create_results_dir(self, epoch):
+        self.results_dir = f"{self.dirs['results']}/epoch{epoch}{self.postfix}"
+        os.system(f'mkdir -p {self.results_dir}')
+
     def plot_reconstructions(self, plot_dict):
         metadata = plot_dict['meta']
         plot_dict.pop('meta', None)
-        postfix = \
-            self.create_postfix(
-                add_name=f"epoch{metadata['epoch']}t{metadata['time']}")
         prefix = metadata['prefix']
         fig_name = (f"{self.dirs['results']}/"
-                    f"{prefix}reconstructions{postfix}.png")
+                    f"{prefix}reconstructions_t{metadata['time']}.png")
 
         num_plots = len(plot_dict.keys())
         M, N = metadata['subplot_shape']
@@ -65,7 +67,7 @@ class PlotMachine():
         print(f'\nsaving to {fig_name}')
         plt.savefig(fig_name, bbox_inches='tight')
 
-    def plot_hovmöller(self, T, plot_type, transect):
+    def plot_hovmöller(self, T, plot_type, transect, epoch):
 
         if plot_type == 'energy':
             for key, value in T.items():
@@ -74,19 +76,22 @@ class PlotMachine():
 
         T['absdiff'] = np.abs(T['truth'] - T['pred'])
 
-        plt.figure(figsize=(12, 11))
+        # plt.switch_backend('qtagg')
+        plt.figure(figsize=(8, 10))
         long_names = {'truth': 'truth',
                       'pred': 'prediction',
                       'absdiff': '|truth - prediction|',
                       'lowres': 'bilinear'}
         for i, (key, data) in enumerate(T.items()):
             plt.subplot(len(T.values()), 1, i + 1)
-            plt.pcolormesh(data.transpose())
+            a = plt.pcolormesh(data.transpose())
+            plt.colorbar(a)
             plt.gca().set_title(long_names[key])
 
         plt.suptitle(f'Hovmöller diagrams: {plot_type}, {transect}')
-        postfix = self.create_postfix()
-        fig_name = f'Hovmoller_{plot_type}_{transect}{postfix}.png'
+        fig_name = (f'{self.results_dir}/Hovmöller_'
+                    f'{plot_type}_{transect}.png')
+        plt.tight_layout()
         plt.savefig(fig_name, bbox_inches='tight')
 
     def plot_single_frame(self, frame_id, output_dict=None):
@@ -94,8 +99,7 @@ class PlotMachine():
             if output_dict is None else output_dict
 
         plt.figure(figsize=self.figsize)
-        postfix = self.create_postfix()
-        fig_name = f'{self.results_dir}/results_autoencoder{postfix}.png'
+        fig_name = f'{self.results_dir}/results_autoencoder{self.postfix}.png'
         print(fig_name)
         self.plot_frame(frame_id, fig_name)
 
@@ -115,8 +119,7 @@ class PlotMachine():
                 p.map(self.plot_frame, range(0, len(self.time_array),
                                              self.frame_stride))
 
-        postfix = self.create_postfix()
-        movie_name = f'movie{postfix}.mov'
+        movie_name = f'movie{self.postfix}.mov'
         framerate = 24
         sys_cmd = (f"ffmpeg -r {framerate} -f image2 -pattern_type glob -i "
                    f"'{self.movie_dir}/frame-*.png' "
@@ -171,8 +174,7 @@ class PlotMachine():
                      add='',
                      ):
 
-        postfix = self.create_postfix()
-        fig_name = f'{self.results_dir}/history{postfix}.png'
+        fig_name = f'{self.results_dir}/history{self.postfix}.png'
 
         plt.figure(figsize=(11, 9))
         [plt.semilogy(value, label=key) for key, value in hist.history.items()]
@@ -186,8 +188,7 @@ class PlotMachine():
 
     def plot_prediction_error(self, X, Y, Z, add_name=''):
 
-        postfix = self.create_postfix(add_name)
-        fig_name = f'{self.results_dir}/errors{postfix}.png'
+        fig_name = f'{self.results_dir}/errors{self.postfix}.png'
 
         RSE_Y = np.sqrt(np.sum(np.square(X - Y), axis=(1, 2, 3)))
         RSE_Z = np.sqrt(np.sum(np.square(X - Z), axis=(1, 2, 3)))
@@ -206,15 +207,12 @@ class PlotMachine():
 
     def create_postfix(self, add_name=''):
 
-        postfix = ''
         if self.trial_id is not None:
-            postfix += f'_trial_{self.trial_id}'
+            self.postfix += f'_trial_{self.trial_id}'
 
-        postfix += f'_{add_name}' if len(add_name) > 0 else ''
+        self.postfix += f'_{add_name}' if len(add_name) > 0 else ''
         timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
-        postfix += f'_{timestamp}'
-
-        return postfix
+        self.postfix += f'_{timestamp}'
 
     def plot_timestepping(self,
                           results,
@@ -245,9 +243,8 @@ class PlotMachine():
         plt.gca().tick_params(axis='x', labelrotation=45)
         plt.tight_layout()
 
-        postfix = self.create_postfix(add_name)
         fig_name = \
-            f'{self.results_dir}/timestepping_epoch{epoch}{postfix}.png'
+            f'{self.results_dir}/timestepping.png'
         print('\n saving to ', fig_name)
         plt.savefig(fig_name)
 
@@ -263,7 +260,6 @@ class PlotMachine():
         k = {}
         S = {}
         T = {}
-        print(data.keys())
         for dkey, skey in zip(['truth', 'pred', 'lowres'],
                               ['scaler_truth', 'scaler_pred', 'scaler_lowres']
                               ):
@@ -299,15 +295,14 @@ class PlotMachine():
             plt.loglog(k_1, offset_1 * k_1**(-5 / 3), '--', label='k^-5/3')
             plt.loglog(k_2, offset_2 * k_2**(-3), ':', label='k^-3')
 
-        postfix = self.create_postfix()
         if spectrum_type == 'energy':
             tstring = \
                 (f'Mean eddy kinetic energy spectrum,'
                  f' {transect_name}, {direction}')
             fig_name = \
                 (f'{self.results_dir}/'
-                 f'energy_spectrum_epoch{epoch}_{transect_name}_{direction}'
-                 f'{postfix}.png'
+                 f'energy_spectrum_{transect_name}_{direction}'
+                 f'.png'
                  )
         elif spectrum_type == 'enstrophy':
             tstring = \
@@ -315,8 +310,8 @@ class PlotMachine():
                  f' {transect_name} {direction}')
             fig_name = \
                 (f'{self.results_dir}/'
-                 f'enstrophy_spectrum_epoch{epoch}_'
-                 f'{transect_name}_{direction}{postfix}.png')
+                 f'enstrophy_spectrum_'
+                 f'{transect_name}_{direction}.png')
 
         # plt.gca().set_ylim([1e-7, 1])
         plt.gca().set_title(tstring)
@@ -327,7 +322,6 @@ class PlotMachine():
         plt.tight_layout()
         plt.savefig(fig_name)
         return S, T
-
 
     def unscale2D(self, field, scaler):
         x, y = field.shape
@@ -432,9 +426,8 @@ class PlotMachine():
             ax3.invert_yaxis()
             ax3.set_title('predicted')
 
-        postfix = self.create_postfix()
         fig_name = (f'{self.results_dir}/spectra_swot'
-                    f'{postfix}.png'
+                    f'{self.postfix}.png'
                     )
 
         print(fig_name)

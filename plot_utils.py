@@ -65,6 +65,30 @@ class PlotMachine():
         print(f'\nsaving to {fig_name}')
         plt.savefig(fig_name, bbox_inches='tight')
 
+    def plot_hovmöller(self, T, plot_type, transect):
+
+        if plot_type == 'energy':
+            for key, value in T.items():
+                # take only first 2 variables uo, vo
+                T[key] = 0.5 * np.sum(np.square(value[..., :2]), axis=2)
+
+        T['absdiff'] = np.abs(T['truth'] - T['pred'])
+
+        plt.figure(figsize=(12, 11))
+        long_names = {'truth': 'truth',
+                      'pred': 'prediction',
+                      'absdiff': '|truth - prediction|',
+                      'lowres': 'bilinear'}
+        for i, (key, data) in enumerate(T.items()):
+            plt.subplot(len(T.values()), 1, i + 1)
+            plt.pcolormesh(data.transpose())
+            plt.gca().set_title(long_names[key])
+
+        plt.suptitle(f'Hovmöller diagrams: {plot_type}, {transect}')
+        postfix = self.create_postfix()
+        fig_name = f'Hovmoller_{plot_type}_{transect}{postfix}.png'
+        plt.savefig(fig_name, bbox_inches='tight')
+
     def plot_single_frame(self, frame_id, output_dict=None):
         self.output_dict = self.output_dict \
             if output_dict is None else output_dict
@@ -238,17 +262,18 @@ class PlotMachine():
 
         k = {}
         S = {}
+        T = {}
         print(data.keys())
         for dkey, skey in zip(['truth', 'pred', 'lowres'],
                               ['scaler_truth', 'scaler_pred', 'scaler_lowres']
                               ):
-            k[dkey], S[dkey] = self.ct.compute_spectrum_along_transect(
-                data[dkey],
-                data[skey],
-                transect_name=transect_name,
-                spectrum_type=spectrum_type,
-                direction=direction,
-            )
+            k[dkey], S[dkey], T[dkey] = \
+                self.ct.compute_spectrum_along_transect(
+                    data[dkey],
+                    data[skey],
+                    transect_name=transect_name,
+                    spectrum_type=spectrum_type,
+                    direction=direction)
 
         # compute mean
         S_truth_mn = np.mean(S['truth'], axis=0)
@@ -301,10 +326,8 @@ class PlotMachine():
         print(fig_name)
         plt.tight_layout()
         plt.savefig(fig_name)
+        return S, T
 
-        return {'truth': S['truth'],
-                'lowres': S['lowres'],
-                'pred': S['pred']}
 
     def unscale2D(self, field, scaler):
         x, y = field.shape

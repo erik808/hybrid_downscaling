@@ -283,23 +283,14 @@ class AnalysisBase(keras.callbacks.Callback, ABC):
              },
         )
 
+        x = np.concatenate([r['LR_data'] for r in results], 0)[:, 0,]
+        y = np.concatenate([t['HR_data'] for t in truths], 0)[:, 0,]
+        z = np.concatenate([r['HR_data'] for r in results], 0)[:, 0,]
+
         if spectra:
-            x = \
-                np.concatenate([r['LR_data'] for r in results], 0)[:, 0,]
-            y = \
-                np.concatenate([t['HR_data'] for t in truths], 0)[:, 0,]
-            z = \
-                np.concatenate([r['HR_data'] for r in results], 0)[:, 0,]
             self.spectra_wrapper(x, y, z, epoch)
 
         if reconstruction:
-            x = \
-                np.concatenate([r['LR_data'] for r in results], 0)[:, 0,]
-            y = \
-                np.concatenate([t['HR_data'] for t in truths], 0)[:, 0,]
-            z = \
-                np.concatenate([r['HR_data'] for r in results], 0)[:, 0,]
-
             t_range = np.linspace(0, x.shape[0] - 1, 4).astype(int)
             for t in t_range:
                 self.plot_reconstruction(x, y, z, epoch, t)
@@ -329,12 +320,17 @@ class AnalysisBase(keras.callbacks.Callback, ABC):
         for transect in ['along_flow', 'across_flow']:
             for spectype in ['energy', 'enstrophy']:
                 for direction in ['spatial', 'temporal']:
-                    self.plot_machine\
-                        .plot_spectrum(data,
-                                       epoch,
-                                       transect_name=transect,
-                                       spectrum_type=spectype,
-                                       direction=direction)
+                    S, T = self.plot_machine\
+                               .plot_spectrum(data,
+                                              epoch,
+                                              transect_name=transect,
+                                              spectrum_type=spectype,
+                                              direction=direction)
+                self.plot_machine.plot_hovmöller(
+                    T,
+                    plot_type=spectype,
+                    transect=transect
+                )
 
 
 class AnalysisResNet(AnalysisBase):

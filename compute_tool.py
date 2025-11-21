@@ -64,6 +64,22 @@ class ComputeTool():
                                         resolution=resolution,
                                         **transect)
 
+    def hovmöller_along_transect(
+            self,
+            data,
+            scaler=None,
+            transect_name='along_flow',
+            spectrum_type='energy',
+    ):
+        self.get_regridder(transect_name)
+        if spectrum_type == 'energy':
+            transect_data = self.invert_and_regrid(data, scaler)
+        elif spectrum_type == 'enstrophy':
+            zeta = self.vorticity(data, scaler, crop=False)
+            transect_data = self.do_regridding(zeta)
+
+        return transect_data
+
     def compute_spectrum_along_transect(
             self,
             data,
@@ -72,27 +88,21 @@ class ComputeTool():
             spectrum_type='energy',
             direction='spatial',
     ):
-        self.get_regridder(transect_name)
 
-        if spectrum_type == 'energy':
-            transect_data = self.invert_and_regrid(data, scaler)
-            k, S = self.compute_spectrum(
-                transect_data,
-                spectrum_type=spectrum_type,
-                direction=direction,
-            )
+        transect_data = self.hovmöller_along_transect(
+            data,
+            scaler=scaler,
+            transect_name=transect_name,
+            spectrum_type=spectrum_type,
+        )
 
-        elif spectrum_type == 'enstrophy':
-            zeta = self.vorticity(data, scaler, crop=False)
-            zeta_tr = self.do_regridding(zeta)
-            k, S = self.compute_spectrum(
-                zeta_tr,
-                spectrum_type=spectrum_type,
-                direction=direction)
-        else:
-            raise Exception('invalid spectrum type')
+        k, S = self.compute_spectrum(
+            transect_data,
+            spectrum_type=spectrum_type,
+            direction=direction,
+        )
 
-        return k, S
+        return k, S, transect_data
 
     def taper_data(self, data):
         # taper the boundaries

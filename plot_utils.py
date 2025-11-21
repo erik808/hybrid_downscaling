@@ -46,8 +46,8 @@ class PlotMachine():
         metadata = plot_dict['meta']
         plot_dict.pop('meta', None)
         prefix = metadata['prefix']
-        fig_name = (f"{self.dirs['results']}/"
-                    f"{prefix}reconstructions_t{metadata['time']}.png")
+        fig_name = (f"{self.results_dir}/"
+                    f"{prefix}reconstructions_t{metadata['time']:04d}.png")
 
         num_plots = len(plot_dict.keys())
         M, N = metadata['subplot_shape']
@@ -82,9 +82,11 @@ class PlotMachine():
                       'pred': 'prediction',
                       'absdiff': '|truth - prediction|',
                       'lowres': 'bilinear'}
-        for i, (key, data) in enumerate(T.items()):
+
+        ordering = ['truth', 'pred', 'absdiff', 'lowres']
+        for i, key in enumerate(ordering):
             plt.subplot(len(T.values()), 1, i + 1)
-            a = plt.pcolormesh(data.transpose())
+            a = plt.pcolormesh(T[key].transpose())
             plt.colorbar(a)
             plt.gca().set_title(long_names[key])
 
@@ -207,6 +209,7 @@ class PlotMachine():
 
     def create_postfix(self, add_name=''):
 
+        self.postfix = ''
         if self.trial_id is not None:
             self.postfix += f'_trial_{self.trial_id}'
 

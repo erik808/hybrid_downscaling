@@ -16,7 +16,7 @@ gamma = 1
 # options: 'simpleRNN', 'dense', 'lstm', 'conv3d', 'convlstm'
 predictor = 'dense'
 
-output_filters = 64
+output_filters = 128
 
 convlstm_filters = 64
 
@@ -24,5 +24,5 @@ activation = 'leaky_relu'
 
 kernel_regularizer = None  # {'L2': 1e-2}
 recurrent_regularizer = None  # {'L2': 1e-2}
-recurrent_dropout = 0.0  # 0.4
+recurrent_dropout = 0.4  # 0.4
 dense_units = 4

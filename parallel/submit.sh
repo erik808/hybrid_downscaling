@@ -5,7 +5,7 @@
 #SBATCH -N 1
 #SBATCH -n 4
 #SBATCH --cpus-per-task 4
-#SBATCH --mem 16G
+#SBATCH --mem 32G
 #SBATCH --account sm_fouo
 
 export OMP_NUM_THREADS=8

@@ -30,7 +30,7 @@ else:
 dmgr_cmems = \
     data_manager_cmems.DataManagerCMEMS(
         experiment_id=experiment_id,
-        testing=True,
+        testing=False,
         force_rebuild=False,
     )
 
@@ -83,7 +83,7 @@ analysis_callback = callbacks.AnalysisHybrid(
 )
 hist = hybrid.fit(
     x=dgen_train,
-    epochs=1,
+    epochs=20,
     shuffle=False,
     validation_data=dgen_test,
     callbacks=[

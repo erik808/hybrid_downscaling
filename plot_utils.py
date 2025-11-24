@@ -43,6 +43,7 @@ class PlotMachine():
         os.system(f'mkdir -p {self.results_dir}')
 
     def plot_reconstructions(self, plot_dict):
+        plt.close('all')
         metadata = plot_dict['meta']
         plot_dict.pop('meta', None)
         prefix = metadata['prefix']
@@ -68,7 +69,7 @@ class PlotMachine():
         plt.savefig(fig_name, bbox_inches='tight')
 
     def plot_hovmöller(self, T, plot_type, transect, epoch):
-
+        plt.close('all')
         if plot_type == 'energy':
             for key, value in T.items():
                 # take only first 2 variables uo, vo
@@ -76,7 +77,6 @@ class PlotMachine():
 
         T['absdiff'] = np.abs(T['truth'] - T['pred'])
 
-        # plt.switch_backend('qtagg')
         plt.figure(figsize=(8, 10))
         long_names = {'truth': 'truth',
                       'pred': 'prediction',
@@ -178,6 +178,7 @@ class PlotMachine():
 
         fig_name = f'{self.results_dir}/history{self.postfix}.png'
 
+        plt.close('all')
         plt.figure(figsize=(11, 9))
         [plt.semilogy(value, label=key) for key, value in hist.history.items()]
         plt.grid(which='both')
@@ -224,6 +225,7 @@ class PlotMachine():
                           masking,
                           add_name='',
                           ):
+        plt.close('all')
         results_HR = np.concatenate([r['HR_data'] for r in results], 0)
         truths_HR = np.concatenate([t['HR_data'] for t in truths], 0)
         time_arr = [r['time'] for r in results]
@@ -260,6 +262,7 @@ class PlotMachine():
                       add_powerlaws=False,
                       ):
 
+        plt.close('all')
         k = {}
         S = {}
         T = {}

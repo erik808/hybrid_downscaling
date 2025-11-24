@@ -14,9 +14,9 @@ time_range_testing = slice('2023-09-01', '2023-10-01')
 data_dir = 'data'
 transect_dir = f'{data_dir}/transects'
 data_files = \
-    (f'{data_dir}/cmems_mod_nws_phy_anfc_0.027deg-2D_PT15M-i_'
+    (f'{data_dir}/cmems_mod_nws_phy_anfc_0.027deg-2D_PT1H-m_'
      'uo-vo-zos_4.22E-7.78E_56.81N-58.69N_'
-     '2022-12-01-2025-09-30_zarr/data.zarr')
+     '2022-12-01-2025-09-30_zarr_nocons/data.zarr')
 coarse_data_folder = \
     (f'{data_dir}/coarse_data')
 bathy_file = \

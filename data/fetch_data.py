@@ -21,8 +21,9 @@ box_NwCC['max_dep'] = 643.5668334960938
 time_start = "2022-12-01T00:00:00"
 time_end = "2025-09-30T23:00:00"
 
-fetch = 'bathy'
+fetch = 'vars'
 print(f'fetch {fetch}')
+
 
 def fetch_wrapper(box, **kwargs):
     out = cm.subset(
@@ -37,13 +38,14 @@ def fetch_wrapper(box, **kwargs):
     return out
 
 
-if fetch == 'uv':
+if fetch == 'vars':
 
-    dataset_id_HR = "cmems_mod_nws_phy_anfc_0.027deg-2D_PT15M-i"
-    dataset_id_LR = "cmems_mod_nws_phy-uv_my_7km-2D_PT1H-i"
-    variables = ["uo", "vo"]
+    # dataset_id_HR = "cmems_mod_nws_phy_anfc_0.027deg-2D_PT15M-i"
+    # dataset_id_LR = "cmems_mod_nws_phy-uv_my_7km-2D_PT1H-i"
+    dataset_id_HR = "cmems_mod_nws_phy_anfc_0.027deg-2D_PT1H-m"
+    variables = ["uo", "vo", "zos"]
 
-    for ds_id in [dataset_id_HR, dataset_id_LR]:
+    for ds_id in [dataset_id_HR]:
         out = fetch_wrapper(box_NwCC,
                             dataset_id=ds_id,
                             variables=variables,
@@ -54,8 +56,8 @@ if fetch == 'uv':
 elif fetch == 'bathy':
 
     ds_id = "cmems_mod_nws_phy_anfc_0.027deg-3D_static"
-    dataset_part="bathy"
-    variables=["deptho", "deptho_lev", "mask"]
+    dataset_part = "bathy"
+    variables = ["deptho", "deptho_lev", "mask"]
 
     out = fetch_wrapper(box_NwCC,
                         dataset_id=ds_id,
@@ -66,8 +68,8 @@ elif fetch == 'bathy':
 
 elif fetch == 'coords':
     ds_id = "cmems_mod_nws_phy_anfc_0.027deg-3D_static"
-    dataset_part="coords"
-    variables=["e1t", "e2t", "e3t"]
+    dataset_part = "coords"
+    variables = ["e1t", "e2t", "e3t"]
 
     out = fetch_wrapper(box_NwCC,
                         dataset_id=ds_id,

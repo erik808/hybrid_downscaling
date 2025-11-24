@@ -2,15 +2,13 @@ import xarray as xr
 import os
 from dask.diagnostics import ProgressBar
 
-# convert big file to monthly files, adapted from the
-# save_mfdataset example
-
-# compression level (0-9)
-complevel = 0
+# convert to zarr
 
 # filename = 'cmems_mod_nws_phy_anfc_0.027deg-2D_PT15M-i_uo-vo_4.23E-7.78E_56.81N-58.70N_2023-01-01-2023-12-31.nc'
-filename = 'cmems_mod_nws_phy_anfc_0.027deg-2D_PT15M-i_uo-vo-zos_4.22E-7.78E_56.81N-58.69N_2022-12-01-2025-09-30.nc'
-basename = f'{filename[:-3]}_zarr'
+# filename = 'cmems_mod_nws_phy_anfc_0.027deg-2D_PT15M-i_uo-vo-zos_4.22E-7.78E_56.81N-58.69N_2022-12-01-2025-09-30.nc'
+# filename = 'cmems_mod_nws_phy_anfc_0.027deg-2D_PT1H-m_uo-vo-zos_4.22E-7.78E_56.81N-58.69N_2022-12-01-2025-09-30.nc'
+filename = 'cmems_mod_nws_phy_anfc_0.027deg-2D_PT1H-m_uo-vo-zos_4.22E-7.78E_56.81N-58.69N_2022-12-01-2025-09-30.nc'
+basename = f'{filename[:-3]}_zarr_nocons'
 
 cmd = f'mkdir -p {basename}'
 print(cmd)
@@ -26,7 +24,8 @@ with ProgressBar():
     ds.to_zarr(f'{basename}/data.zarr',
                mode='w',
                encoding=encoding,
-               consolidated=True)
+               # consolidated=True,
+               )
 
 # def nested_groupby(ds):
 #     datasets = []

@@ -291,6 +291,19 @@ class LSPredictor(layers.Layer):
             ])
             self.output_transf = layers.Reshape(dims)
 
+        elif self.predictor == 'dense_residual':
+            self.input_transf = FlattenAndStack()
+            self.predictmod = DenseResidual(
+                units=self.dense_units,
+            )
+            self.output_transf = keras.Sequential([
+                layers.Dense(
+                    units=np.prod(dims),
+                    activation=self.activation,
+                ),
+                layers.Reshape(dims),
+                ])
+
         elif self.predictor == 'conv3d':
             self.input_transf = Stack()
 
@@ -389,3 +402,27 @@ class FlattenAndStack(layers.Layer):
     def call(self, x):
         return ops.stack([layers.Flatten()(sample)
                           for sample in x], axis=1)
+
+
+class DenseResidual(layers.Layer):
+    def __init__(
+            self,
+            units,
+            **kwargs,
+    ):
+        super().__init__(**kwargs)
+        self.units = units
+
+    def build(self, input_shape):
+        Nt = input_shape[1]
+        self.input_layer = layers.Dense(units=self.units)
+        self.rec_lrs = []
+        for i in range(Nt):
+            self.rec_lrs.append(layers.Dense(units=self.units))
+
+    def call(self, inputs):
+        # x0 = self.input_layer(inputs[:, 0, ])
+        # breakpoint()
+        # for i, lr in enumerate(self.rec_lrs):
+        #     x1t = lr(x0)
+        breakpoint()

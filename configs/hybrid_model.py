@@ -14,13 +14,13 @@ learning_rate = 5e-5
 alpha = 1
 
 # weight on prediction loss in the latent space (inner prediction)
-alpha_ls = 1e-3
+alpha_ls = 1
 
 # weight on VAE KL loss  (betaVAE)
-beta = 1e-3
+beta = 1
 
 # weight on VAE reconstruction loss
-gamma = 1e-2
+gamma = 1
 
 # hybridization: 'product', 'concat', 'add'
 hybridization = 'product'

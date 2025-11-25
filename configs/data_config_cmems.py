@@ -2,7 +2,7 @@
 # Data configuration specific for the synthetic CMEMS NWS set
 # --------------------------------------------------------------------
 compute_data = False
-split_factor = 4 / 5
+split_factor = 11 / 12
 time_range = slice('2023-01-01', '2023-12-31')
 # time_range = slice('2023-01-01', '2023-04-01')
 

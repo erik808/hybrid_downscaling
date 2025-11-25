@@ -3,12 +3,12 @@
 trainable_resnet = True
 trainable_predictor = True
 
-# select losses to include
-# loss_list = ['outer_pred', 'inner_pred', 'reconstruction', 'KL']
-loss_list = ['outer_pred']  # , 'reconstruction']
+# select losses to include: 'outer_pred', 'inner_pred',
+# 'reconstruction', 'KL'
+loss_list = ['outer_pred', 'inner_pred', 'reconstruction', 'KL']
 
 # learning rate
-learning_rate = 1e-3
+learning_rate = 5e-5
 
 # weight on outer prediction loss
 alpha = 1

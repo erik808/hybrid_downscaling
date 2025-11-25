@@ -5,22 +5,22 @@ trainable_predictor = True
 
 # select losses to include: 'outer_pred', 'inner_pred',
 # 'reconstruction', 'KL'
-loss_list = ['outer_pred', 'inner_pred', 'reconstruction', 'KL']
+loss_list = ['outer_pred', 'inner_pred', 'KL'] # , 'inner_pred', 'reconstruction', 'KL']
 
 # learning rate
-learning_rate = 5e-5
+learning_rate = 1e-3
 
 # weight on outer prediction loss
 alpha = 1
 
 # weight on prediction loss in the latent space (inner prediction)
-alpha_ls = 1
+alpha_ls = 1e-3
 
 # weight on VAE KL loss  (betaVAE)
-beta = 1
+beta = 1e-3
 
 # weight on VAE reconstruction loss
-gamma = 1
+gamma = 1e-3
 
 # hybridization: 'product', 'concat', 'add'
 hybridization = 'product'

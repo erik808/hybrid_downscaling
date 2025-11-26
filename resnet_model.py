@@ -330,6 +330,8 @@ class UpSampling(layers.Layer):
             activation='prelu',
             method='bilinear',
             scale=2,
+            num_layers=1,
+            use_residual=False,
             **kwargs,
     ):
         super().__init__(**kwargs)
@@ -338,6 +340,8 @@ class UpSampling(layers.Layer):
         self.scale = scale
         self.method = method
         self.activation = activation
+        self.num_layers = num_layers
+        self.use_residual = use_residual
 
     def build(self, input_shape):
         _, M, N, C = input_shape
@@ -345,15 +349,34 @@ class UpSampling(layers.Layer):
         self.upsample = layers.UpSampling2D(
             size=(self.scale, self.scale),
             interpolation=self.method)
-        self.conv2d = layers.Conv2D(
-            filters=self.filters,
-            kernel_size=self.kernel_size,
-            padding='same',
-            activation=None,
-        )
-        self.actv = base_model.Activation(self.activation)
+
+        self.conv_layers = []
+        self.BN_layers = []
+        self.actv_layers = []
+        for cl in range(self.num_layers):
+            self.conv_layers.append(
+                layers.Conv2D(
+                    filters=self.filters,
+                    kernel_size=self.kernel_size,
+                    padding='same',
+                    activation=None,
+                )
+            )
+            # self.BN_layers.append(layers.BatchNormalization())
+            self.actv_layers.append(base_model.Activation(self.activation))
+
+        self.add = layers.Add()
 
     def call(self, inputs):
         s = self.upsample(inputs)
-        s = self.conv2d(s)
-        return self.actv(s)
+        skip = s
+        for i in range(self.num_layers):
+            s = self.conv_layers[i](s)
+            # s = self.BN_layers[i](s)
+            s = self.actv_layers[i](s)
+
+        out = s
+        if self.use_residual:
+            out = self.add([out, skip])
+
+        return out

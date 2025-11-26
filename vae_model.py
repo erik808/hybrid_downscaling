@@ -134,7 +134,7 @@ class VAE(base_model.BaseModel):
                          self.sampling_type == 'spatial' and
                          not self.deterministic_mode) else 1
 
-            x = self.conv_downsampling(x, mult)
+            x = self.conv_downsampling(x, mult, version='v2')
 
         if self.bypass_vae:
             x = layers.Identity(name='vae_input_transform')(input_k)
@@ -229,16 +229,72 @@ class VAE(base_model.BaseModel):
     def conv_downsampling(
             self,
             inputs,
-            multiple=1
+            multiple=1,
+            version='v1',
+            num_layers=3,
+            use_residual=True,
     ):
-        out = layers.Conv2D(
-            filters=self.filters * multiple,
-            strides=2,
-            kernel_size=3,
-            padding='same',
-            activation=None,
-        )(inputs)
-        return self.create_activation(out)
+        if version == 'v1':
+            out = layers.Conv2D(
+                filters=self.filters * multiple,
+                strides=2,
+                kernel_size=3,
+                padding='same',
+                activation=None,
+            )(inputs)
+            return self.create_activation(out)
+
+        elif version == 'v2':
+            if (inputs.shape[-1] != self.filters and use_residual):
+                inputs = layers.Conv2D(
+                    filters=self.filters,
+                    strides=1,
+                    kernel_size=3,
+                    padding='same',
+                    activation=None,
+                )(inputs)
+
+            skip = inputs
+            out = inputs
+            for i in range(num_layers - 1):
+                out = layers.Conv2D(
+                    filters=self.filters,
+                    strides=1,
+                    kernel_size=3,
+                    padding='same',
+                    activation=None,
+                )(out)
+                out = self.create_activation(out)
+                out = layers.Conv2D(
+                    filters=self.filters,
+                    strides=1,
+                    kernel_size=3,
+                    padding='same',
+                    activation=None,
+                )(out)
+                out = self.create_activation(out)
+
+            if use_residual:
+                out = layers.Add()([out, skip])
+            out = layers.Conv2D(
+                filters=self.filters,
+                strides=2,
+                kernel_size=3,
+                padding='same',
+                activation=None,
+            )(out)
+            out = self.create_activation(out)
+            if multiple > 1:
+                out = layers.Conv2D(
+                    filters=self.filters * multiple,
+                    strides=1,
+                    kernel_size=3,
+                    padding='same',
+                    activation=None,
+                )(out)
+                out = layers.BatchNormalization()(out)
+                out = self.create_activation(out)
+            return out
 
     def conv_upsampling(
             self,
@@ -259,6 +315,8 @@ class VAE(base_model.BaseModel):
                 scale=2,
                 activation=self.activation,
                 method='bilinear',
+                num_layers=1,
+                use_residual=False,
             )(inputs)
         else:
             raise Exception('invalid upsampling method')

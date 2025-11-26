@@ -20,7 +20,7 @@ filters = 128  # tested: 64
 num_filters_hybrid = 64
 
 # number of down and upsampling convolutions
-num_layers = 6  # tested: 4
+num_layers = 3  # tested: 4
 
 # deterministic mode bypasses the sampling layer and uses the mean
 # only
@@ -30,7 +30,7 @@ deterministic_mode = True
 bypass_vae = False
 
 # select sampling: 'spatial', 'dense'
-sampling_type = 'dense'
+sampling_type = 'spatial'
 
 # latent space size
 dense_units = 256  # used in dense mode

@@ -65,7 +65,7 @@ class PlotMachine():
             plt.colorbar(a)
             plt.gca().set_title(key)
 
-        print(f'\nsaving to {fig_name}')
+        print(fig_name)
         plt.savefig(fig_name, bbox_inches='tight')
 
     def plot_hovmöller(self, T, plot_type, transect, epoch):
@@ -250,7 +250,7 @@ class PlotMachine():
 
         fig_name = \
             f'{self.results_dir}/timestepping.png'
-        print('\n saving to ', fig_name)
+        print(fig_name)
         plt.savefig(fig_name)
 
     def plot_spectrum(self,

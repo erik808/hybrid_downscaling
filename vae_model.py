@@ -129,6 +129,7 @@ class VAE(base_model.BaseModel):
         for i in range(self.num_layers):
             # doubling #filters when used for mean and logvar
             mult = 2 if (i == self.num_layers - 1 and
+                         self.sampling_type == 'spatial' and
                          not self.deterministic_mode) else 1
 
             x = self.conv_downsampling(x, mult)

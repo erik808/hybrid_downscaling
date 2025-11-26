@@ -231,7 +231,7 @@ class VAE(base_model.BaseModel):
             inputs,
             multiple=1,
             version='v2',
-            num_layers=2,
+            num_layers=1,
             use_residual=True,
     ):
         if version == 'v1':

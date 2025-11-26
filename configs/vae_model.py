@@ -16,7 +16,7 @@ activation_out = 'tanh_scaled'
 
 # number of filters in conv layers
 input_filters = 32
-filters = 64  # tested: 64
+filters = 256  # tested: 64
 num_filters_hybrid = 64
 
 # number of down and upsampling convolutions

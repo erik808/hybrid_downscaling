@@ -142,7 +142,10 @@ class VAE(base_model.BaseModel):
             x_shape = x.shape[1:]
             x = layers.Flatten()(x)
             mult = 1 if self.deterministic_mode else 2
-            x = layers.Dense(units=self.dense_units * mult)(x)
+            x = layers.Dense(
+                units=self.dense_units * mult,
+                activation=self.activation,
+            )(x)
 
         mean, logvar = Split(
             name="vae_splitter",
@@ -154,7 +157,10 @@ class VAE(base_model.BaseModel):
         )(mean, logvar)
 
         if self.sampling_type == 'dense':
-            x = layers.Dense(units=ops.prod(x_shape))(x)
+            x = layers.Dense(
+                units=ops.prod(x_shape),
+                activation=self.activation,
+            )(x)
             x = layers.Reshape(x_shape)(x)
 
         # Upsampling layers ---------------------------------

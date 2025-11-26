@@ -33,4 +33,4 @@ bypass_vae = False
 sampling_type = 'dense'
 
 # latent space size
-dense_units = 128  # used in dense mode
+dense_units = 64  # used in dense mode

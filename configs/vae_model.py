@@ -28,3 +28,8 @@ deterministic_mode = False
 
 # bypass the whole vae
 bypass_vae = False
+
+# select sampling: 'spatial', 'dense'
+sampling_type = 'dense'
+
+dense_units = 64  # used in dense mode

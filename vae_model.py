@@ -136,7 +136,13 @@ class VAE(base_model.BaseModel):
         if self.bypass_vae:
             x = layers.Identity(name='vae_input_transform')(input_k)
 
-        # Sampling layer
+        # Sampling layers
+        if self.sampling_type == 'dense':
+            x_shape = x.shape[1:]
+            x = layers.Flatten()(x)
+            mult = 1 if self.deterministic_mode else 2
+            x = layers.Dense(units=self.dense_units * mult)(x)
+
         mean, logvar = Split(
             name="vae_splitter",
             bypass=self.deterministic_mode
@@ -145,6 +151,10 @@ class VAE(base_model.BaseModel):
             name="vae_sampling",
             bypass=self.deterministic_mode
         )(mean, logvar)
+
+        if self.sampling_type == 'dense':
+            x = layers.Dense(units=ops.prod(x_shape))(x)
+            x = layers.Reshape(x_shape)(x)
 
         # Upsampling layers
         y = x

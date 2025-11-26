@@ -44,7 +44,11 @@ class AnalysisBase(keras.callbacks.Callback, ABC):
         pass
 
     @abstractmethod
-    def restrict_xy(self, x, y):
+    def restrict_x(self, x):
+        pass
+
+    @abstractmethod
+    def restrict_y(self, y):
         pass
 
     @property
@@ -79,17 +83,6 @@ class AnalysisBase(keras.callbacks.Callback, ABC):
                 reconstruction=self.reconstruction,
             )
 
-    def random_prediction(self, epoch):
-        n = self.dgen.__len__()
-        idx = np.random.randint(n)
-        self.predict_and_plot(idx, epoch)
-
-    def predict_and_plot(self, idx, epoch):
-        x, y = self.dgen.__getitem__(idx)
-        z = self.call_model(x)
-        x, y = self.restrict_xy(x, y)
-        self.plot_reconstruction(x, y, z, epoch)
-
     def unscale_var(self, var, scaler):
         """ unscale variables """
         var_shape = var.shape
@@ -97,23 +90,6 @@ class AnalysisBase(keras.callbacks.Callback, ABC):
         return scaler\
             .inverse_transform(var.reshape(Tdim, -1))\
             .reshape(var_shape)
-
-    def plot_spectra(self, epoch):
-        n = self.dgen.__len__()
-        x_list, y_list, z_list = [], [], []
-        for i in range(n):
-            x, y = self.dgen.__getitem__(i)
-            z = self.call_model(x)
-            x, y = self.restrict_xy(x, y)
-            x_list.append(x)
-            y_list.append(y)
-            z_list.append(z)
-
-        x = np.concatenate(x_list, axis=0)
-        y = np.concatenate(y_list, axis=0)
-        z = np.concatenate(z_list, axis=0)
-
-        self.spectra_wrapper(x, y, z, epoch)
 
     def plot_reconstruction(
             self,
@@ -218,7 +194,7 @@ class AnalysisBase(keras.callbacks.Callback, ABC):
             time = pd.to_datetime(batch_x['meta']['time'][b_i, 0], unit="s")
 
             # remove truth (just to be sure)
-            x_HR[0, 0, ] = np.zeros_like(x_HR[0, 0, ])
+            # x_HR[0, 0, ] = np.zeros_like(x_HR[0, 0, ])
 
             # update x lookback dimension with previous time step if
             # available
@@ -285,9 +261,9 @@ class AnalysisBase(keras.callbacks.Callback, ABC):
              },
         )
 
-        x = np.concatenate([r['LR_data'] for r in results], 0)[:, 0,]
-        y = np.concatenate([t['HR_data'] for t in truths], 0)[:, 0,]
-        z = np.concatenate([r['HR_data'] for r in results], 0)[:, 0,]
+        x = np.concatenate([self.restrict_x(r) for r in results], 0)
+        y = np.concatenate([self.restrict_y(t) for t in truths], 0)
+        z = np.concatenate([self.restrict_y(r) for r in results], 0)
 
         if spectra:
             self.spectra_wrapper(x, y, z, epoch)
@@ -298,17 +274,17 @@ class AnalysisBase(keras.callbacks.Callback, ABC):
                 self.plot_reconstruction(x, y, z, epoch, t)
 
     def spectra_wrapper(self, x, y, z, epoch):
-
         x_unscaled, y_unscaled, z_unscaled = \
             [self.unscale_var(d, self.dgen.dm.scalers[res])
              for d, res in zip([x, y, z], self.scaler_list)]
 
-        # upsample unscaled x (bilinear interpolation)
-        x_unscaled = \
-            np.ascontiguousarray(x_unscaled.transpose((0, 3, 1, 2)))
-        x_unscaled = \
-            self.dgen.dm.bilin_upsampler(x_unscaled)\
-                        .transpose((0, 2, 3, 1))
+        if x_unscaled.shape != z_unscaled.shape:
+            # upsample unscaled x (bilinear interpolation)
+            x_unscaled = \
+                np.ascontiguousarray(x_unscaled.transpose((0, 3, 1, 2)))
+            x_unscaled = \
+                self.dgen.dm.bilin_upsampler(x_unscaled)\
+                            .transpose((0, 2, 3, 1))
 
         data = {
             'lowres': np.nan_to_num(x_unscaled),
@@ -353,10 +329,15 @@ class AnalysisResNet(AnalysisBase):
         z = (z * self.mask).cpu().detach().numpy()
         return z
 
-    def restrict_xy(self, x, y):
+    def restrict_x(self, x):
         # keep relevant keys, ignore lookback
-        x, y = x['LR_data'][:, 0,], y['HR_data'][:, 0,]
-        return x, y
+        x = x['LR_data'][:, 0,]
+        return x
+
+    def restrict_y(self, x, y):
+        # keep relevant keys, ignore lookback
+        y = y['HR_data'][:, 0,]
+        return y
 
     @property
     def scaler_list(self):
@@ -383,10 +364,15 @@ class AnalysisVAE(AnalysisBase):
         z = (z * self.mask).cpu().detach().numpy()
         return z
 
-    def restrict_xy(self, x, y):
+    def restrict_x(self, x):
         # keep relevant keys, ignore lookback
-        x, y = x['HR_data'][:, 0,], y['HR_data'][:, 0,]
-        return x, y
+        x = x['HR_data'][:, 0,]
+        return x
+
+    def restrict_y(self, y):
+        # keep relevant keys, ignore lookback
+        y = y['HR_data'][:, 0,]
+        return y
 
     @property
     def scaler_list(self):
@@ -414,10 +400,15 @@ class AnalysisPredictor(AnalysisBase):
         z = (z * self.mask).cpu().detach().numpy()
         return z
 
-    def restrict_xy(self, x, y):
+    def restrict_x(self, x):
         # keep relevant keys, ignore lookback
-        x, y = x['LR_data'][:, 0,], y['HR_data'][:, 0,]
-        return x, y
+        x = x['LR_data'][:, 0,]
+        return x
+
+    def restrict_y(self, y):
+        # keep relevant keys, ignore lookback
+        y = y['HR_data'][:, 0,]
+        return y
 
     @property
     def scaler_list(self):
@@ -447,10 +438,15 @@ class AnalysisHybrid(AnalysisBase):
         z = (z * self.mask).cpu().detach().numpy()
         return z
 
-    def restrict_xy(self, x, y):
+    def restrict_x(self, x):
         # keep relevant keys, ignore lookback
-        x, y = x['LR_data'][:, 0,], y['HR_data'][:, 0,]
-        return x, y
+        x = x['LR_data'][:, 0,]
+        return x
+
+    def restrict_y(self, y):
+        # keep relevant keys, ignore lookback
+        y = y['HR_data'][:, 0,]
+        return y
 
     @property
     def scaler_list(self):

@@ -1,5 +1,5 @@
 # learning rate in Adam optimizer
-learning_rate = 2e-3
+learning_rate = 5e-5
 
 # weight on KL loss
 beta = 1e-5

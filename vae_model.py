@@ -117,7 +117,7 @@ class VAE(base_model.BaseModel):
         x = layers.Conv2D(
             filters=self.input_filters,
             strides=1,
-            kernel_size=9,
+            kernel_size=3,
             padding='same',
             kernel_initializer="glorot_uniform",
             activation=None,
@@ -180,7 +180,7 @@ class VAE(base_model.BaseModel):
         # output transform
         z = layers.Conv2D(
             filters=self.num_vars,
-            kernel_size=9,
+            kernel_size=3,
             padding='same',
             kernel_initializer="glorot_uniform",
             name='vae_output_conv',

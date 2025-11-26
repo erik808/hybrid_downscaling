@@ -19,6 +19,6 @@ num_filters_hybrid = 64
 
 # number of additional layers in output block (not including output
 # sigmoid)
-num_output_layers = 1
+num_output_layers = 0
 
 # number of necessary upsampling blocks is inferred from LR and HR grids

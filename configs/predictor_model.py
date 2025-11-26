@@ -24,5 +24,5 @@ activation = 'leaky_relu'
 
 kernel_regularizer = None  # {'L2': 1e-2}
 recurrent_regularizer = None  # {'L2': 1e-2}
-recurrent_dropout = 0.4  # 0.4
+recurrent_dropout = 0.0  # 0.4
 dense_units = 32

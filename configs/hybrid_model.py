@@ -5,7 +5,7 @@ trainable_predictor = True
 
 # select losses to include: 'outer_pred', 'inner_pred',
 # 'reconstruction', 'KL'
-loss_list = ['outer_pred', 'inner_pred', 'KL'] # , 'inner_pred', 'reconstruction', 'KL']
+loss_list = ['outer_pred', 'inner_pred', 'reconstruction', 'KL'] # , 'inner_pred', 'reconstruction', 'KL']
 
 # learning rate
 learning_rate = 1e-3
@@ -20,7 +20,7 @@ alpha_ls = 1e-3
 beta = 1e-3
 
 # weight on VAE reconstruction loss
-gamma = 1e-3
+gamma = 1e-2
 
 # hybridization: 'product', 'concat', 'add'
 hybridization = 'product'

@@ -117,7 +117,7 @@ class VAE(base_model.BaseModel):
         x = layers.Conv2D(
             filters=self.input_filters,
             strides=1,
-            kernel_size=3,
+            kernel_size=9,
             padding='same',
             kernel_initializer="glorot_uniform",
             activation=None,
@@ -125,19 +125,19 @@ class VAE(base_model.BaseModel):
         )(input_k)
         x = self.create_activation(x)
 
-        # Downsampling layers
+        # Downsampling layers ---------------------------------
         for i in range(self.num_layers):
             # doubling #filters when used for mean and logvar
             mult = 2 if (i == self.num_layers - 1 and
                          self.sampling_type == 'spatial' and
                          not self.deterministic_mode) else 1
 
-            x = self.conv_downsampling(x, mult)
+            x = self.conv_downsampling(x, mult * (i + 1))
 
         if self.bypass_vae:
             x = layers.Identity(name='vae_input_transform')(input_k)
 
-        # Sampling layers
+        # Sampling layers ---------------------------------
         if self.sampling_type == 'dense':
             x_shape = x.shape[1:]
             x = layers.Flatten()(x)
@@ -157,10 +157,10 @@ class VAE(base_model.BaseModel):
             x = layers.Dense(units=ops.prod(x_shape))(x)
             x = layers.Reshape(x_shape)(x)
 
-        # Upsampling layers
+        # Upsampling layers ---------------------------------
         y = x
-        for i in range(self.num_layers):
-            y = self.conv_upsampling(y)
+        for i in range(self.num_layers, 0, -1):
+            y = self.conv_upsampling(y, i)
 
         # layer to couple to other models
         y = layers.Conv2D(filters=self.num_filters_hybrid,
@@ -174,7 +174,7 @@ class VAE(base_model.BaseModel):
         # output transform
         z = layers.Conv2D(
             filters=self.num_vars,
-            kernel_size=3,
+            kernel_size=9,
             padding='same',
             kernel_initializer="glorot_uniform",
             name='vae_output_conv',
@@ -211,17 +211,18 @@ class VAE(base_model.BaseModel):
     def conv_upsampling(
             self,
             inputs,
+            multiple=1,
     ):
         if self.upsampling_method == 'subpixel':
             return resnet_model.SubPixelConv(
-                filters_out=self.filters,
+                filters_out=self.filters * multiple,
                 kernel_size=3,
                 scale=2,
                 activation=self.activation
             )(inputs)
         elif self.upsampling_method == 'bilinear':
             return resnet_model.UpSampling(
-                filters=self.filters,
+                filters=self.filters * multiple,
                 kernel_size=3,
                 scale=2,
                 activation=self.activation,

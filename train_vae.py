@@ -62,7 +62,7 @@ model_checkpoint_callback = keras.callbacks.ModelCheckpoint(
 
 hist = vae.fit(
     x=dgen_train,
-    epochs=100,
+    epochs=30,
     validation_data=dgen_test,
     callbacks=[
         analysis_callback,

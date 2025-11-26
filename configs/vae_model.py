@@ -2,7 +2,7 @@
 learning_rate = 5e-5
 
 # weight on KL loss
-beta = 1e-5
+beta = 0.0
 
 # weight on reconstruction loss
 gamma = 1
@@ -15,7 +15,7 @@ activation = 'leaky_relu'
 activation_out = 'tanh_scaled'
 
 # number of filters in conv layers
-input_filters = 64
+input_filters = 32
 filters = 64  # tested: 64
 num_filters_hybrid = 64
 
@@ -24,7 +24,7 @@ num_layers = 4  # tested: 4
 
 # deterministic mode bypasses the sampling layer and uses the mean
 # only
-deterministic_mode = False
+deterministic_mode = True
 
 # bypass the whole vae
 bypass_vae = False
@@ -32,4 +32,5 @@ bypass_vae = False
 # select sampling: 'spatial', 'dense'
 sampling_type = 'dense'
 
-dense_units = 64  # used in dense mode
+# latent space size
+dense_units = 128  # used in dense mode

@@ -226,7 +226,7 @@ class AnalysisBase(keras.callbacks.Callback, ABC):
                 # create kth model input
                 x_k = x_(batch_x, k, x_km1)
                 # perform time step and update x_k
-                x_k['HR_data'][0, 0, ] = self.call_model(x_k)
+                x_k['HR_data'][0, 0, ], x_k['latent'] = self.call_model(x_k)
                 batch_results.append(x_k)
                 x_km1 = x_k
 
@@ -327,7 +327,7 @@ class AnalysisResNet(AnalysisBase):
         )
         # apply nan mask and detach
         z = (z * self.mask).cpu().detach().numpy()
-        return z
+        return z, []
 
     def restrict_x(self, x):
         # keep relevant keys, ignore lookback
@@ -359,10 +359,11 @@ class AnalysisVAE(AnalysisBase):
     def call_model(self, x):
         z = self.model({'HR_data': ops.nan_to_num(x['HR_data'])},
                        training=False)
-        z = z['decoded']
+        z_decoded = z['decoded']
+        z_mean = z['mean'].cpu().detach().numpy()
         # apply nan mask and detach
-        z = (z * self.mask).cpu().detach().numpy()
-        return z
+        z_decoded = (z_decoded * self.mask).cpu().detach().numpy()
+        return z_decoded, z_mean
 
     def restrict_x(self, x):
         # keep relevant keys, ignore lookback
@@ -396,9 +397,10 @@ class AnalysisPredictor(AnalysisBase):
         z = self.model({'HR_data': ops.nan_to_num(x['HR_data'])},
                        training=False)
         z = z['decoded']
+        z_mean = z['mean'].cpu().detach().numpy()
         # apply nan mask and detach
         z = (z * self.mask).cpu().detach().numpy()
-        return z
+        return z, z_mean
 
     def restrict_x(self, x):
         # keep relevant keys, ignore lookback
@@ -434,9 +436,10 @@ class AnalysisHybrid(AnalysisBase):
                         },
                        training=False)
         z = z['hybrid']
+        z_mean = z['mean'].cpu().detach().numpy()
         # apply nan mask and detach
         z = (z * self.mask).cpu().detach().numpy()
-        return z
+        return z, z_mean
 
     def restrict_x(self, x):
         # keep relevant keys, ignore lookback

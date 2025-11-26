@@ -25,6 +25,8 @@ class VAE(base_model.BaseModel):
         self.compiler = keras.optimizers.Adam(
             learning_rate=self.learning_rate)
 
+        self.kernel_regularizer = keras.regularizers.L2(1e-2)
+
         self.loss_fn = keras.losses.MeanSquaredError()
         self.loss_tracker = keras.metrics.Mean(name="loss")
         self.re_loss_tracker = keras.metrics.Mean(name="recons")
@@ -132,7 +134,7 @@ class VAE(base_model.BaseModel):
                          self.sampling_type == 'spatial' and
                          not self.deterministic_mode) else 1
 
-            x = self.conv_downsampling(x, mult * (i + 1))
+            x = self.conv_downsampling(x, mult)
 
         if self.bypass_vae:
             x = layers.Identity(name='vae_input_transform')(input_k)
@@ -141,11 +143,23 @@ class VAE(base_model.BaseModel):
         if self.sampling_type == 'dense':
             x_shape = x.shape[1:]
             x = layers.Flatten()(x)
+            x = layers.Dense(
+                units=self.dense_units,
+                activation=None,
+                kernel_initializer="identity",
+                kernel_regularizer=self.kernel_regularizer,
+                # trainable=False,
+            )(x)
+            x = self.create_activation(x)
             mult = 1 if self.deterministic_mode else 2
             x = layers.Dense(
-                units=self.dense_units * mult,
-                activation=self.activation,
+                units=self.latent_space * mult,
+                activation=None,
+                kernel_initializer="identity",
+                kernel_regularizer=self.kernel_regularizer,
+                # trainable=False,
             )(x)
+            x = self.create_activation(x)
 
         mean, logvar = Split(
             name="vae_splitter",
@@ -158,9 +172,21 @@ class VAE(base_model.BaseModel):
 
         if self.sampling_type == 'dense':
             x = layers.Dense(
-                units=ops.prod(x_shape),
-                activation=self.activation,
+                units=self.dense_units,
+                activation=None,
+                kernel_initializer="identity",
+                kernel_regularizer=self.kernel_regularizer,
+                # trainable=False,
             )(x)
+            x = self.create_activation(x)
+            x = layers.Dense(
+                units=ops.prod(x_shape),
+                activation=None,
+                kernel_initializer="identity",
+                kernel_regularizer=self.kernel_regularizer,
+                # trainable=False,
+            )(x)
+            x = self.create_activation(x)
             x = layers.Reshape(x_shape)(x)
 
         # Upsampling layers ---------------------------------
@@ -221,14 +247,14 @@ class VAE(base_model.BaseModel):
     ):
         if self.upsampling_method == 'subpixel':
             return resnet_model.SubPixelConv(
-                filters_out=self.filters * multiple,
+                filters_out=self.filters,
                 kernel_size=3,
                 scale=2,
                 activation=self.activation
             )(inputs)
         elif self.upsampling_method == 'bilinear':
             return resnet_model.UpSampling(
-                filters=self.filters * multiple,
+                filters=self.filters,
                 kernel_size=3,
                 scale=2,
                 activation=self.activation,

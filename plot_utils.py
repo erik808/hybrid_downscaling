@@ -253,6 +253,19 @@ class PlotMachine():
         print(fig_name)
         plt.savefig(fig_name)
 
+        ls = np.concatenate([r['latent'] for r in results], 0)
+        ls = np.reshape(ls, (ls.shape[0], -1))
+        ls = ls.transpose()
+
+        plt.figure(figsize=self.figsize)
+        a = plt.imshow(ls, aspect='auto')
+        plt.colorbar(a)
+        plt.tight_layout()
+        fig_name = \
+            f'{self.results_dir}/latentspace.png'
+        print(fig_name)
+        plt.savefig(fig_name, bbox_inches='tight')
+
     def plot_spectrum(self,
                       data,
                       epoch,

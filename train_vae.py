@@ -59,7 +59,7 @@ model_checkpoint_callback = keras.callbacks.ModelCheckpoint(
     monitor='val_loss',
     mode='min',
     save_best_only=True)
-
+# raise Exception('que?')
 hist = vae.fit(
     x=dgen_train,
     epochs=30,

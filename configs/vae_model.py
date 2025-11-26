@@ -16,11 +16,11 @@ activation_out = 'tanh_scaled'
 
 # number of filters in conv layers
 input_filters = 32
-filters = 128  # tested: 64
+filters = 64  # tested: 64
 num_filters_hybrid = 64
 
 # number of down and upsampling convolutions
-num_layers = 3  # tested: 4
+num_layers = 6  # tested: 4
 
 # deterministic mode bypasses the sampling layer and uses the mean
 # only

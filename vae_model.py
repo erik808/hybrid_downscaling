@@ -134,7 +134,7 @@ class VAE(base_model.BaseModel):
                          self.sampling_type == 'spatial' and
                          not self.deterministic_mode) else 1
 
-            x = self.conv_downsampling(x, mult, version='v2')
+            x = self.conv_downsampling(x, mult)
 
         if self.bypass_vae:
             x = layers.Identity(name='vae_input_transform')(input_k)
@@ -230,8 +230,8 @@ class VAE(base_model.BaseModel):
             self,
             inputs,
             multiple=1,
-            version='v1',
-            num_layers=3,
+            version='v2',
+            num_layers=2,
             use_residual=True,
     ):
         if version == 'v1':
@@ -245,7 +245,11 @@ class VAE(base_model.BaseModel):
             return self.create_activation(out)
 
         elif version == 'v2':
-            if (inputs.shape[-1] != self.filters and use_residual):
+            if (
+                    inputs.shape[-1] != self.filters and
+                    use_residual and
+                    num_layers > 1
+            ):
                 inputs = layers.Conv2D(
                     filters=self.filters,
                     strides=1,
@@ -265,17 +269,10 @@ class VAE(base_model.BaseModel):
                     activation=None,
                 )(out)
                 out = self.create_activation(out)
-                out = layers.Conv2D(
-                    filters=self.filters,
-                    strides=1,
-                    kernel_size=3,
-                    padding='same',
-                    activation=None,
-                )(out)
-                out = self.create_activation(out)
 
-            if use_residual:
+            if use_residual and num_layers > 1:
                 out = layers.Add()([out, skip])
+
             out = layers.Conv2D(
                 filters=self.filters,
                 strides=2,

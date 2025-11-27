@@ -7,6 +7,9 @@ beta = 0.0
 # weight on reconstruction loss
 gamma = 1
 
+# weight on latent space size
+alpha_ls = 1e-3
+
 #
 upsampling_method = 'bilinear'
 
@@ -15,12 +18,12 @@ activation = 'leaky_relu'
 activation_out = 'tanh_scaled'
 
 # number of filters in conv layers
-input_filters = 32
-filters = 256  # tested: 64
+input_filters = 64
+filters = 64  # tested: 64
 num_filters_hybrid = 64
 
 # number of down and upsampling convolutions
-num_layers = 6  # tested: 4
+num_layers = 4  # tested: 4
 
 # deterministic mode bypasses the sampling layer and uses the mean
 # only
@@ -33,5 +36,5 @@ bypass_vae = False
 sampling_type = 'spatial'
 
 # latent space size
-dense_units = 256  # used in dense mode
-latent_space = 256  # used in dense mode
+dense_units = 64  # used in dense mode
+latent_space = 32  # used in dense mo

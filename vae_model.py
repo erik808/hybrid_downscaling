@@ -25,11 +25,11 @@ class VAE(base_model.BaseModel):
         self.compiler = keras.optimizers.Adam(
             learning_rate=self.learning_rate)
 
-        self.kernel_regularizer = keras.regularizers.L2(1e-2)
-
+        self.kernel_regularizer = None
         self.loss_fn = keras.losses.MeanSquaredError()
         self.loss_tracker = keras.metrics.Mean(name="loss")
         self.re_loss_tracker = keras.metrics.Mean(name="recons")
+        self.ls_size_tracker = keras.metrics.Mean(name="ls_size")
         self.KL_loss_tracker = keras.metrics.Mean(name="KLloss")
 
         # disable layers when bypass enabled
@@ -40,6 +40,7 @@ class VAE(base_model.BaseModel):
         return [
             self.loss_tracker,
             self.re_loss_tracker,
+            self.ls_size_tracker,
             self.KL_loss_tracker,
         ]
 
@@ -72,8 +73,11 @@ class VAE(base_model.BaseModel):
         # kl loss variance formulation
         kl_loss = self.loss_KL(z_mean, z_logvar, beta=self.beta)
 
+        # latent space size
+        ls_size = ops.mean(ops.abs(z_mean)) * self.alpha_ls
+
         # combine losses
-        loss = re_loss + kl_loss
+        loss = re_loss + kl_loss + ls_size
 
         if training:
             loss.backward()
@@ -89,6 +93,8 @@ class VAE(base_model.BaseModel):
                 metric.update_state(loss)
             if metric.name == "recons":
                 metric.update_state(re_loss)
+            if metric.name == "ls_size":
+                metric.update_state(ls_size)
             if metric.name == "KLloss":
                 metric.update_state(kl_loss)
 

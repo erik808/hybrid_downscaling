@@ -258,8 +258,14 @@ class PlotMachine():
         ls = ls.transpose()
 
         plt.figure(figsize=self.figsize)
+        plt.subplot(2, 1, 1)
         a = plt.imshow(ls, aspect='auto')
         plt.colorbar(a)
+        plt.subplot(2, 1, 2)
+        rr = np.min([32, ls.shape[0]])
+        a = plt.imshow(ls[:rr,], aspect='auto')
+        plt.colorbar(a)
+        plt.suptitle('latent space plots')
         plt.tight_layout()
         fig_name = \
             f'{self.results_dir}/latentspace.png'

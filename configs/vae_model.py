@@ -8,13 +8,13 @@ beta = 0.0
 gamma = 1
 
 # weight on latent space size
-alpha_ls = 0.0
+alpha_ls = 1e-4
 
 #
 upsampling_method = 'bilinear'
 
 # activation type ('prelu', 'relu', 'leaky_relu', 'elu')
-activation = 'relu'
+activation = 'leaky_relu'
 activation_out = 'tanh_scaled'
 
 # number of down and upsampling convolutions
@@ -23,7 +23,7 @@ num_layers = 4  # tested: 4
 kernel_size = 3
 
 # number of filters in input
-input_filters = 128
+input_filters = 64
 # filters in downsampling (and reversed in upsampling)
 filters = [64, 64, 128, 128, 256, 512]
 # filters in the coupling with resnet
@@ -42,4 +42,4 @@ sampling_type = 'dense'
 
 # latent space size
 # dense_units = 4096  # used in dense mode
-latent_space = 4096  # used in dense mode
+latent_space = 2048  # used in dense mode

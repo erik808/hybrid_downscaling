@@ -26,7 +26,7 @@ dmgr_cmems.create_training_data()
 
 dgen_args = {
     'dm': dmgr_cmems,
-    'batch_size': 4,
+    'batch_size': 32,
     'lookback': 1,
     'shuffle': True,
     'use_multiprocessing': True,
@@ -59,10 +59,10 @@ model_checkpoint_callback = keras.callbacks.ModelCheckpoint(
     monitor='val_loss',
     mode='min',
     save_best_only=True)
-raise Exception('que?')
+# raise Exception('que?')
 hist = vae.fit(
     x=dgen_train,
-    epochs=20,
+    epochs=30,
     validation_data=dgen_test,
     callbacks=[
         analysis_callback,

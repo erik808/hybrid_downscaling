@@ -259,11 +259,11 @@ class PlotMachine():
 
         plt.figure(figsize=self.figsize)
         plt.subplot(2, 1, 1)
-        a = plt.imshow(ls, aspect='auto')
+        a = plt.imshow(ls, aspect='auto', interpolation=None)
         plt.colorbar(a)
         plt.subplot(2, 1, 2)
         rr = np.min([32, ls.shape[0]])
-        a = plt.imshow(ls[:rr,], aspect='auto')
+        a = plt.imshow(ls[:rr,], aspect='auto', interpolation=None)
         plt.colorbar(a)
         plt.suptitle('latent space plots')
         plt.tight_layout()

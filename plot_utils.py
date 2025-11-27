@@ -271,6 +271,7 @@ class PlotMachine():
             f'{self.results_dir}/latentspace.png'
         print(fig_name)
         plt.savefig(fig_name, bbox_inches='tight')
+        # breakpoint()
 
     def plot_spectrum(self,
                       data,

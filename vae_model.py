@@ -1,3 +1,4 @@
+import numpy as np
 import keras
 from keras import layers
 from keras import ops
@@ -31,8 +32,7 @@ class VAE(base_model.BaseModel):
         self.ls_size_tracker = keras.metrics.Mean(name="ls_size")
         self.KL_loss_tracker = keras.metrics.Mean(name="KLloss")
 
-        # disable layers when bypass enabled
-        self.num_layers = 0 if self.bypass_vae else self.num_layers
+        self.filters = self.filters[:self.num_layers]
 
     @property
     def metrics(self):
@@ -124,13 +124,12 @@ class VAE(base_model.BaseModel):
         x = layers.Conv2D(
             filters=self.input_filters,
             strides=1,
-            kernel_size=3,
+            kernel_size=self.kernel_size,
             padding='same',
             kernel_initializer="glorot_uniform",
             activation=None,
             name='vae_input_transform',
         )(input_k)
-        x = self.create_activation(x)
 
         # Downsampling layers ---------------------------------
         for i in range(self.num_layers):
@@ -139,32 +138,32 @@ class VAE(base_model.BaseModel):
                          self.sampling_type == 'spatial' and
                          not self.deterministic_mode) else 1
 
-            x = self.conv_downsampling(x, mult)
-
-        if self.bypass_vae:
-            x = layers.Identity(name='vae_input_transform')(input_k)
+            x = self.create_activation(x)
+            x = self.conv_downsampling(
+                x,
+                filters=self.filters[i],
+                multiple=mult,
+            )
 
         # Sampling layers ---------------------------------
         if self.sampling_type == 'dense':
             x_shape = x.shape[1:]
-            x = layers.Flatten()(x)
-            x = layers.Dense(
-                units=self.dense_units,
-                activation=None,
-                kernel_initializer="identity",
-                kernel_regularizer=self.kernel_regularizer,
-                # trainable=False,
-            )(x)
             x = self.create_activation(x)
+            x = layers.Flatten()(x)
+            # x = layers.Dense(
+            #     units=self.dense_units,
+            #     activation=None,
+            # )(x)
+            # x = self.create_activation(x)
             mult = 1 if self.deterministic_mode else 2
             x = layers.Dense(
                 units=self.latent_space * mult,
                 activation=None,
-                kernel_initializer="identity",
-                kernel_regularizer=self.kernel_regularizer,
-                # trainable=False,
             )(x)
-            x = self.create_activation(x)
+
+        if self.deterministic_mode:
+            # x = self.create_activation(x)
+            x = layers.LayerNormalization()(x)
 
         mean, logvar = Split(
             name="vae_splitter",
@@ -176,32 +175,30 @@ class VAE(base_model.BaseModel):
         )(mean, logvar)
 
         if self.sampling_type == 'dense':
-            x = layers.Dense(
-                units=self.dense_units,
-                activation=None,
-                kernel_initializer="identity",
-                kernel_regularizer=self.kernel_regularizer,
-                # trainable=False,
-            )(x)
-            x = self.create_activation(x)
+            # x = layers.Dense(
+            #     units=self.dense_units,
+            #     activation=None,
+            #     # kernel_initializer="identity",
+            #     # kernel_regularizer=self.kernel_regularizer,
+            # )(x)
+            # x = self.create_activation(x)
             x = layers.Dense(
                 units=ops.prod(x_shape),
                 activation=None,
-                kernel_initializer="identity",
-                kernel_regularizer=self.kernel_regularizer,
-                # trainable=False,
+                # kernel_initializer="identity",
+                # kernel_regularizer=self.kernel_regularizer,
             )(x)
             x = self.create_activation(x)
             x = layers.Reshape(x_shape)(x)
 
         # Upsampling layers ---------------------------------
         y = x
-        for i in range(self.num_layers, 0, -1):
-            y = self.conv_upsampling(y, i)
+        for i in np.arange(self.num_layers)[::-1]:
+            y = self.conv_upsampling(y, filters=self.filters[i])
 
         # layer to couple to other models
         y = layers.Conv2D(filters=self.num_filters_hybrid,
-                          kernel_size=3,
+                          kernel_size=self.kernel_size,
                           padding='same',
                           name='vae_hybrid_coupling',
                           activation=None,
@@ -211,15 +208,12 @@ class VAE(base_model.BaseModel):
         # output transform
         z = layers.Conv2D(
             filters=self.num_vars,
-            kernel_size=3,
+            kernel_size=self.kernel_size,
             padding='same',
             kernel_initializer="glorot_uniform",
             name='vae_output_conv',
             activation=None)(y)
         z = self.create_activation(z, 'out')
-
-        if self.bypass_vae:
-            z = layers.Identity(name='vae_output_conv')(y)
 
         # activation and masking
         z = self.masking(z)
@@ -234,6 +228,7 @@ class VAE(base_model.BaseModel):
     def conv_downsampling(
             self,
             inputs,
+            filters,
             multiple=1,
             version='v1',
             num_layers=1,
@@ -241,24 +236,25 @@ class VAE(base_model.BaseModel):
     ):
         if version == 'v1':
             out = layers.Conv2D(
-                filters=self.filters * multiple,
+                filters=filters * multiple,
                 strides=2,
-                kernel_size=3,
+                kernel_size=self.kernel_size,
                 padding='same',
                 activation=None,
             )(inputs)
-            return self.create_activation(out)
+
+            return out
 
         elif version == 'v2':
             if (
-                    inputs.shape[-1] != self.filters and
+                    inputs.shape[-1] != filters and
                     use_residual and
                     num_layers > 1
             ):
                 inputs = layers.Conv2D(
-                    filters=self.filters,
+                    filters=filters,
                     strides=1,
-                    kernel_size=3,
+                    kernel_size=self.kernel_size,
                     padding='same',
                     activation=None,
                 )(inputs)
@@ -267,9 +263,9 @@ class VAE(base_model.BaseModel):
             out = inputs
             for i in range(num_layers - 1):
                 out = layers.Conv2D(
-                    filters=self.filters,
+                    filters=filters,
                     strides=1,
-                    kernel_size=3,
+                    kernel_size=self.kernel_size,
                     padding='same',
                     activation=None,
                 )(out)
@@ -279,41 +275,41 @@ class VAE(base_model.BaseModel):
                 out = layers.Add()([out, skip])
 
             out = layers.Conv2D(
-                filters=self.filters,
+                filters=filters,
                 strides=2,
-                kernel_size=3,
+                kernel_size=self.kernel_size,
                 padding='same',
                 activation=None,
             )(out)
-            out = self.create_activation(out)
+
             if multiple > 1:
+                out = self.create_activation(out)
                 out = layers.Conv2D(
-                    filters=self.filters * multiple,
+                    filters=filters * multiple,
                     strides=1,
-                    kernel_size=3,
+                    kernel_size=self.kernel_size,
                     padding='same',
                     activation=None,
                 )(out)
-                out = layers.BatchNormalization()(out)
-                out = self.create_activation(out)
             return out
 
     def conv_upsampling(
             self,
             inputs,
+            filters,
             multiple=1,
     ):
         if self.upsampling_method == 'subpixel':
             return resnet_model.SubPixelConv(
-                filters_out=self.filters,
-                kernel_size=3,
+                filters_out=filters,
+                kernel_size=self.kernel_size,
                 scale=2,
                 activation=self.activation
             )(inputs)
         elif self.upsampling_method == 'bilinear':
             return resnet_model.UpSampling(
-                filters=self.filters,
-                kernel_size=3,
+                filters=filters,
+                kernel_size=self.kernel_size,
                 scale=2,
                 activation=self.activation,
                 method='bilinear',

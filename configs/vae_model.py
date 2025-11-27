@@ -8,22 +8,27 @@ beta = 0.0
 gamma = 1
 
 # weight on latent space size
-alpha_ls = 1
+alpha_ls = 0.0
 
 #
 upsampling_method = 'bilinear'
 
 # activation type ('prelu', 'relu', 'leaky_relu', 'elu')
-activation = 'leaky_relu'
+activation = 'relu'
 activation_out = 'tanh_scaled'
 
-# number of filters in conv layers
+# number of down and upsampling convolutions
+num_layers = 5  # tested: 4
+
+kernel_size = 3
+
+# number of filters in input
 input_filters = 64
-filters = 64  # tested: 64
+# filters in downsampling (and reversed in upsampling)
+filters = [64, 64, 128, 256, 512, 512]
+# filters in the coupling with resnet
 num_filters_hybrid = 64
 
-# number of down and upsampling convolutions
-num_layers = 4  # tested: 4
 
 # deterministic mode bypasses the sampling layer and uses the mean
 # only
@@ -33,8 +38,8 @@ deterministic_mode = True
 bypass_vae = False
 
 # select sampling: 'spatial', 'dense'
-sampling_type = 'spatial'
+sampling_type = 'dense'
 
 # latent space size
-dense_units = 64  # used in dense mode
-latent_space = 32  # used in dense mo
+# dense_units = 4096  # used in dense mode
+latent_space = 2048  # used in dense mode

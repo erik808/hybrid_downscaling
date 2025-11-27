@@ -27,6 +27,8 @@ class VAE(base_model.BaseModel):
 
         self.kernel_regularizer = None
         self.loss_fn = keras.losses.MeanSquaredError()
+        # self.loss_fn = keras.losses.MeanSquaredLogarithmicError()
+        # self.loss_fn = keras.losses.MeanAbsoluteError()
         self.loss_tracker = keras.metrics.Mean(name="loss")
         self.re_loss_tracker = keras.metrics.Mean(name="recons")
         self.ls_size_tracker = keras.metrics.Mean(name="ls_size")

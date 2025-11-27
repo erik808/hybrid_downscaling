@@ -8,7 +8,7 @@ beta = 0.0
 gamma = 1
 
 # weight on latent space size
-alpha_ls = 1e-3
+alpha_ls = 1
 
 #
 upsampling_method = 'bilinear'

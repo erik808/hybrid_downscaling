@@ -1,7 +1,6 @@
 import keras
 from keras import layers
 from keras import ops
-# from keras import regularizers
 import torch
 import tools
 import base_model
@@ -236,9 +235,9 @@ class VAE(base_model.BaseModel):
             self,
             inputs,
             multiple=1,
-            version='v2',
+            version='v1',
             num_layers=1,
-            use_residual=True,
+            use_residual=False,
     ):
         if version == 'v1':
             out = layers.Conv2D(

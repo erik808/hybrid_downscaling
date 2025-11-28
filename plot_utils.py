@@ -253,25 +253,28 @@ class PlotMachine():
         print(fig_name)
         plt.savefig(fig_name)
 
+        # plot laten variables in time
         ls = np.concatenate([r['latent'] for r in results], 0)
-        ls = np.reshape(ls, (ls.shape[0], -1))
-        ls = ls.transpose()
+        if len(ls) > 0:
+            ls = np.reshape(ls, (ls.shape[0], -1))
+            ls = ls.transpose()
 
-        plt.figure(figsize=self.figsize)
-        plt.subplot(2, 1, 1)
-        a = plt.imshow(ls, aspect='auto', interpolation=None)
-        plt.colorbar(a)
-        plt.subplot(2, 1, 2)
-        rr = np.min([32, ls.shape[0]])
-        a = plt.imshow(ls[:rr,], aspect='auto', interpolation=None)
-        plt.colorbar(a)
-        plt.suptitle('latent space plots')
-        plt.tight_layout()
-        fig_name = \
-            f'{self.results_dir}/latentspace.png'
-        print(fig_name)
-        plt.savefig(fig_name, bbox_inches='tight')
-        # breakpoint()
+            plt.figure(figsize=self.figsize)
+            plt.subplot(2, 1, 1)
+            a = plt.imshow(ls, aspect='auto', interpolation=None)
+            plt.colorbar(a)
+            plt.subplot(2, 1, 2)
+            rr = np.min([32, ls.shape[0]])
+            a = plt.imshow(ls[:rr,], aspect='auto', interpolation=None)
+            plt.colorbar(a)
+            plt.suptitle('latent space plots')
+            plt.tight_layout()
+            fig_name = \
+                f'{self.results_dir}/latentspace.png'
+            print(fig_name)
+            plt.savefig(fig_name, bbox_inches='tight')
+        else:
+            print('no latent variables available for plotting')
 
     def plot_spectrum(self,
                       data,

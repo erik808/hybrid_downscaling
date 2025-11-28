@@ -142,39 +142,39 @@ class AnalysisBase(keras.callbacks.Callback, ABC):
         }
         self.plot_machine.plot_reconstructions(plot_dict)
 
-        if x.shape != z.shape:
-            x_bilin = np.ascontiguousarray(x.transpose((2, 0, 1)))
-            x_bilin = self.dgen.dm.bilin_upsampler(x_bilin)\
-                                  .transpose((1, 2, 0))
+        # if x.shape != z.shape:
+        #     x_bilin = np.ascontiguousarray(x.transpose((2, 0, 1)))
+        #     x_bilin = self.dgen.dm.bilin_upsampler(x_bilin)\
+        #                           .transpose((1, 2, 0))
 
-            err_uo = np.abs(y[..., 0] - x_bilin[..., 0])
-            err_zos = np.abs(y[..., 2] - x_bilin[..., 2])
+        #     err_uo = np.abs(y[..., 0] - x_bilin[..., 0])
+        #     err_zos = np.abs(y[..., 2] - x_bilin[..., 2])
 
-            plot_dict = {
-                'meta': {'epoch': epoch,
-                         'time': time,
-                         'prefix': 'bilin_',
-                         'subplot_shape': [2, 4]},
-                'input uo': wrapper(
-                    {'data': x[..., 0]}),
-                'bilin uo': wrapper(
-                    {'data': x_bilin[..., 0]}),
-                'truth uo': wrapper(
-                    {'data': y[..., 0]}),
-                'err uo': wrapper(
-                    {'data': err_uo,
-                     'vmin': 0, 'vmax': 0.1}),
-                'input zos': wrapper(
-                    {'data': x[..., 2]}),
-                'bilin zos': wrapper(
-                    {'data': x_bilin[..., 2]}),
-                'truth zos': wrapper(
-                    {'data': y[..., 2]}),
-                'err zos': wrapper(
-                    {'data': err_zos,
-                     'vmin': 0, 'vmax': 0.1}),
-            }
-            self.plot_machine.plot_reconstructions(plot_dict)
+        #     plot_dict = {
+        #         'meta': {'epoch': epoch,
+        #                  'time': time,
+        #                  'prefix': 'bilin_',
+        #                  'subplot_shape': [2, 4]},
+        #         'input uo': wrapper(
+        #             {'data': x[..., 0]}),
+        #         'bilin uo': wrapper(
+        #             {'data': x_bilin[..., 0]}),
+        #         'truth uo': wrapper(
+        #             {'data': y[..., 0]}),
+        #         'err uo': wrapper(
+        #             {'data': err_uo,
+        #              'vmin': 0, 'vmax': 0.1}),
+        #         'input zos': wrapper(
+        #             {'data': x[..., 2]}),
+        #         'bilin zos': wrapper(
+        #             {'data': x_bilin[..., 2]}),
+        #         'truth zos': wrapper(
+        #             {'data': y[..., 2]}),
+        #         'err zos': wrapper(
+        #             {'data': err_zos,
+        #              'vmin': 0, 'vmax': 0.1}),
+        #     }
+        #     self.plot_machine.plot_reconstructions(plot_dict)
 
     def plot_history(self, hist):
         self.plot_machine.plot_history(hist)
@@ -334,7 +334,7 @@ class AnalysisResNet(AnalysisBase):
         x = x['LR_data'][:, 0,]
         return x
 
-    def restrict_y(self, x, y):
+    def restrict_y(self, y):
         # keep relevant keys, ignore lookback
         y = y['HR_data'][:, 0,]
         return y

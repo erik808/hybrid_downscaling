@@ -38,7 +38,8 @@ class BaseModel(keras.Model):
                     name=self.name + '_masking')
 
         # setup loss and loss tracker
-        self.loss_fn = keras.losses.MeanSquaredError()
+        self.loss_MSE = keras.losses.MeanSquaredError()
+        self.loss_MSLE = keras.losses.MeanSquaredError()
         self.loss_tracker = keras.metrics.Mean(name="loss")
 
     @property

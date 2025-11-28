@@ -84,7 +84,6 @@ class Hybrid(base_model.BaseModel):
         self.compiler = keras.optimizers.Adam(
             learning_rate=self.learning_rate)
 
-        self.loss_fn = keras.losses.MeanSquaredError()
         self.loss_fn_KL = predictor_model.loss_KL
 
         self.trackers = []
@@ -126,7 +125,7 @@ class Hybrid(base_model.BaseModel):
                                                   0,  # target lookback index
                                                   ...],
                             axis=1)))[0]  # use only the mean
-            lspred_loss = self.loss_fn(z_ls_pred, y_ls) * self.alpha_ls
+            lspred_loss = self.loss_MSE(z_ls_pred, y_ls) * self.alpha_ls
         else:
             lspred_loss = 0.0
 
@@ -151,7 +150,7 @@ class Hybrid(base_model.BaseModel):
                                          self.masking.rows,
                                          self.masking.cols,
                                          :]
-            re_loss = self.loss_fn(z_ae_recons, y_k(1)) * self.gamma
+            re_loss = self.loss_MSLE(z_ae_recons, y_k(1)) * self.gamma
         else:
             re_loss = 0.0
 
@@ -161,7 +160,7 @@ class Hybrid(base_model.BaseModel):
                                    self.masking.cols,
                                    :]
             # actual prediction
-            pred_loss = self.loss_fn(z_hybrid, y_k(0)) * self.alpha
+            pred_loss = self.loss_MSLE(z_hybrid, y_k(0)) * self.alpha
         else:
             pred_loss = 0.0
 

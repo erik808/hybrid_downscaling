@@ -237,7 +237,7 @@ class AnalysisBase(keras.callbacks.Callback, ABC):
             truths.append(batch_y)
 
             batch_loss = \
-                self.model.loss_fn(
+                self.model.loss_MSE(
                     batch_results_HR[:,
                                      0,
                                      self.model.masking.rows.cpu(),
@@ -396,11 +396,11 @@ class AnalysisPredictor(AnalysisBase):
     def call_model(self, x):
         z = self.model({'HR_data': ops.nan_to_num(x['HR_data'])},
                        training=False)
-        z = z['decoded']
+        z_decoded = z['decoded']
         z_mean = z['mean'].cpu().detach().numpy()
         # apply nan mask and detach
-        z = (z * self.mask).cpu().detach().numpy()
-        return z, z_mean
+        z_decoded = (z_decoded * self.mask).cpu().detach().numpy()
+        return z_decoded, z_mean
 
     def restrict_x(self, x):
         # keep relevant keys, ignore lookback
@@ -435,11 +435,11 @@ class AnalysisHybrid(AnalysisBase):
                         'LR_data': ops.nan_to_num(x['LR_data'])
                         },
                        training=False)
-        z = z['hybrid']
+        z_hybrid = z['hybrid']
         z_mean = z['mean'].cpu().detach().numpy()
         # apply nan mask and detach
-        z = (z * self.mask).cpu().detach().numpy()
-        return z, z_mean
+        z_hybrid = (z_hybrid * self.mask).cpu().detach().numpy()
+        return z_hybrid, z_mean
 
     def restrict_x(self, x):
         # keep relevant keys, ignore lookback

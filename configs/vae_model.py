@@ -2,7 +2,7 @@
 learning_rate = 1e-4
 
 # weight on KL loss
-beta = 0.0
+beta = 0.0  # 1e-4
 
 # weight on reconstruction loss
 gamma = 1
@@ -38,8 +38,8 @@ deterministic_mode = True
 bypass_vae = False
 
 # select sampling: 'spatial', 'dense'
-sampling_type = 'dense'
+sampling_type = 'spatial'
 
 # latent space size
 # dense_units = 4096  # used in dense mode
-latent_space = 2048  # used in dense mode
+latent_space = 256  # used in dense mode

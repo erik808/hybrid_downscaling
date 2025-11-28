@@ -20,13 +20,14 @@ else:
 
 dmgr_cmems = \
     data_manager_cmems.DataManagerCMEMS(experiment_id=experiment_id,
-                                        testing=True)
-dmgr_cmems.create_training_data(force_rebuild=False)
+                                        testing=False,
+                                        force_rebuild=False)
+dmgr_cmems.create_training_data()
 
 dgen_args = {
     'dm': dmgr_cmems,
     'batch_size': 4,
-    'lookback': 3,
+    'lookback': 2,
     'shuffle': True,
     'use_multiprocessing': True,
     'workers': 4,
@@ -39,9 +40,10 @@ dgen_train, dgen_test = \
 vae = vae_model.VAE(data_gen=dgen_train)
 vae.build_model("betaVAE")
 vae.summary(line_length=80)
+
 # load existing weights
 vae_checkpoint = \
-    'experiments/vae_nl3_filt16_beta1e-5/checkpoints/checkpoint.vae.keras'
+    'models/vae/l4k3f64-128spatial/checkpoint.vae.keras'
 vae.load_weights(vae_checkpoint)
 
 predictor = predictor_model.Predictor(data_gen=dgen_train,
@@ -57,9 +59,8 @@ predictor.compile(predictor.compiler)
 
 analysis_callback = callbacks.AnalysisPredictor(data_gen=dgen_test,
                                                 plot=[
-                                                    # 'reconstruction',
-                                                    # 'spectra',
-                                                    'timestepping_spectrum',
+                                                    'reconstruction',
+                                                    'spectra',
                                                 ]
                                                 )
 
@@ -77,7 +78,7 @@ hist = predictor.fit(
     validation_data=dgen_test,
     callbacks=[
         analysis_callback,
-        model_checkpoint_callback,
+        # model_checkpoint_callback,
     ]
 )
 

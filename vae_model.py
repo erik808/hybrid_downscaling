@@ -26,9 +26,6 @@ class VAE(base_model.BaseModel):
             learning_rate=self.learning_rate)
 
         self.kernel_regularizer = None
-        self.loss_fn = keras.losses.MeanSquaredError()
-        # self.loss_fn = keras.losses.MeanSquaredLogarithmicError()
-        # self.loss_fn = keras.losses.MeanAbsoluteError()
         self.loss_tracker = keras.metrics.Mean(name="loss")
         self.re_loss_tracker = keras.metrics.Mean(name="recons")
         self.ls_size_tracker = keras.metrics.Mean(name="ls_size")
@@ -69,7 +66,7 @@ class VAE(base_model.BaseModel):
                          self.masking.cols,
                          :]
 
-        re_loss = self.loss_fn(z_decoded, y) * self.gamma
+        re_loss = self.loss_MSLE(z_decoded, y) * self.gamma
 
         # kl loss variance formulation
         kl_loss = self.loss_KL(z_mean, z_logvar, beta=self.beta)

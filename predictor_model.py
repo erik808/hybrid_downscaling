@@ -71,7 +71,6 @@ class Predictor(base_model.BaseModel):
         self.compiler = keras.optimizers.Adam(
             learning_rate=self.learning_rate)
 
-        self.loss_fn = keras.losses.MeanSquaredError()
         self.loss_KL = vae_model.loss_KL
         self.loss_tracker = keras.metrics.Mean(name="loss")
         self.re_loss_tracker = keras.metrics.Mean(name="reconstruction")
@@ -124,7 +123,7 @@ class Predictor(base_model.BaseModel):
                         axis=1)))[0]  # take only the mean
 
         # prediction loss in the latent space
-        lspred_loss = self.loss_fn(z_ls_pred, y_ls)
+        lspred_loss = self.loss_MSE(z_ls_pred, y_ls) * self.alpha_ls
 
         def y_k(k):
             return \
@@ -135,12 +134,12 @@ class Predictor(base_model.BaseModel):
                                       :]
 
         # prediction loss, compare against target
-        pred_loss = self.loss_fn(z_decoded, y_k(0))
+        pred_loss = self.loss_MSLE(z_decoded, y_k(0)) * self.alpha
 
         # reconstruction loss, compare using most recent, only used
         # when the VAE weights are trainable
         if self.trainable_VAE:
-            re_loss = self.loss_fn(z_ae_recons, y_k(1)) * self.gamma
+            re_loss = self.loss_MSLE(z_ae_recons, y_k(1)) * self.gamma
         else:
             re_loss = 0.0
 

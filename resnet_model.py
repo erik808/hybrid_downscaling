@@ -44,7 +44,7 @@ class ResNet(base_model.BaseModel):
               self.masking.cols,
               :]
 
-        loss = self.loss_fn(z, y)
+        loss = self.loss_MSLE(z, y)
 
         if training:
             loss.backward()

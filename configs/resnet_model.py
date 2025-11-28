@@ -5,7 +5,7 @@ learning_rate = 5e-5
 upsampling_method = 'bilinear'
 
 # activation function  (except output sigmoid)
-activation = 'prelu'
+activation = 'leaky_relu'
 activation_out = 'tanh_scaled'
 
 # number of residual blocks

@@ -27,7 +27,7 @@ dmgr_cmems.create_training_data()
 dgen_args = {
     'dm': dmgr_cmems,
     'batch_size': 4,
-    'lookback': 3,
+    'lookback': 2,
     'shuffle': True,
     'use_multiprocessing': True,
     'workers': 4,
@@ -76,7 +76,7 @@ model_checkpoint_callback = keras.callbacks.ModelCheckpoint(
 
 hist = predictor.fit(
     x=dgen_train,
-    epochs=20,
+    epochs=5,
     validation_data=dgen_test,
     callbacks=[
         dmd_callback,

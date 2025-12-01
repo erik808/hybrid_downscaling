@@ -495,8 +495,8 @@ class AnalysisPredictor(AnalysisBase):
     def call_model(self, x):
         z = self.model(
             {
-                'LR_data': x['LR_data'],
                 'HR_data': ops.nan_to_num(x['HR_data']),
+                'control_input': x['LR_data'],
             },
             training=False)
 

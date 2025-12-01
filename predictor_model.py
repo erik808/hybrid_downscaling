@@ -89,10 +89,12 @@ class Predictor(base_model.BaseModel):
         ]
 
     def create_input(self, inputs):
-        return {self.input_name_LR:
-                inputs[self.input_name_LR],
-                self.input_name_HR:
-                ops.nan_to_num(inputs[self.input_name_HR])}
+        return {
+            self.input_name_HR:
+            ops.nan_to_num(inputs[self.input_name_HR]),
+            'control_input':
+            inputs[self.input_name_LR],
+        }
 
     def train_step(self, data, training=True):
         x, y = data
@@ -208,7 +210,7 @@ class Predictor(base_model.BaseModel):
         # get control input
         control_input = layers.Input(
             shape=self.input_shape_LR,
-            name=self.input_name_LR)
+            name='control_input')
         control_last = ops.split(
             control_input,
             self.input_shape_LR[0],
@@ -229,8 +231,8 @@ class Predictor(base_model.BaseModel):
             'skip_vae_output': skipped,
         }
         inputs = {
-            self.input_name_LR: control_input,
             self.input_name_HR: input_HR,
+            'control_input': control_input,
         }
         return inputs, outputs
 

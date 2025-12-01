@@ -89,7 +89,7 @@ dmd_callback = callbacks.DMD(data_gen=dgen_train)
 
 hist = hybrid.fit(
     x=dgen_train,
-    epochs=20,
+    epochs=4,
     shuffle=False,
     validation_data=dgen_test,
     callbacks=[

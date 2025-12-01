@@ -4,6 +4,7 @@ import pandas as pd
 from keras import ops
 import plot_utils
 import importlib
+import ESN.ESN as ESN_mod
 import matplotlib.pyplot as plt
 from abc import ABC, abstractmethod
 
@@ -12,6 +13,93 @@ importlib.reload(plot_utils)
 plt.switch_backend('Agg')
 # if os.environ.get('DISPLAY') is not None:
 #     plt.switch_backend('qtagg')
+
+
+class DMD(keras.callbacks.Callback):
+
+    def __init__(
+            self,
+            data_gen,
+            **kwargs,
+    ):
+        super().__init__(**kwargs)
+        self.dgen = data_gen
+
+    def on_epoch_end(self, epoch, logs=None):
+        return None
+
+    def on_epoch_begin(self, epoch, logs=None):
+
+        predictor_layer = self.model\
+                              .model\
+                              .get_layer('latent_predictor')
+
+        # do some checks
+        DMDcheck = (len(predictor_layer.weights) == 1 and
+                    'W_out' in predictor_layer.weights[0].path)
+
+        if DMDcheck:
+            print('ESN/DMD layer detected')
+        else:
+            print('ESN/DMD inactive')
+            return None
+
+        # temp increase batch size
+        batch_size = self.dgen.batch_size
+        self.dgen.batch_size = batch_size * 50
+        num_batches = self.dgen.__len__()
+        # unshuffle
+        self.dgen.indices = np.sort(self.dgen.indices)
+
+        # create data matrix
+        pb_i = keras.utils.Progbar(num_batches, interval=0.5)
+        x_enc_mat = []
+        print('create training data for ESN/DMD using encoder')
+        for b in range(num_batches):
+            pb_i.add(1)
+            batch_x, batch_y = self.dgen.__getitem__(b)
+            x_enc = self.model.encoder(
+                ops.nan_to_num(
+                    ops.squeeze(
+                        batch_x['HR_data'][:,
+                                           1,  # target lookback index
+                                           ...],
+                        axis=1)),
+                training=False
+            )[0].cpu().detach().numpy()  # take only the mean
+
+            x_enc_mat += [x_enc]
+
+        # decrease batch size again
+        self.dgen.batch_size = batch_size
+
+        # shuffle
+        if self.dgen.shuffle:
+            np.random.shuffle(self.dgen.indices)
+
+        X = np.concatenate(x_enc_mat, 0)
+        X = (X.reshape(X.shape[0], -1)).T
+        N = X.shape[0]
+
+        esn_pars = {}
+        esn_pars['scalingType'] = 'none'
+        esn_pars['dmdMode'] = True
+        esn_pars['tikhonov_lambda'] = 1.0e-3
+        esn_pars['feedThrough'] = True
+        esn_pars['ftRange'] = range(0, N)
+        esn_pars['fCutoff'] = 0.01
+
+        U = X[:, :-1].T
+        Y = X[:, 1:].T
+
+        np.random.seed(1)
+        esn = ESN_mod.ESN(100, U.shape[1], Y.shape[1])
+        esn.setPars(esn_pars)
+        esn.initialize()
+        esn.train(U, Y)
+
+        # assign ESN weights to layer
+        predictor_layer.set_weights([esn.W_out])
 
 
 class AnalysisBase(keras.callbacks.Callback, ABC):

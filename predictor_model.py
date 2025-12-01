@@ -120,7 +120,9 @@ class Predictor(base_model.BaseModel):
                         y[self.input_name_HR][:,
                                               0,  # target lookback index
                                               ...],
-                        axis=1)))[0]  # take only the mean
+                        axis=1)),
+                training=training,
+            )[0]  # take only the mean
 
         # prediction loss in the latent space
         lspred_loss = self.loss_MSE(z_ls_pred, y_ls) * self.alpha_ls
@@ -301,7 +303,7 @@ class LSPredictor(layers.Layer):
                     activation=self.activation,
                 ),
                 layers.Reshape(dims),
-                ])
+            ])
 
         elif self.predictor == 'conv3d':
             self.input_transf = Stack()
@@ -360,6 +362,13 @@ class LSPredictor(layers.Layer):
             self.predictmod = layers.Identity()
             self.output_transf = layers.Identity()
 
+        elif self.predictor == 'DMD':
+            self.input_transf = keras.Sequential([
+                Last(),
+                layers.Flatten(),
+            ])
+            self.predictmod = DMD(name='dmd_operator')
+            self.output_transf = layers.Reshape(dims)
         else:
             raise Exception("Invalid predictor")
 
@@ -425,3 +434,20 @@ class DenseResidual(layers.Layer):
         # for i, lr in enumerate(self.rec_lrs):
         #     x1t = lr(x0)
         breakpoint()
+
+
+class DMD(layers.Layer):
+    def __init__(self, **kwargs):
+        super().__init__(**kwargs)
+
+    def build(self, input_shape):
+        self.W_out = self.add_weight(
+            shape=(input_shape[-1], input_shape[-1]),
+            initializer='identity',
+            trainable=False,
+            name='W_out',
+        )
+        self.built = True
+
+    def call(self, inputs):
+        return ops.matmul(self.W_out, inputs.T).T

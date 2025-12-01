@@ -64,6 +64,8 @@ analysis_callback = callbacks.AnalysisPredictor(data_gen=dgen_test,
                                                 ]
                                                 )
 
+dmd_callback = callbacks.DMD(data_gen=dgen_train)
+
 checkpoint_filepath = \
     f'{dmgr_cmems.dirs["checkpoints"]}/checkpoint.predictor.keras'
 model_checkpoint_callback = keras.callbacks.ModelCheckpoint(
@@ -77,6 +79,7 @@ hist = predictor.fit(
     epochs=20,
     validation_data=dgen_test,
     callbacks=[
+        dmd_callback,
         analysis_callback,
         # model_checkpoint_callback,
     ]

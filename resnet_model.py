@@ -131,6 +131,7 @@ class ResNet(base_model.BaseModel):
                           name='hybrid_coupling',
                           activation=None,
                           )(y)
+
         y = base_model.Activation(self.activation,
                                   name='hybrid_coupling_actv')(y)
 

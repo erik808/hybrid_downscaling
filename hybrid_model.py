@@ -8,7 +8,6 @@ import tools
 import base_model
 import resnet_model as rm
 import predictor_model as pm
-# import matplotlib.pyplot as plt
 
 importlib.reload(base_model)
 importlib.reload(rm)
@@ -27,10 +26,6 @@ class Hybrid(base_model.BaseModel):
 
         self.resnet_input = resnet_model.model.input['LR_data']
         self.resnet_output = resnet_model.model.output
-
-        # plt.switch_backend('qtagg')
-
-        # plt.close('all')
 
         # coupling point where we choose to do the hybridization in
         # resnet
@@ -60,6 +55,7 @@ class Hybrid(base_model.BaseModel):
             name="ResNet_submodel",
         )
 
+        # use same encoder as predictor is using
         self.encoder = predictor_model.model.get_layer('encoder')
 
         self.predictor_layers = keras.Model(
@@ -124,7 +120,9 @@ class Hybrid(base_model.BaseModel):
                             y[self.input_name_HR][:,
                                                   0,  # target lookback index
                                                   ...],
-                            axis=1)))[0]  # use only the mean
+                            axis=1)),
+                    training=training,
+                )[0]  # use only the mean
             lspred_loss = self.loss_MSE(z_ls_pred, y_ls) * self.alpha_ls
         else:
             lspred_loss = 0.0
@@ -269,8 +267,7 @@ class Hybrid(base_model.BaseModel):
             raise Exception('invalid hybridization parameter')
 
         # reusing resnet output bplock
-        x = layers.BatchNormalization()(x)
-        x = base_model.Activation('leaky_relu')(x)
+        # x = layers.BatchNormalization()(x)
         out = self.output_block(x)
 
         outputs = {'hybrid': out,

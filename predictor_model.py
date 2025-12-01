@@ -92,8 +92,7 @@ class Predictor(base_model.BaseModel):
         return {
             self.input_name_HR:
             ops.nan_to_num(inputs[self.input_name_HR]),
-            'control_input':
-            inputs[self.input_name_LR],
+            'control_input': inputs[self.input_name_LR],
         }
 
     def train_step(self, data, training=True):
@@ -219,7 +218,10 @@ class Predictor(base_model.BaseModel):
         # do prediction in latent space
         prediction = LSPredictor(
             name="latent_predictor",
-        )(encoded_series, control_last)
+        )(
+            encoded_series,
+            control_last,
+        )
 
         prediction_decoded, skipped = self.decoder(prediction)
         outputs = {

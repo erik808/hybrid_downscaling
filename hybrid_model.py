@@ -243,14 +243,13 @@ class Hybrid(base_model.BaseModel):
 
         # reusing resnet input
         input_LR = self.resnet_input
-        control_input = input_LR
 
         resnet_result = \
             base_model.Activation('linear')(
                 self.resnet_layers(input_LR))
         predictor_result = \
             base_model.Activation('linear')(
-                self.predictor_layers([input_HR, control_input]))
+                self.predictor_layers([input_HR, input_LR]))
 
         assert resnet_result.shape[1:-1] == predictor_result.shape[1:-1], \
             "resnet and predictor have different rows/cols"

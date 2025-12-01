@@ -77,6 +77,7 @@ hybrid.build_model("hybrid")
 hybrid.compile(hybrid.compiler)
 hybrid.summary(expand_nested=False)
 
+
 analysis_callback = callbacks.AnalysisHybrid(
     data_gen=dgen_test,
     plot=[

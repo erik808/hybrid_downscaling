@@ -67,6 +67,7 @@ class BaseModel(keras.Model):
 
     def build(self, *args, **kwargs):
         self.model.build(*args, **kwargs)
+        self.built = True
 
     def create_input(self, inputs):
         return inputs

@@ -493,8 +493,13 @@ class AnalysisPredictor(AnalysisBase):
         super().__init__(data_gen, **kwargs)
 
     def call_model(self, x):
-        z = self.model({'HR_data': ops.nan_to_num(x['HR_data'])},
-                       training=False)
+        z = self.model(
+            {
+                'LR_data': x['LR_data'],
+                'HR_data': ops.nan_to_num(x['HR_data']),
+            },
+            training=False)
+
         z_decoded = z['decoded']
         z_mean = z['mean'].cpu().detach().numpy()
         # apply nan mask and detach

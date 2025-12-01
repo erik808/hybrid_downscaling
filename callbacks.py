@@ -54,6 +54,7 @@ class DMD(keras.callbacks.Callback):
         # create data matrix
         pb_i = keras.utils.Progbar(num_batches, interval=0.5)
         x_enc_mat = []
+        x_enc_LR_mat = []
         print('create training data for ESN/DMD using available encoder')
         for b in range(num_batches):
             pb_i.add(1)
@@ -69,6 +70,7 @@ class DMD(keras.callbacks.Callback):
             )[0].cpu().detach().numpy()  # take only the mean
 
             x_enc_mat += [x_enc]
+            x_enc_LR_mat += [ops.squeeze(batch_x['LR_data'][:, 0, ...])]
 
         # decrease batch size again
         self.dgen.batch_size = batch_size
@@ -81,15 +83,18 @@ class DMD(keras.callbacks.Callback):
         X = (X.reshape(X.shape[0], -1)).T
         N = X.shape[0]
 
+        X_LR = np.concatenate(x_enc_LR_mat, 0)
+        X_LR = (X_LR.reshape(X_LR.shape[0], -1)).T
+
         esn_pars = {}
         esn_pars['scalingType'] = 'none'
         esn_pars['dmdMode'] = True
         esn_pars['tikhonov_lambda'] = self.model.lambdaDMD
         esn_pars['feedThrough'] = True
-        esn_pars['ftRange'] = range(0, N)
+        # esn_pars['ftRange'] = range(0, N)
         esn_pars['fCutoff'] = self.model.cutoffDMD
 
-        U = X[:, :-1].T
+        U = np.vstack([X[:, :-1], X_LR[:, :-1]]).T
         Y = X[:, 1:].T
 
         np.random.seed(1)

@@ -20,7 +20,7 @@ else:
 
 dmgr_cmems = \
     data_manager_cmems.DataManagerCMEMS(experiment_id=experiment_id,
-                                        testing=False,
+                                        testing=True,
                                         force_rebuild=False)
 dmgr_cmems.create_training_data()
 

@@ -89,7 +89,9 @@ class Predictor(base_model.BaseModel):
         ]
 
     def create_input(self, inputs):
-        return {self.input_name_HR:
+        return {self.input_name_LR:
+                inputs[self.input_name_LR],
+                self.input_name_HR:
                 ops.nan_to_num(inputs[self.input_name_HR])}
 
     def train_step(self, data, training=True):
@@ -182,7 +184,7 @@ class Predictor(base_model.BaseModel):
 
         timeseries = ops.split(
             input_HR,
-            self.input_shape_LR[0],
+            self.input_shape_HR[0],
             axis=1)
 
         # lookback ordering is backwards in time, reversing to get it
@@ -203,10 +205,19 @@ class Predictor(base_model.BaseModel):
                                                    axis=1))[0]
                           for snapshot in timeseries]
 
+        # get control input
+        control_input = layers.Input(
+            shape=self.input_shape_LR,
+            name=self.input_name_LR)
+        control_last = ops.split(
+            control_input,
+            self.input_shape_LR[0],
+            axis=1)[0]
+
         # do prediction in latent space
         prediction = LSPredictor(
             name="latent_predictor",
-        )(encoded_series)
+        )(encoded_series, control_last)
 
         prediction_decoded, skipped = self.decoder(prediction)
         outputs = {
@@ -217,7 +228,10 @@ class Predictor(base_model.BaseModel):
             'ae_recons': ae_reconstruction,
             'skip_vae_output': skipped,
         }
-        inputs = {self.input_name_HR: input_HR}
+        inputs = {
+            self.input_name_LR: control_input,
+            self.input_name_HR: input_HR,
+        }
         return inputs, outputs
 
 
@@ -240,6 +254,7 @@ class LSPredictor(layers.Layer):
     def build(self, input_shape):
         dims = input_shape[0][1:]  # ignore batch dim
         lb_dim = len(input_shape)
+        self.combine_control = CombineControl(mode='bypass')
 
         if self.predictor == 'simpleRNN':
             self.input_transf = FlattenAndStack()
@@ -362,18 +377,26 @@ class LSPredictor(layers.Layer):
             self.predictmod = layers.Identity()
             self.output_transf = layers.Identity()
 
-        elif self.predictor == 'DMD':
+        elif (
+                self.predictor == 'DMD' or
+                self.predictor == 'DMDc'
+        ):
             self.input_transf = keras.Sequential([
                 Last(),
                 layers.Flatten(),
             ])
-            self.predictmod = DMD(name='dmd_operator')
+            self.combine_control = CombineControl(mode='append')
+            self.predictmod = DMD(
+                name='dmd_operator',
+                mode=self.predictor,
+            )
             self.output_transf = layers.Reshape(dims)
         else:
             raise Exception("Invalid predictor")
 
-    def call(self, inputs):
+    def call(self, inputs, control):
         x = self.input_transf(inputs)
+        x = self.combine_control(x, control)
         x = self.predictmod(x)
         out = self.output_transf(x)
         return out
@@ -437,12 +460,22 @@ class DenseResidual(layers.Layer):
 
 
 class DMD(layers.Layer):
-    def __init__(self, **kwargs):
+    def __init__(self, mode='DMD', **kwargs):
         super().__init__(**kwargs)
+        self.mode = mode
 
     def build(self, input_shape):
+        if self.mode == 'DMD':
+            self.concat = False
+            rows = input_shape[0][-1]
+            cols = input_shape[0][-1]
+        elif self.mode == 'DMDc':
+            self.concat = True
+            rows = input_shape[0][-1]
+            cols = input_shape[0][-1] + input_shape[1][-1]
+
         self.W_out = self.add_weight(
-            shape=(input_shape[-1], input_shape[-1]),
+            shape=(rows, cols),
             initializer='identity',
             trainable=False,
             name='W_out',
@@ -450,4 +483,30 @@ class DMD(layers.Layer):
         self.built = True
 
     def call(self, inputs):
+        if self.concat:
+            inputs = ops.concatenate(inputs, -1)
+        else:
+            inputs = inputs[0]
         return ops.matmul(self.W_out, inputs.T).T
+
+
+class CombineControl(layers.Layer):
+    def __init__(
+            self,
+            mode='bypass',
+            **kwargs,
+    ):
+        super().__init__(**kwargs)
+        self.mode = mode
+        self.flat = layers.Flatten()
+
+    def call(self, inputs, control):
+        control = self.flat(control)
+        if self.mode == 'concat':
+            return ops.concatenate([inputs, control], -1)
+        elif self.mode == 'append':
+            return [inputs, control]
+        elif self.mode == 'bypass':
+            return inputs
+        else:
+            raise Exception('invalid mode')

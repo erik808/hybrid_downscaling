@@ -37,8 +37,8 @@ class Hybrid(base_model.BaseModel):
         self.predictor_input = \
             predictor_model.model.input['HR_data']
 
-        self.control_input = \
-            predictor_model.model.input['control_input']
+        # self.control_input = \
+        #     predictor_model.model.input['control_input']
 
         self.predictor_output = \
             predictor_model.model.output['skip_vae_output']
@@ -62,8 +62,7 @@ class Hybrid(base_model.BaseModel):
         self.encoder = predictor_model.model.get_layer('encoder')
 
         self.predictor_layers = keras.Model(
-            inputs=[self.predictor_input,
-                    self.control_input],
+            inputs=self.predictor_input,
             outputs=self.predictor_output,
             name="predictor_submodel",
         )
@@ -249,7 +248,7 @@ class Hybrid(base_model.BaseModel):
                 self.resnet_layers(input_LR))
         predictor_result = \
             base_model.Activation('linear')(
-                self.predictor_layers([input_HR, input_LR]))
+                self.predictor_layers(input_HR))
 
         assert resnet_result.shape[1:-1] == predictor_result.shape[1:-1], \
             "resnet and predictor have different rows/cols"

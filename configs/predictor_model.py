@@ -17,7 +17,7 @@ gamma = 1
 
 # model that does the actual prediction in the latent space
 # options: 'simpleRNN', 'dense', 'lstm', 'conv3d', 'convlstm', 'DMD'
-predictor = 'DMDc'
+predictor = 'DMD'
 lambdaDMD = 1e-1
 cutoffDMD = 1e-2
 

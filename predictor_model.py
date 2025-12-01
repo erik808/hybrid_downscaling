@@ -92,7 +92,6 @@ class Predictor(base_model.BaseModel):
         return {
             self.input_name_HR:
             ops.nan_to_num(inputs[self.input_name_HR]),
-            'control_input': inputs[self.input_name_LR],
         }
 
     def train_step(self, data, training=True):
@@ -207,20 +206,20 @@ class Predictor(base_model.BaseModel):
                           for snapshot in timeseries]
 
         # get control input
-        control_input = layers.Input(
-            shape=self.input_shape_LR,
-            name='control_input')
-        control_last = ops.split(
-            control_input,
-            self.input_shape_LR[0],
-            axis=1)[0]
+        # control_input = layers.Input(
+        #     shape=self.input_shape_LR,
+        #     name='control_input')
+        # control_last = ops.split(
+        #     control_input,
+        #     self.input_shape_LR[0],
+        #     axis=1)[0]
 
         # do prediction in latent space
         prediction = LSPredictor(
             name="latent_predictor",
         )(
             encoded_series,
-            control_last,
+#             control_last,
         )
 
         prediction_decoded, skipped = self.decoder(prediction)
@@ -234,7 +233,7 @@ class Predictor(base_model.BaseModel):
         }
         inputs = {
             self.input_name_HR: input_HR,
-            'control_input': control_input,
+#            'control_input': control_input,
         }
         return inputs, outputs
 
@@ -398,9 +397,8 @@ class LSPredictor(layers.Layer):
         else:
             raise Exception("Invalid predictor")
 
-    def call(self, inputs, control):
+    def call(self, inputs):
         x = self.input_transf(inputs)
-        x = self.combine_control(x, control)
         x = self.predictmod(x)
         out = self.output_transf(x)
         return out
@@ -467,17 +465,20 @@ class DMD(layers.Layer):
     def __init__(self, mode='DMD', **kwargs):
         super().__init__(**kwargs)
         self.mode = mode
+        self.concat = False
 
     def build(self, input_shape):
-        if self.mode == 'DMD':
+        if self.mode == 'DMD' and isinstance(input_shape[0], list):
             self.concat = False
             rows = input_shape[0][-1]
             cols = input_shape[0][-1]
-        elif self.mode == 'DMDc':
+        elif self.mode == 'DMDc' and isinstance(input_shape[0], list):
             self.concat = True
             rows = input_shape[0][-1]
             cols = input_shape[0][-1] + input_shape[1][-1]
-
+        else:
+            rows = input_shape[-1]
+            cols = input_shape[-1]
         self.W_out = self.add_weight(
             shape=(rows, cols),
             initializer='identity',
@@ -487,9 +488,9 @@ class DMD(layers.Layer):
         self.built = True
 
     def call(self, inputs):
-        if self.concat:
+        if self.concat and isinstance(inputs, list):
             inputs = ops.concatenate(inputs, -1)
-        else:
+        elif isinstance(inputs, list):
             inputs = inputs[0]
         return ops.matmul(self.W_out, inputs.T).T
 

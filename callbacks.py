@@ -94,7 +94,11 @@ class DMD(keras.callbacks.Callback):
         # esn_pars['ftRange'] = range(0, N)
         esn_pars['fCutoff'] = self.model.cutoffDMD
 
-        U = np.vstack([X[:, :-1], X_LR[:, :-1]]).T
+        if self.model.predictor == 'DMD':
+            U = X[:, :-1].T
+        elif self.model.predictor == 'DMDc':
+            U = np.vstack([X[:, :-1], X_LR[:, :-1]]).T
+            
         Y = X[:, 1:].T
 
         np.random.seed(1)

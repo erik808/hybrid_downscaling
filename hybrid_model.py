@@ -37,6 +37,10 @@ class Hybrid(base_model.BaseModel):
         self.predictor_input = \
             predictor_model.model.input['HR_data']
 
+        self.predictor = predictor_model.predictor
+        self.lambdaDMD = predictor_model.lambdaDMD
+        self.cutoffDMD = predictor_model.cutoffDMD
+
         # self.control_input = \
         #     predictor_model.model.input['control_input']
 

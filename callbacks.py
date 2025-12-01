@@ -46,7 +46,7 @@ class DMD(keras.callbacks.Callback):
 
         # temp increase batch size
         batch_size = self.dgen.batch_size
-        self.dgen.batch_size = batch_size * 50
+        self.dgen.batch_size = batch_size * 100
         num_batches = self.dgen.__len__()
         # unshuffle
         self.dgen.indices = np.sort(self.dgen.indices)
@@ -54,7 +54,7 @@ class DMD(keras.callbacks.Callback):
         # create data matrix
         pb_i = keras.utils.Progbar(num_batches, interval=0.5)
         x_enc_mat = []
-        print('create training data for ESN/DMD using encoder')
+        print('create training data for ESN/DMD using available encoder')
         for b in range(num_batches):
             pb_i.add(1)
             batch_x, batch_y = self.dgen.__getitem__(b)
@@ -84,10 +84,10 @@ class DMD(keras.callbacks.Callback):
         esn_pars = {}
         esn_pars['scalingType'] = 'none'
         esn_pars['dmdMode'] = True
-        esn_pars['tikhonov_lambda'] = 1.0e-3
+        esn_pars['tikhonov_lambda'] = self.model.lambdaDMD
         esn_pars['feedThrough'] = True
         esn_pars['ftRange'] = range(0, N)
-        esn_pars['fCutoff'] = 0.01
+        esn_pars['fCutoff'] = self.model.cutoffDMD
 
         U = X[:, :-1].T
         Y = X[:, 1:].T
@@ -295,6 +295,9 @@ class AnalysisBase(keras.callbacks.Callback, ABC):
                 'time': time,
             }
 
+        # temp increase batch size
+        batch_size_org = self.dgen.batch_size
+        self.dgen.batch_size = batch_size_org * 100
         num_batches = self.dgen.__len__()
 
         # initialization
@@ -339,6 +342,9 @@ class AnalysisBase(keras.callbacks.Callback, ABC):
             losses.append(batch_loss)
 
         logs['timestepper'] = np.mean([ll.cpu() for ll in losses])
+
+        # decrease batch size again
+        self.dgen.batch_size = batch_size_org
 
         self.plot_machine.plot_timestepping(
             results,

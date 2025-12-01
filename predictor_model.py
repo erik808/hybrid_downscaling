@@ -92,6 +92,8 @@ class Predictor(base_model.BaseModel):
         return {
             self.input_name_HR:
             ops.nan_to_num(inputs[self.input_name_HR]),
+            self.input_name_LR:
+            ops.nan_to_num(inputs[self.input_name_LR]),
         }
 
     def train_step(self, data, training=True):
@@ -194,35 +196,38 @@ class Predictor(base_model.BaseModel):
         # remove current lookback (our target), keep only past samples
         timeseries.pop()
 
+        # encode timeseries using encoder
+        encoded_series = [self.encoder(ops.squeeze(snapshot,
+                                                   axis=1))
+                          for snapshot in timeseries]
+
         # use most recent lookback for reconstruction loss
-        mean, logvar = self.encoder(
-            ops.squeeze(timeseries[-1], axis=1))
+        mean, logvar = encoded_series[-1]
         sampled = self.sampler(mean, logvar)
         ae_reconstruction, _ = self.decoder(sampled)
 
-        # encode timeseries using mean output of encoder
-        encoded_series = [self.encoder(ops.squeeze(snapshot,
-                                                   axis=1))[0]
-                          for snapshot in timeseries]
+        # continue with only the mean
+        encoded_series = [sample[0] for sample in encoded_series]
 
         # get control input
-        # control_input = layers.Input(
-        #     shape=self.input_shape_LR,
-        #     name='control_input')
-        # control_last = ops.split(
-        #     control_input,
-        #     self.input_shape_LR[0],
-        #     axis=1)[0]
+        input_LR = layers.Input(
+            shape=self.input_shape_LR,
+            name='LR_data')
+        control_last = ops.split(
+            input_LR,
+            self.input_shape_LR[0],
+            axis=1)[0]
 
         # do prediction in latent space
         prediction = LSPredictor(
-            name="latent_predictor",
+            name="latent_predictor"
         )(
             encoded_series,
-#             control_last,
+            control_last,
         )
 
         prediction_decoded, skipped = self.decoder(prediction)
+
         outputs = {
             'decoded': prediction_decoded,
             'ls_pred': prediction,
@@ -233,7 +238,7 @@ class Predictor(base_model.BaseModel):
         }
         inputs = {
             self.input_name_HR: input_HR,
-#            'control_input': control_input,
+            self.input_name_LR: input_LR,
         }
         return inputs, outputs
 
@@ -310,19 +315,6 @@ class LSPredictor(layers.Layer):
             ])
             self.output_transf = layers.Reshape(dims)
 
-        elif self.predictor == 'dense_residual':
-            self.input_transf = FlattenAndStack()
-            self.predictmod = DenseResidual(
-                units=self.dense_units,
-            )
-            self.output_transf = keras.Sequential([
-                layers.Dense(
-                    units=np.prod(dims),
-                    activation=self.activation,
-                ),
-                layers.Reshape(dims),
-            ])
-
         elif self.predictor == 'conv3d':
             self.input_transf = Stack()
 
@@ -397,8 +389,10 @@ class LSPredictor(layers.Layer):
         else:
             raise Exception("Invalid predictor")
 
-    def call(self, inputs):
+    def call(self, inputs, control=None):
         x = self.input_transf(inputs)
+        if control is not None:
+            x = self.combine_control(x, control)
         x = self.predictmod(x)
         out = self.output_transf(x)
         return out
@@ -437,30 +431,6 @@ class FlattenAndStack(layers.Layer):
                           for sample in x], axis=1)
 
 
-class DenseResidual(layers.Layer):
-    def __init__(
-            self,
-            units,
-            **kwargs,
-    ):
-        super().__init__(**kwargs)
-        self.units = units
-
-    def build(self, input_shape):
-        Nt = input_shape[1]
-        self.input_layer = layers.Dense(units=self.units)
-        self.rec_lrs = []
-        for i in range(Nt):
-            self.rec_lrs.append(layers.Dense(units=self.units))
-
-    def call(self, inputs):
-        # x0 = self.input_layer(inputs[:, 0, ])
-        # breakpoint()
-        # for i, lr in enumerate(self.rec_lrs):
-        #     x1t = lr(x0)
-        breakpoint()
-
-
 class DMD(layers.Layer):
     def __init__(self, mode='DMD', **kwargs):
         super().__init__(**kwargs)
@@ -468,11 +438,11 @@ class DMD(layers.Layer):
         self.concat = False
 
     def build(self, input_shape):
-        if self.mode == 'DMD' and isinstance(input_shape[0], list):
+        if self.mode == 'DMD' and isinstance(input_shape[0], tuple):
             self.concat = False
             rows = input_shape[0][-1]
             cols = input_shape[0][-1]
-        elif self.mode == 'DMDc' and isinstance(input_shape[0], list):
+        elif self.mode == 'DMDc' and isinstance(input_shape[0], tuple):
             self.concat = True
             rows = input_shape[0][-1]
             cols = input_shape[0][-1] + input_shape[1][-1]
@@ -503,13 +473,17 @@ class CombineControl(layers.Layer):
     ):
         super().__init__(**kwargs)
         self.mode = mode
-        self.flat = layers.Flatten()
 
-    def call(self, inputs, control):
+    def build(self, input_shape):
+        self.flat = layers.Flatten()
+        self.built = True
+
+    def call(self, inputs, control=None):
+        if control is None:
+            return inputs
+
         control = self.flat(control)
-        if self.mode == 'concat':
-            return ops.concatenate([inputs, control], -1)
-        elif self.mode == 'append':
+        if self.mode == 'append':
             return [inputs, control]
         elif self.mode == 'bypass':
             return inputs

@@ -424,6 +424,7 @@ class AnalysisResNet(AnalysisBase):
         super().__init__(data_gen, **kwargs)
 
     def call_model(self, x):
+        print(x.keys())
         z = self.model(
             {'LR_data': x['LR_data']},
             training=False
@@ -500,7 +501,7 @@ class AnalysisPredictor(AnalysisBase):
         z = self.model(
             {
                 'HR_data': ops.nan_to_num(x['HR_data']),
-                'control_input': x['LR_data'],
+                'LR_data': ops.nan_to_num(x['LR_data']),
             },
             training=False)
 

@@ -34,15 +34,14 @@ class Hybrid(base_model.BaseModel):
                         .get_layer('hybrid_coupling')\
                         .output
 
-        self.predictor_input = \
+        self.predictor_input_HR = \
             predictor_model.model.input['HR_data']
+        self.predictor_input_LR = \
+            predictor_model.model.input['LR_data']
 
         self.predictor = predictor_model.predictor
         self.lambdaDMD = predictor_model.lambdaDMD
         self.cutoffDMD = predictor_model.cutoffDMD
-
-        # self.control_input = \
-        #     predictor_model.model.input['control_input']
 
         self.predictor_output = \
             predictor_model.model.output['skip_vae_output']
@@ -66,7 +65,8 @@ class Hybrid(base_model.BaseModel):
         self.encoder = predictor_model.model.get_layer('encoder')
 
         self.predictor_layers = keras.Model(
-            inputs=self.predictor_input,
+            inputs={'HR_data': self.predictor_input_HR,
+                    'LR_data': self.predictor_input_LR},
             outputs=self.predictor_output,
             name="predictor_submodel",
         )
@@ -239,20 +239,23 @@ class Hybrid(base_model.BaseModel):
     def builder(self):
 
         # reusing predictor input
-        input_HR = self.predictor_input
+        input_HR = self.predictor_input_HR
+        input_LR = self.predictor_input_LR
 
         assert input_HR.shape[1] > 1, \
             "need at least lookback=2 to make predictions"
 
         # reusing resnet input
-        input_LR = self.resnet_input
+        # input_LR = self.resnet_input
 
         resnet_result = \
             base_model.Activation('linear')(
                 self.resnet_layers(input_LR))
         predictor_result = \
             base_model.Activation('linear')(
-                self.predictor_layers(input_HR))
+                self.predictor_layers({
+                    'HR_data': input_HR,
+                    'LR_data': input_LR}))
 
         assert resnet_result.shape[1:-1] == predictor_result.shape[1:-1], \
             "resnet and predictor have different rows/cols"

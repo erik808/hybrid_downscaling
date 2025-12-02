@@ -1,7 +1,7 @@
 #!/bin/bash
 
-#SBATCH -t 04:00:00
-#SBATCH -J VAEdownscaling
+#SBATCH -t 06:00:00
+#SBATCH -J HybDown
 #SBATCH -N 1
 #SBATCH -n 4
 #SBATCH --cpus-per-task 4

@@ -41,6 +41,10 @@ class PlotMachine():
         self.results_dir = f"{self.dirs['results']}/epoch{epoch}{self.postfix}"
         os.system(f'mkdir -p {self.results_dir}')
 
+    def set_results_dir(self, dirname):
+        self.results_dir = dirname
+        os.system(f'mkdir -p {self.results_dir}')
+
     def plot_reconstructions(self, plot_dict):
         plt.close('all')
         metadata = plot_dict['meta']

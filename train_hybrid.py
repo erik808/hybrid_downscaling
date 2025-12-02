@@ -39,7 +39,7 @@ dmgr_cmems.create_training_data()
 dgen_args = {
     'dm': dmgr_cmems,
     'batch_size': 4,
-    'lookback': 3,
+    'lookback': 2,
     'shuffle': True,
     'use_multiprocessing': True,
     'workers': 4,
@@ -81,8 +81,8 @@ hybrid.summary(expand_nested=False)
 analysis_callback = callbacks.AnalysisHybrid(
     data_gen=dgen_test,
     plot=[
-        # 'reconstruction',
-        # 'spectra',
+        'reconstruction',
+        'spectra',
     ]
 )
 

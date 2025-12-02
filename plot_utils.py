@@ -7,10 +7,8 @@ from multiprocess import Pool
 import importlib
 from skimage.draw import line
 from scipy.stats import binned_statistic
-import data_utils
 import compute_tool
 
-importlib.reload(data_utils)
 importlib.reload(compute_tool)
 
 

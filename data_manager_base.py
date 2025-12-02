@@ -13,7 +13,12 @@ class DataManagerBase(ABC):
     def create_training_data(self) -> Tuple[dict, dict, dict, dict]:
         pass
 
-    def setup_directories(self, experiment_id, add_id=""):
+    def setup_directories(
+            self,
+            experiment_id,
+            add_id="",
+            base_dir="experiments",
+    ):
         base_dir = f'experiments/{experiment_id}{add_id}'
         models_dir = f'{base_dir}/models'
         tuning_dir = f'{base_dir}/tuning'
@@ -30,13 +35,13 @@ class DataManagerBase(ABC):
         os.system(f'mkdir -p {checkpoints_dir}')
         os.system(f'mkdir -p {logs_dir}')
 
-        dirs = {'models'      : models_dir,
-                'tuning'      : tuning_dir,
-                'results'     : results_dir,
-                'movies'      : movie_dir,
-                'checkpoints' : checkpoints_dir,
-                'logs'        : logs_dir}
+        dirs = {'models': models_dir,
+                'tuning': tuning_dir,
+                'results': results_dir,
+                'movies': movie_dir,
+                'checkpoints': checkpoints_dir,
+                'logs': logs_dir}
 
-        files = {'log' : log_file}
+        files = {'log': log_file}
 
         return dirs, files

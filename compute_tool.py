@@ -2,14 +2,10 @@ import numpy as np
 import os
 import tools
 import matplotlib.pyplot as plt
-import importlib
-import data_utils
 import dill
 from scipy.stats import binned_statistic
 
 from transectpicker.transectpicker import TransectPicker
-
-importlib.reload(data_utils)
 
 
 class ComputeTool():
@@ -22,7 +18,7 @@ class ComputeTool():
         self.dm = dm
         self.grid = self.dm.load_coords()
         self.binary_mask = self.dm.mask[0,]
-        self.mask = np.where(self.binary_mask==0, np.nan, 1)
+        self.mask = np.where(self.binary_mask == 0, np.nan, 1)
         self.e1 = self.grid.e1t.data  # in m
         self.e2 = self.grid.e2t.data  # in m
         self.tdim = 60 * 60 * 24  # seconds to days
@@ -37,7 +33,7 @@ class ComputeTool():
             with open(dill_file, 'rb') as file:
                 tpicker = dill.load(file)['tpicker']
 
-                transect_res=len(tpicker.x_trans)
+                transect_res = len(tpicker.x_trans)
                 regridder = \
                     self.regrid_to_transect(tpicker,
                                             resolution=transect_res)
@@ -221,7 +217,7 @@ class ComputeTool():
         v = data[..., 1]  # m/s
 
         # compute vorticity
-        zeta = self.tdim /(self.e1 * self.e2) *\
+        zeta = self.tdim / (self.e1 * self.e2) *\
             (np.diff(v * self.e2, axis=2, prepend=np.nan) -
              np.diff(u * self.e1, axis=1, prepend=np.nan))
 
@@ -272,7 +268,7 @@ class ComputeTool():
         transect_name = input('Give a name for the transect\n')
         dill_file = f'{self.dm.transect_dir}/{transect_name}.dill'
 
-        container = {'tpicker' : tpicker}
+        container = {'tpicker': tpicker}
 
         print(f'writing to {dill_file}')
         with open(dill_file, 'wb') as file:

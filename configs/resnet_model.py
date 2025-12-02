@@ -1,5 +1,5 @@
 # learning rate in Adam optimizer
-learning_rate = 5e-5
+learning_rate = 1e-4
 
 # upsampling method: 'subpixel', 'bilinear'
 upsampling_method = 'bilinear'

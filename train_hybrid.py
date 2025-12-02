@@ -81,8 +81,8 @@ hybrid.summary(expand_nested=False)
 analysis_callback = callbacks.AnalysisHybrid(
     data_gen=dgen_test,
     plot=[
-        'reconstruction',
-        'spectra',
+        # 'reconstruction',
+        # 'spectra',
     ]
 )
 
@@ -90,7 +90,7 @@ dmd_callback = callbacks.DMD(data_gen=dgen_train)
 
 hist = hybrid.fit(
     x=dgen_train,
-    epochs=2,
+    epochs=10,
     shuffle=False,
     validation_data=dgen_test,
     callbacks=[

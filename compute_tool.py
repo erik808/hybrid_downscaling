@@ -163,6 +163,7 @@ class ComputeTool():
         S, _, _ = binned_statistic(freqs, S,
                                    statistic='mean',
                                    bins=kbins)
+
         return k, S
 
     def do_regridding(self, field):

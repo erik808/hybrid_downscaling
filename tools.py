@@ -1,3 +1,4 @@
+import dill
 import xarray as xr
 import keras
 import re
@@ -131,7 +132,7 @@ def load_config(obj, config_name):
         setattr(obj, key, value)
 
 
-def print_configuration(data_gen, model):
+def print_configuration(data_gen, model_obj):
     output_dir = data_gen.dm.dirs['logs']
     config = SimpleNamespace()
     data_ns = SimpleNamespace()
@@ -148,13 +149,21 @@ def print_configuration(data_gen, model):
         setattr(config, model, model_ns)
 
     with open(f"{output_dir}/config.txt", "w") as fl:
-        model.summary(print_fn=lambda x: fl.write(x + '\n'))
+        model_obj.summary(print_fn=lambda x: fl.write(x + '\n'))
 
         for key, value in vars(config).items():
             fl.write(f'{key}:' + '\n')
             for k, v in vars(value).items():
                 fl.write(f'  {k}: {v}' + '\n')
     return True
+
+
+def print_history(data_gen, history):
+    log_dir = data_gen.dm.dirs['logs']
+    history_file = \
+        f'{log_dir}/history.dill'
+    with open(history_file, 'wb') as file:
+        dill.dump(history, file)
 
 
 def build_grid(lat_arr, lon_arr):

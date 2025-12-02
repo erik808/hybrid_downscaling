@@ -25,6 +25,7 @@ class PlotMachine():
 
         self.dm = dm
         self.dirs = dm.dirs
+        self.log_dir = f"{self.dirs['logs']}"
         self.results_dir = []
         self.figsize = figsize
         self.output_dict = output_dict
@@ -173,14 +174,18 @@ class PlotMachine():
 
     def plot_history(self,
                      hist,
-                     add='',
                      ):
 
-        fig_name = f'{self.results_dir}/history{self.postfix}.png'
+        if not isinstance(hist, dict):
+            history = hist.history
+            fig_name = f'{self.log_dir}/history{self.postfix}.png'
+        else:
+            history = hist
+            fig_name = f'{self.log_dir}/history_intermediate.png'
 
         plt.close('all')
         plt.figure(figsize=(11, 9))
-        [plt.semilogy(value, label=key) for key, value in hist.history.items()]
+        [plt.semilogy(value, label=key) for key, value in history.items()]
         plt.grid(which='both')
         plt.gca().set_xlabel('epoch')
         plt.legend()

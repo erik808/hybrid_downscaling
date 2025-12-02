@@ -1,3 +1,4 @@
+import dill
 import numpy as np
 import keras
 import pandas as pd
@@ -193,6 +194,9 @@ class AnalysisBase(keras.callbacks.Callback, ABC):
             else:
                 self.history[key] = [value]
 
+        tools.print_history(self.dgen, self.history)
+        self.plot_machine.plot_history(self.history)
+
     def unscale_var(self, var, scaler):
         """ unscale variables """
         var_shape = var.shape
@@ -381,6 +385,15 @@ class AnalysisBase(keras.callbacks.Callback, ABC):
         y = np.concatenate([self.restrict_y(t) for t in truths], 0)
         z = np.concatenate([self.restrict_y(r) for r in results], 0)
 
+        timestepping_file = \
+            f'{self.plot_machine.results_dir}/timeseries.dill'
+        with open(timestepping_file, 'wb') as file:
+            dill.dump({
+                'x': x,
+                'y': y,
+                'z': z,
+            }, file)
+
         if spectra:
             self.spectra_wrapper(x, y, z, epoch)
 
@@ -411,9 +424,14 @@ class AnalysisBase(keras.callbacks.Callback, ABC):
             'scaler_pred': None,
         }
 
+        # do not create temporal plots when time dimension is limited
+        # (during testing)
+        Nt = x.shape[0]
+        directions = ['spatial', 'temporal'] if Nt > 100 else ['spatial']
+
         for transect in ['along_flow', 'across_flow']:
             for spectype in ['energy', 'enstrophy']:
-                for direction in ['spatial', 'temporal']:
+                for direction in directions:
                     S, T = self.plot_machine\
                                .plot_spectrum(data,
                                               epoch,

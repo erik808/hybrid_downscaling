@@ -5,7 +5,7 @@ trainable_predictor = True
 
 # select losses to include: 'outer_pred', 'inner_pred',
 # 'reconstruction', 'KL'
-loss_list = ['outer_pred', 'reconstruction', 'KL']
+loss_list = ['outer_pred', 'reconstruction'] #, 'KL']
 
 # learning rate
 learning_rate = 1e-4

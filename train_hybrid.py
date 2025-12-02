@@ -30,7 +30,7 @@ else:
 dmgr_cmems = \
     data_manager_cmems.DataManagerCMEMS(
         experiment_id=experiment_id,
-        testing=True,
+        testing=False,
         force_rebuild=False,
     )
 
@@ -60,7 +60,7 @@ vae = vae_model.VAE(data_gen=dgen_train)
 vae.build_model("betaVAE")
 vae.summary(expand_nested=True)
 vae_checkpoint = \
-    'models/vae/l4k3f64-128spatial/checkpoint.vae.keras'
+    'models/vae/l4k3f64-128spatial/checkpoint.vae_2.keras'
 vae.load_weights(vae_checkpoint, skip_mismatch=True)
 
 predictor = predictor_model.Predictor(data_gen=dgen_train,

@@ -4,9 +4,11 @@ import pandas as pd
 from keras import ops
 import plot_utils
 import importlib
+import tools
 import ESN.ESN as ESN_mod
 import matplotlib.pyplot as plt
 from abc import ABC, abstractmethod
+
 
 importlib.reload(plot_utils)
 
@@ -24,9 +26,6 @@ class DMD(keras.callbacks.Callback):
     ):
         super().__init__(**kwargs)
         self.dgen = data_gen
-
-    def on_epoch_end(self, epoch, logs=None):
-        return None
 
     def on_epoch_begin(self, epoch, logs=None):
 
@@ -81,7 +80,6 @@ class DMD(keras.callbacks.Callback):
 
         X = np.concatenate(x_enc_mat, 0)
         X = (X.reshape(X.shape[0], -1)).T
-        N = X.shape[0]
 
         X_LR = np.concatenate(x_enc_LR_mat, 0)
         X_LR = (X_LR.reshape(X_LR.shape[0], -1)).T
@@ -98,7 +96,7 @@ class DMD(keras.callbacks.Callback):
             U = X[:, :-1].T
         elif self.model.predictor == 'DMDc':
             U = np.vstack([X[:, :-1], X_LR[:, :-1]]).T
-            
+
         Y = X[:, 1:].T
 
         np.random.seed(1)
@@ -109,6 +107,9 @@ class DMD(keras.callbacks.Callback):
 
         # assign ESN weights to layer
         predictor_layer.set_weights([esn.W_out])
+
+    def on_epoch_end(self, epoch, logs=None):
+        return None
 
 
 class AnalysisBase(keras.callbacks.Callback, ABC):
@@ -129,12 +130,13 @@ class AnalysisBase(keras.callbacks.Callback, ABC):
         self.spectra = ('spectra' in self.plot_instructions or
                         'spectrum' in self.plot_instructions)
 
-        self.output_path = self.dgen.dm.dirs['results']
         self.plot_machine = \
             plot_utils.PlotMachine(dm=self.dgen.dm)
 
         # create a nan-mask
         self.mask_constructed = False
+        self.cfg_printed = False
+        self.history = {}
 
     @abstractmethod
     def call_model(self, x):
@@ -165,9 +167,13 @@ class AnalysisBase(keras.callbacks.Callback, ABC):
             pass
 
     def on_epoch_begin(self, epoch, logs=None):
+        if not self.cfg_printed:
+            self.cfg_printed = \
+                tools.print_configuration(self.dgen, self.model)
         return None
 
     def on_epoch_end(self, epoch, logs=None):
+        self.update_history(logs)
         plt.close('all')
         self.plot_machine.create_postfix()
         self.plot_machine.create_results_dir(epoch)
@@ -179,6 +185,13 @@ class AnalysisBase(keras.callbacks.Callback, ABC):
                 spectra=self.spectra,
                 reconstruction=self.reconstruction,
             )
+
+    def update_history(self, logs):
+        for key, value in logs.items():
+            if key in self.history:
+                self.history[key].append(value)
+            else:
+                self.history[key] = [value]
 
     def unscale_var(self, var, scaler):
         """ unscale variables """

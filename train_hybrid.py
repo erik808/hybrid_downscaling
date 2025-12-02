@@ -90,13 +90,13 @@ dmd_callback = callbacks.DMD(data_gen=dgen_train)
 
 hist = hybrid.fit(
     x=dgen_train,
-    epochs=4,
+    epochs=2,
     shuffle=False,
     validation_data=dgen_test,
     callbacks=[
-        dmd_callback,
         analysis_callback,
-        #     model_checkpoint_callback,
+        dmd_callback,
+        # model_checkpoint_callback,
     ]
 )
 analysis_callback.plot_history(hist)

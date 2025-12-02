@@ -32,7 +32,7 @@ num_filters_hybrid = 64
 
 # deterministic mode bypasses the sampling layer and uses the mean
 # only
-deterministic_mode = True
+deterministic_mode = False
 
 # bypass the whole vae
 bypass_vae = False

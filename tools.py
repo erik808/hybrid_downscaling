@@ -7,6 +7,7 @@ import os
 import numpy as np
 import sys
 from datetime import datetime
+from types import SimpleNamespace
 import importlib
 import xesmf as xe
 from dask.diagnostics import ProgressBar
@@ -111,8 +112,6 @@ def load_config(obj, config_name):
     # config_file. Exclude "__" members and functions.
 
     config_file = f'configs.{config_name}'
-    print(f'Load config: {config_file}')
-
     try:
         config = importlib.import_module(config_file)
     except ModuleNotFoundError:
@@ -130,6 +129,32 @@ def load_config(obj, config_name):
 
     for (key, value) in config_vars.items():
         setattr(obj, key, value)
+
+
+def print_configuration(data_gen, model):
+    output_dir = data_gen.dm.dirs['logs']
+    config = SimpleNamespace()
+    data_ns = SimpleNamespace()
+    load_config(
+        data_ns,
+        config_name=data_gen.dm.config_name,
+    )
+    setattr(config, data_gen.dm.config_name, data_ns)
+
+    for model in ['resnet', 'vae', 'predictor', 'hybrid']:
+        cfg_name = model + '_model'
+        model_ns = SimpleNamespace()
+        load_config(model_ns, config_name=cfg_name)
+        setattr(config, model, model_ns)
+
+    with open(f"{output_dir}/config.txt", "w") as fl:
+        model.summary(print_fn=lambda x: fl.write(x + '\n'))
+
+        for key, value in vars(config).items():
+            fl.write(f'{key}:' + '\n')
+            for k, v in vars(value).items():
+                fl.write(f'  {k}: {v}' + '\n')
+    return True
 
 
 def build_grid(lat_arr, lon_arr):

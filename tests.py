@@ -195,7 +195,7 @@ def test_predictor():
     # load existing weights
     checkpoint_filepath = \
         'experiments/test/vae/checkpoints/checkpoint.vae.keras'
-    vae.load_weights(checkpoint_filepath)
+    # vae.load_weights(checkpoint_filepath)
 
     predictor = predictor_model.Predictor(data_gen=dgen_train,
                                           vae_model=vae)
@@ -286,4 +286,4 @@ def test_hybrid():
 # test_predictor()
 # test_data_generator()
 # test_resnet()
-test_hybrid()
+# test_hybrid()

@@ -24,7 +24,7 @@ class PlotMachine():
         self.dm = dm
         self.dirs = dm.dirs
         self.log_dir = f"{self.dirs['logs']}"
-        self.results_dir = []
+        self.results_dir = self.dirs['results']
         self.figsize = figsize
         self.output_dict = output_dict
         self.time_array = time_array
@@ -67,7 +67,7 @@ class PlotMachine():
         print(fig_name)
         plt.savefig(fig_name, bbox_inches='tight')
 
-    def plot_hovmöller(self, T, plot_type, transect, epoch):
+    def plot_hovmöller(self, T, plot_type, transect):
         plt.close('all')
         if plot_type == 'energy':
             for key, value in T.items():
@@ -94,6 +94,51 @@ class PlotMachine():
                     f'{plot_type}_{transect}.png')
         plt.tight_layout()
         plt.savefig(fig_name, bbox_inches='tight')
+
+    def spectra_wrapper(self, x, y, z):
+        scaler_list = ['LR', 'HR', 'HR']
+        if x.shape == z.shape:
+            scaler_list[0] = 'HR'
+
+        x_unscaled, y_unscaled, z_unscaled = \
+            [tools.unscale_var(d, self.dm.scalers[res])
+             for d, res in zip([x, y, z], scaler_list)]
+
+        if x_unscaled.shape != z_unscaled.shape:
+            # upsample unscaled x (bilinear interpolation)
+            x_unscaled = \
+                np.ascontiguousarray(x_unscaled.transpose((0, 3, 1, 2)))
+            x_unscaled = \
+                self.dm\
+                    .bilin_upsampler(x_unscaled)\
+                    .transpose((0, 2, 3, 1))
+
+        data = {
+            'lowres': np.nan_to_num(x_unscaled),
+            'scaler_lowres': None,
+            'truth': np.nan_to_num(y_unscaled),
+            'scaler_truth': None,
+            'pred': np.nan_to_num(z_unscaled),
+            'scaler_pred': None,
+        }
+
+        # do not create temporal plots when time dimension is limited
+        # (during testing)
+        Nt = x.shape[0]
+        directions = ['spatial', 'temporal'] if Nt > 100 else ['spatial']
+
+        for transect in ['along_flow', 'across_flow']:
+            for spectype in ['energy', 'enstrophy']:
+                for direction in directions:
+                    S, T = self.plot_spectrum(data,
+                                              transect_name=transect,
+                                              spectrum_type=spectype,
+                                              direction=direction)
+                self.plot_hovmöller(
+                    T,
+                    plot_type=spectype,
+                    transect=transect,
+                )
 
     def plot_single_frame(self, frame_id, output_dict=None):
         self.output_dict = self.output_dict \
@@ -281,7 +326,6 @@ class PlotMachine():
 
     def plot_spectrum(self,
                       data,
-                      epoch,
                       transect_name='along_flow',
                       spectrum_type='energy',
                       direction='spatial',

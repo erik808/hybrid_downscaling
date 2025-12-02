@@ -21,13 +21,15 @@ class DataManagerCMEMS(data_manager_base.DataManagerBase):
             testing=False,
             force_rebuild=False,
             config_name='data_config_cmems',
+            base_dir='experiment',
     ):
         super().__init__()
         tools.load_config(self, config_name=config_name)
         self.config_name = config_name
         self.force_rebuild = force_rebuild
         self.dirs, self.files = self.setup_directories(
-            experiment_id=experiment_id)
+            experiment_id=experiment_id,
+            base_dir=base_dir)
 
         # setup test mode
         self.testing = testing

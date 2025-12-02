@@ -19,7 +19,7 @@ class DataManagerBase(ABC):
             add_id="",
             base_dir="experiments",
     ):
-        base_dir = f'experiments/{experiment_id}{add_id}'
+        base_dir = f'{base_dir}/{experiment_id}{add_id}'
         models_dir = f'{base_dir}/models'
         tuning_dir = f'{base_dir}/tuning'
         results_dir = f'{base_dir}/results'

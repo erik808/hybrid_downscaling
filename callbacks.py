@@ -197,14 +197,6 @@ class AnalysisBase(keras.callbacks.Callback, ABC):
         tools.print_history(self.dgen, self.history)
         self.plot_machine.plot_history(self.history)
 
-    def unscale_var(self, var, scaler):
-        """ unscale variables """
-        var_shape = var.shape
-        Tdim = var_shape[0] if len(var_shape) > 3 else 1
-        return scaler\
-            .inverse_transform(var.reshape(Tdim, -1))\
-            .reshape(var_shape)
-
     def plot_reconstruction(
             self,
             x,
@@ -395,55 +387,12 @@ class AnalysisBase(keras.callbacks.Callback, ABC):
             }, file)
 
         if spectra:
-            self.spectra_wrapper(x, y, z, epoch)
+            self.plot_machine.spectra_wrapper(x, y, z)
 
         if reconstruction:
             t_range = np.linspace(0, x.shape[0] - 1, 4).astype(int)
             for t in t_range:
                 self.plot_reconstruction(x, y, z, epoch, t)
-
-    def spectra_wrapper(self, x, y, z, epoch):
-        x_unscaled, y_unscaled, z_unscaled = \
-            [self.unscale_var(d, self.dgen.dm.scalers[res])
-             for d, res in zip([x, y, z], self.scaler_list)]
-
-        if x_unscaled.shape != z_unscaled.shape:
-            # upsample unscaled x (bilinear interpolation)
-            x_unscaled = \
-                np.ascontiguousarray(x_unscaled.transpose((0, 3, 1, 2)))
-            x_unscaled = \
-                self.dgen.dm.bilin_upsampler(x_unscaled)\
-                            .transpose((0, 2, 3, 1))
-
-        data = {
-            'lowres': np.nan_to_num(x_unscaled),
-            'scaler_lowres': None,
-            'truth': np.nan_to_num(y_unscaled),
-            'scaler_truth': None,
-            'pred': np.nan_to_num(z_unscaled),
-            'scaler_pred': None,
-        }
-
-        # do not create temporal plots when time dimension is limited
-        # (during testing)
-        Nt = x.shape[0]
-        directions = ['spatial', 'temporal'] if Nt > 100 else ['spatial']
-
-        for transect in ['along_flow', 'across_flow']:
-            for spectype in ['energy', 'enstrophy']:
-                for direction in directions:
-                    S, T = self.plot_machine\
-                               .plot_spectrum(data,
-                                              epoch,
-                                              transect_name=transect,
-                                              spectrum_type=spectype,
-                                              direction=direction)
-                self.plot_machine.plot_hovmöller(
-                    T,
-                    plot_type=spectype,
-                    transect=transect,
-                    epoch=epoch,
-                )
 
 
 class AnalysisResNet(AnalysisBase):

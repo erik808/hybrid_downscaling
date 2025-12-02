@@ -237,6 +237,15 @@ def regrid_to_transect(grid_orig,
     return interp_to_transect
 
 
+def unscale_var(var, scaler):
+    """ unscale variables """
+    var_shape = var.shape
+    Tdim = var_shape[0] if len(var_shape) > 3 else 1
+    return scaler\
+        .inverse_transform(var.reshape(Tdim, -1))\
+        .reshape(var_shape)
+
+
 def apply_time_range(globstr, time_range):
     files = sorted(glob.glob(globstr))
     if len(files) == 1:

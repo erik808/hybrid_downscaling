@@ -455,7 +455,6 @@ class AnalysisResNet(AnalysisBase):
         super().__init__(data_gen, **kwargs)
 
     def call_model(self, x):
-        print(x.keys())
         z = self.model(
             {'LR_data': x['LR_data']},
             training=False

@@ -1,6 +1,6 @@
 # Set True if resnet and/or predictor weights are allowed to get
 # updated during training
-trainable_resnet = False
+trainable_resnet = True
 trainable_predictor = True
 
 # select losses to include: 'outer_pred', 'inner_pred',

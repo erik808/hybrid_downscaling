@@ -19,7 +19,7 @@ gamma = 1
 # options: 'identity', 'simpleRNN',
 #          'dense', 'lstm', 'conv3d',
 #          'convlstm', 'DMD', 'DMDc'
-predictor = 'identity'
+predictor = 'DMDc'
 
 lambdaDMD = 1e-6
 cutoffDMD = 0.1

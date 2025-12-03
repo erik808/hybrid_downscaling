@@ -59,10 +59,10 @@ resnet.load_weights(resnet_checkpoint, skip_mismatch=True)
 vae = vae_model.VAE(data_gen=dgen_train)
 vae.build_model("betaVAE")
 vae.summary(expand_nested=True)
-# vae_checkpoint = \
-#     'models/vae/l5k3f64-256spatial/checkpoint.vae.keras'
 vae_checkpoint = \
-    'models/vae/l4f64-128dense2048/checkpoint.vae.keras'
+    'models/vae/l5k3f64-256spatial/checkpoint.vae.keras'
+# vae_checkpoint = \
+#     'models/vae/l4f64-128dense2048/checkpoint.vae.keras'
 
 vae.load_weights(vae_checkpoint, skip_mismatch=True)
 

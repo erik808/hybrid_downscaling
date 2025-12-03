@@ -70,7 +70,8 @@ class DMD(keras.callbacks.Callback):
             )[0].cpu().detach().numpy()  # take only the mean
 
             x_enc_mat += [x_enc]
-            x_enc_LR_mat += [ops.squeeze(batch_x['LR_data'][:, 0, ...])]
+            x_enc_LR_mat += [ops.squeeze(batch_x['LR_data'][:, 0, ...])
+                             .cpu().detach().numpy()]
 
         # decrease batch size again
         self.dgen.batch_size = batch_size

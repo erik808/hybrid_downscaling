@@ -18,7 +18,7 @@ activation = 'leaky_relu'
 activation_out = 'tanh_scaled'
 
 # number of down and upsampling convolutions
-num_layers = 5  # tested: 4
+num_layers = 4  # tested: 4
 
 kernel_size = 3
 

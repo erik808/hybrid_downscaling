@@ -92,14 +92,9 @@ class Hybrid(base_model.BaseModel):
 
         self.trackers = []
         self.trackers.append(keras.metrics.Mean(name="loss"))
-        if 'reconstruction' in self.loss_list:
-            self.trackers.append(keras.metrics.Mean(name="recon"))
-        if 'KL' in self.loss_list:
-            self.trackers.append(keras.metrics.Mean(name="KL"))
-        if 'outer_pred' in self.loss_list:
-            self.trackers.append(keras.metrics.Mean(name="outer_pred"))
-        if 'inner_pred' in self.loss_list:
-            self.trackers.append(keras.metrics.Mean(name="inner_pred"))
+
+        for loss_name in self.loss_list:
+            self.trackers.append(keras.metrics.Mean(name=loss_name))
 
     @property
     def metrics(self):
@@ -131,7 +126,7 @@ class Hybrid(base_model.BaseModel):
                             axis=1)),
                     training=training,
                 )[0]  # use only the mean
-            lspred_loss = self.loss_MSE(z_ls_pred, y_ls) * self.alpha_ls
+            lspred_loss = self.loss_MSE(z_ls_pred, y_ls) * self.alpha_inner
         else:
             lspred_loss = 0.0
 
@@ -166,9 +161,16 @@ class Hybrid(base_model.BaseModel):
                                    self.masking.cols,
                                    :]
             # actual prediction
-            pred_loss = self.loss_MSLE(z_hybrid, y_k(0)) * self.alpha
+            pred_loss = self.loss_MSLE(z_hybrid, y_k(0)) * self.alpha_outer
         else:
             pred_loss = 0.0
+
+        if 'ls_size' in self.loss_list:
+            # latent space size loss
+            z_mean = z['mean']
+            ls_size = ops.mean(ops.abs(z_mean)) * self.alpha_ls
+        else:
+            ls_size = 0.0
 
         if False:
             ztest_hybrid = z['hybrid'][0, ..., 0].cpu().detach().numpy()
@@ -212,7 +214,7 @@ class Hybrid(base_model.BaseModel):
         # breakpoint()
 
         # total loss
-        loss = pred_loss + re_loss + lspred_loss + kl_loss
+        loss = pred_loss + re_loss + lspred_loss + kl_loss + ls_size
 
         if training:
             loss.backward()
@@ -230,8 +232,10 @@ class Hybrid(base_model.BaseModel):
                 metric.update_state(pred_loss)
             if metric.name == "inner_pred":
                 metric.update_state(lspred_loss)
-            if metric.name == "recon":
+            if metric.name == "reconstruction":
                 metric.update_state(re_loss)
+            if metric.name == "ls_size":
+                metric.update_state(ls_size)
             if metric.name == "KL":
                 metric.update_state(kl_loss)
 

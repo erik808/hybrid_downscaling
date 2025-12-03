@@ -376,9 +376,9 @@ class AnalysisBase(keras.callbacks.Callback, ABC):
         x = np.concatenate([self.restrict_x(r) for r in results], 0)
         y = np.concatenate([self.restrict_y(t) for t in truths], 0)
         z = np.concatenate([self.restrict_y(r) for r in results], 0)
-
+        results_dir_base = self.plot_machine.dirs['results']
         timestepping_file = \
-            f'{self.plot_machine.results_dir}/timeseries.dill'
+            f'{results_dir_base}/timeseries.dill'
         with open(timestepping_file, 'wb') as file:
             dill.dump({
                 'x': x,

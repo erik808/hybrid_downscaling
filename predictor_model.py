@@ -384,6 +384,7 @@ class LSPredictor(layers.Layer):
             self.predictmod = DMD(
                 name='dmd_operator',
                 mode=self.predictor,
+                alpha=self.alphaDMD,
             )
             self.output_transf = layers.Reshape(dims)
         else:
@@ -432,9 +433,14 @@ class FlattenAndStack(layers.Layer):
 
 
 class DMD(layers.Layer):
-    def __init__(self, mode='DMD', **kwargs):
+    def __init__(
+            self,
+            mode='DMD',
+            alpha=1.0,
+            **kwargs):
         super().__init__(**kwargs)
         self.mode = mode
+        self.alpha = alpha
         self.concat = False
 
     def build(self, input_shape):
@@ -458,11 +464,18 @@ class DMD(layers.Layer):
         self.built = True
 
     def call(self, inputs):
+        xk = inputs
+
         if self.concat and isinstance(inputs, list):
+            xk = inputs[0]
             inputs = ops.concatenate(inputs, -1)
         elif isinstance(inputs, list):
+            xk = inputs[0]
             inputs = inputs[0]
-        return ops.matmul(self.W_out, inputs.T).T
+
+        result = ops.matmul(self.W_out, inputs.T).T
+        xkp1 = (1 - self.alpha) * xk + self.alpha * result
+        return xkp1
 
 
 class CombineControl(layers.Layer):

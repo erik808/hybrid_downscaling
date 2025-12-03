@@ -41,6 +41,7 @@ class Hybrid(base_model.BaseModel):
 
         self.predictor = predictor_model.predictor
         self.lambdaDMD = predictor_model.lambdaDMD
+        self.alphaDMD = predictor_model.alphaDMD
         self.cutoffDMD = predictor_model.cutoffDMD
 
         self.predictor_output = \

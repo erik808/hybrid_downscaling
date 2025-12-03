@@ -16,10 +16,14 @@ beta = 0.0
 gamma = 1
 
 # model that does the actual prediction in the latent space
-# options: 'simpleRNN', 'dense', 'lstm', 'conv3d', 'convlstm', 'DMD'
-predictor = 'DMDc'
-lambdaDMD = 1e2
+# options: 'identity', 'simpleRNN',
+#          'dense', 'lstm', 'conv3d',
+#          'convlstm', 'DMD', 'DMDc'
+predictor = 'identity'
+
+lambdaDMD = 1e-6
 cutoffDMD = 0.1
+alphaDMD = 1.0
 
 output_filters = 64
 

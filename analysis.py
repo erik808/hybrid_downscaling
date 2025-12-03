@@ -110,7 +110,7 @@ data = {
 plt.switch_backend('qtagg')
 plot_machine.plot_spectrum(data,
                            transect_name='along_flow',
-                           spectrum_type='enstrophy',
-                           direction='temporal',
+                           spectrum_type='energy',
+                           direction='spatial',
                            add_powerlaws=False)
 plt.pause(1)

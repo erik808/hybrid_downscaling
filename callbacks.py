@@ -98,7 +98,8 @@ class DMD(keras.callbacks.Callback):
         elif self.model.predictor == 'DMDc':
             U = np.vstack([X[:, :-1], X_LR[:, :-1]]).T
 
-        Y = X[:, 1:].T
+        Y = (X[:, 1:].T - (1 - self.model.alphaDMD)
+             * X[:, :-1].T) / self.model.alphaDMD
 
         np.random.seed(1)
         esn = ESN_mod.ESN(100, U.shape[1], Y.shape[1])

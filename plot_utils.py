@@ -142,7 +142,7 @@ class PlotMachine():
                 'plotkwargs': {
                     'label': 'prediction',
                     'linestyle': '-',
-                    'color': cmap(2),
+                    'color': cmap(1),
                     'zorder': 4,
                 },
             },

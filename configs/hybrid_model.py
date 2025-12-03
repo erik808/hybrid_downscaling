@@ -1,11 +1,11 @@
 # Set True if resnet and/or predictor weights are allowed to get
 # updated during training
-trainable_resnet = True
+trainable_resnet = False
 trainable_predictor = True
 
 # select losses to include: 'outer_pred', 'inner_pred',
 # 'reconstruction', 'KL'
-loss_list = ['outer_pred', 'reconstruction'] #, 'KL']
+loss_list = ['outer_pred']
 
 # learning rate
 learning_rate = 1e-4

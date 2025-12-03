@@ -117,13 +117,35 @@ class PlotMachine():
                     .bilin_upsampler(x_unscaled)\
                     .transpose((0, 2, 3, 1))
 
+        cmap = plt.get_cmap('tab10')
         data = {
-            'lowres': np.nan_to_num(x_unscaled),
-            'scaler_lowres': None,
-            'truth': np.nan_to_num(y_unscaled),
-            'scaler_truth': None,
-            'pred': np.nan_to_num(z_unscaled),
-            'scaler_pred': None,
+            'lowres': {
+                'data': np.nan_to_num(x_unscaled),
+                'plotkwargs': {
+                    'label': 'bilinear interpolation',
+                    'linestyle': '--',
+                    'color': cmap(5),
+                    'zorder': 0,
+                },
+            },
+            'truth': {
+                'data': np.nan_to_num(y_unscaled),
+                'plotkwargs': {
+                    'label': 'high-resolution truth',
+                    'linestyle': '-',
+                    'color': cmap(0),
+                    'zorder': 10,
+                },
+            },
+            'pred': {
+                'data': np.nan_to_num(z_unscaled),
+                'plotkwargs': {
+                    'label': 'prediction',
+                    'linestyle': '-',
+                    'color': cmap(2),
+                    'zorder': 4,
+                },
+            },
         }
 
         # do not create temporal plots when time dimension is limited
@@ -336,41 +358,36 @@ class PlotMachine():
                       add_powerlaws=False,
                       ):
 
-        plt.close('all')
         k = {}
         S = {}
         T = {}
-        for dkey, skey in zip(['truth', 'pred', 'lowres'],
-                              ['scaler_truth', 'scaler_pred', 'scaler_lowres']
-                              ):
-            k[dkey], S[dkey], T[dkey] = \
+        for key, value in data.items():
+            k[key], S[key], T[key] = \
                 self.ct.compute_spectrum_along_transect(
-                    data[dkey],
-                    data[skey],
+                    value['data'],
                     transect_name=transect_name,
                     spectrum_type=spectrum_type,
                     direction=direction)
 
         # compute mean
-        S_truth_mn = np.mean(S['truth'], axis=0)
-        S_pred_mn = np.mean(S['pred'], axis=0)
-        S_lowres_mn = np.mean(S['lowres'], axis=0)
+        S_mn = {key: np.mean(value, axis=0) for key, value in S.items()}
+
         plt.figure()
-        plt.loglog(k['truth'], S_truth_mn, 's-',
-                   markersize=3, label='HR truth')
-        plt.loglog(k['pred'], S_pred_mn, '.-',
-                   label='Model prediction')
-        plt.loglog(k['lowres'], S_lowres_mn, '--',
-                   label='LR forcing/control')
+        for key, value in S_mn.items():
+            plt.loglog(
+                k[key],
+                value,
+                **data[key]['plotkwargs'],
+            )
 
         if add_powerlaws:
-            k_1 = np.linspace(1.7, np.ceil(len(S_truth_mn) / 2), 100)
-            k_2 = np.linspace(7, len(S_truth_mn), 100)
+            k_1 = np.linspace(1.7, np.ceil(len(S_mn[key]) / 2), 100)
+            k_2 = np.linspace(7, len(S_mn[key]), 100)
 
-            offset_1 = 1e1 * np.max(S_truth_mn) \
-                if transect_name == 'along_flow' else 1e0 * np.max(S_truth_mn)
-            offset_2 = 2e2 * np.max(S_truth_mn) \
-                if transect_name == 'along_flow' else 1e1 * np.max(S_truth_mn)
+            offset_1 = 1e1 * np.max(S_mn[key]) \
+                if transect_name == 'along_flow' else 1e0 * np.max(S_mn[key])
+            offset_2 = 2e2 * np.max(S_mn[key]) \
+                if transect_name == 'along_flow' else 1e1 * np.max(S_mn[key])
 
             plt.loglog(k_1, offset_1 * k_1**(-5 / 3), '--', label='k^-5/3')
             plt.loglog(k_2, offset_2 * k_2**(-3), ':', label='k^-3')

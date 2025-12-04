@@ -1,5 +1,6 @@
 # import keras
 import importlib
+import keras
 import data_manager_cmems
 from keras import backend as K
 import data_generator_cmems
@@ -21,6 +22,7 @@ importlib.reload(hybrid_model)
 importlib.reload(callbacks)
 
 K.clear_session()
+keras.utils.set_random_seed(123)
 
 if len(sys.argv) < 2:
     experiment_id = 'train_hybrid'

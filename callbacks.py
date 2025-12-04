@@ -35,8 +35,9 @@ class DMD(keras.callbacks.Callback):
                               .get_layer('latent_predictor')
 
         # do some checks
-        DMDcheck = (len(predictor_layer.weights) == 1 and
-                    'W_out' in predictor_layer.weights[0].path)
+        DMDcheck = (len(predictor_layer.weights) == 2 and
+                    'bias' in predictor_layer.weights[0].path and
+                    'W_out' in predictor_layer.weights[1].path)
 
         if DMDcheck:
             print('ESN/DMD layer detected')
@@ -108,8 +109,9 @@ class DMD(keras.callbacks.Callback):
         esn.initialize()
         esn.train(U, Y)
 
-        # assign ESN weights to layer
-        predictor_layer.set_weights([esn.W_out])
+        # assign ESN weights to W_out
+        bias, W_out = predictor_layer.get_weights()
+        predictor_layer.set_weights([bias, esn.W_out])
 
     def on_epoch_end(self, epoch, logs=None):
         return None

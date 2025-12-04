@@ -385,6 +385,7 @@ class LSPredictor(layers.Layer):
                 name='dmd_operator',
                 mode=self.predictor,
                 alpha=self.alphaDMD,
+                use_bias=self.biasDMD,
             )
             self.output_transf = layers.Reshape(dims)
         else:
@@ -437,10 +438,13 @@ class DMD(layers.Layer):
             self,
             mode='DMD',
             alpha=1.0,
-            **kwargs):
+            use_bias=True,
+            **kwargs,
+    ):
         super().__init__(**kwargs)
         self.mode = mode
         self.alpha = alpha
+        self.use_bias = use_bias
         self.concat = False
 
     def build(self, input_shape):
@@ -461,6 +465,13 @@ class DMD(layers.Layer):
             trainable=False,
             name='W_out',
         )
+        if self.use_bias:
+            self.bias = self.add_weight(
+                shape=(rows,),
+                initializer='zeros',
+                trainable=True,
+                name='DMD_bias',
+            )
         self.built = True
 
     def call(self, inputs):
@@ -474,8 +485,11 @@ class DMD(layers.Layer):
             inputs = inputs[0]
 
         result = ops.matmul(self.W_out, inputs.T).T
-        xkp1 = (1 - self.alpha) * xk + self.alpha * result
-        return xkp1
+        output = (1 - self.alpha) * xk + self.alpha * result
+        if self.use_bias:
+            output = ops.add(output, self.bias)
+
+        return output
 
 
 class CombineControl(layers.Layer):

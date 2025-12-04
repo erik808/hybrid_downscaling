@@ -277,8 +277,16 @@ class Hybrid(base_model.BaseModel):
         elif self.hybridization == 'concat':
             x = layers.Concatenate(axis=-1)(
                 [resnet_result, predictor_result])
+            x = layers.Conv2D(
+                filters=resnet_result.shape[-1],
+                kernel_size=3,
+                strides=1,
+                padding='same',
+            )(x)
         elif self.hybridization == 'predictor':
             x = predictor_result
+        elif self.hybridization == 'resnet':
+            x = resnet_result
         else:
             raise Exception('invalid hybridization parameter')
 

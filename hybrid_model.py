@@ -172,7 +172,7 @@ class Hybrid(base_model.BaseModel):
         else:
             ls_size = 0.0
 
-        if True:
+        if False:
             ztest_hybrid = z['hybrid'][0, ..., 0].cpu().detach().numpy()
             ztest_resnet = z['resnet'][0, ..., 0].cpu().detach().numpy()
             ztest_recons = z['ae_recons'][0, ..., 0].cpu().detach().numpy()

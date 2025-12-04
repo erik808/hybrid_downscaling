@@ -32,7 +32,7 @@ else:
 dmgr_cmems = \
     data_manager_cmems.DataManagerCMEMS(
         experiment_id=experiment_id,
-        testing=True,
+        testing=False,
         force_rebuild=False,
     )
 
@@ -56,7 +56,7 @@ resnet.build_model("ResNet")
 resnet.summary(expand_nested=True)
 resnet_checkpoint = \
     'models/resnet/b6f64o0/checkpoint.resnet.keras'
-resnet.load_weights(resnet_checkpoint, skip_mismatch=True)
+# resnet.load_weights(resnet_checkpoint, skip_mismatch=True)
 
 vae = vae_model.VAE(data_gen=dgen_train)
 vae.build_model("betaVAE")
@@ -68,7 +68,7 @@ vae_checkpoint = \
 # vae_checkpoint = \
 #     'models/vae/l4k3f64-128spatial/checkpoint.vae_2.keras'
 
-vae.load_weights(vae_checkpoint, skip_mismatch=True)
+# vae.load_weights(vae_checkpoint, skip_mismatch=True)
 
 predictor = predictor_model.Predictor(data_gen=dgen_train,
                                       vae_model=vae)
@@ -88,8 +88,8 @@ hybrid.summary(expand_nested=False)
 analysis_callback = callbacks.AnalysisHybrid(
     data_gen=dgen_test,
     plot=[
-        # 'reconstruction',
-        # 'spectra',
+        'reconstruction',
+        'spectra',
     ]
 )
 
@@ -97,7 +97,7 @@ dmd_callback = callbacks.DMD(data_gen=dgen_train)
 
 hist = hybrid.fit(
     x=dgen_train,
-    epochs=2,
+    epochs=100,
     shuffle=False,
     validation_data=dgen_test,
     callbacks=[

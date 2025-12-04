@@ -10,7 +10,7 @@ gamma = 1
 # weight on latent space size
 alpha_ls = 1e-4
 
-#
+# 'bilinear', 'subpixel'
 upsampling_method = 'bilinear'
 
 # activation type ('prelu', 'relu', 'leaky_relu', 'elu')
@@ -18,7 +18,7 @@ activation = 'leaky_relu'
 activation_out = 'tanh_scaled'
 
 # number of down and upsampling convolutions
-num_layers = 5  # tested: 4
+num_layers = 4  # tested: 4
 
 kernel_size = 3
 
@@ -42,4 +42,4 @@ sampling_type = 'spatial'
 
 # latent space size
 # dense_units = 4096  # used in dense mode
-latent_space = 2048  # used in dense mode
+latent_space = 256  # used in dense mode

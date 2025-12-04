@@ -37,7 +37,8 @@ class DMD(keras.callbacks.Callback):
         # do some checks
         DMDcheck = (len(predictor_layer.weights) == 2 and
                     'bias' in predictor_layer.weights[0].path and
-                    'W_out' in predictor_layer.weights[1].path)
+                    'W_out' in predictor_layer.weights[1].path and
+                    epoch > 1)
 
         if DMDcheck:
             print('ESN/DMD layer detected')

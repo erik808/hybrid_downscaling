@@ -129,7 +129,7 @@ class Predictor(base_model.BaseModel):
             )[0]  # take only the mean
 
         # prediction loss in the latent space
-        lspred_loss = self.loss_MSE(z_ls_pred, y_ls) * self.alpha_ls
+        lspred_loss = self.loss_MSE(z_ls_pred, y_ls) * self.alpha_inner
 
         def y_k(k):
             return \
@@ -140,7 +140,7 @@ class Predictor(base_model.BaseModel):
                                       :]
 
         # prediction loss, compare against target
-        pred_loss = self.loss_MSLE(z_decoded, y_k(0)) * self.alpha
+        pred_loss = self.loss_MSLE(z_decoded, y_k(0)) * self.alpha_outer
 
         # reconstruction loss, compare using most recent, only used
         # when the VAE weights are trainable

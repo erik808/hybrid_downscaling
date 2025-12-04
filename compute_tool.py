@@ -73,6 +73,9 @@ class ComputeTool():
         elif spectrum_type == 'enstrophy':
             zeta = self.vorticity(data, scaler, crop=False)
             transect_data = self.do_regridding(zeta)
+        elif spectrum_type == 'ssh':
+            ssh = self.get_ssh(data, scaler)
+            transect_data = self.do_regridding(ssh)
 
         return transect_data
 
@@ -127,7 +130,8 @@ class ComputeTool():
             data = data[..., :2]
             data = (data.transpose(1, 0, 2) - np.mean(data, axis=1))\
                 .transpose(1, 0, 2)  # remove spatial average
-        elif spectrum_type == 'enstrophy':
+        elif (spectrum_type == 'enstrophy' or
+              spectrum_type == 'ssh'):
             # remove spatial average
             data = (data.T - np.mean(data, axis=1)).T
 
@@ -149,7 +153,10 @@ class ComputeTool():
         H = np.fft.fft(data_tp, axis=1)
         if spectrum_type == 'energy':
             S = 0.5 * np.sum(np.square(np.abs(H)), axis=2)
-        elif spectrum_type == 'enstrophy':
+        elif (
+                spectrum_type == 'enstrophy' or
+                spectrum_type == 'ssh'
+        ):
             S = 0.5 * np.square(np.abs(H))
 
         n = S.shape[-1]
@@ -226,6 +233,15 @@ class ComputeTool():
             zeta = zeta[..., 1:, 1:]
 
         return zeta.squeeze()
+
+    def get_ssh(self, data, scaler):
+        """
+        returns ssh
+        """
+        data = self.inverse_transform(data, scaler)
+        # assume last dimension has variables, ordered as (u,v,ssh)
+        ssh = data[..., 2]
+        return ssh
 
     def divergence(self, data, scaler, crop=True):
         """

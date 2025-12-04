@@ -410,6 +410,15 @@ class PlotMachine():
                  f'enstrophy_spectrum_'
                  f'{transect_name}_{direction}.png')
 
+        elif spectrum_type == 'ssh':
+            tstring = \
+                (f'Mean ssh spectrum,'
+                 f' {transect_name} {direction}')
+            fig_name = \
+                (f'{self.results_dir}/'
+                 f'ssh_spectrum_'
+                 f'{transect_name}_{direction}.png')
+
         # plt.gca().set_ylim([1e-7, 1])
         plt.gca().set_title(tstring)
         plt.legend()

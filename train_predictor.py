@@ -20,7 +20,7 @@ else:
 
 dmgr_cmems = \
     data_manager_cmems.DataManagerCMEMS(experiment_id=experiment_id,
-                                        testing=True,
+                                        testing=False,
                                         force_rebuild=False)
 dmgr_cmems.create_training_data()
 
@@ -44,7 +44,7 @@ vae.summary(line_length=80)
 # load existing weights
 vae_checkpoint = \
     'models/vae/l4k3f64-128spatial/checkpoint.vae.keras'
-vae.load_weights(vae_checkpoint)
+# vae.load_weights(vae_checkpoint)
 
 predictor = predictor_model.Predictor(data_gen=dgen_train,
                                       vae_model=vae)
@@ -76,7 +76,7 @@ model_checkpoint_callback = keras.callbacks.ModelCheckpoint(
 
 hist = predictor.fit(
     x=dgen_train,
-    epochs=5,
+    epochs=100,
     validation_data=dgen_test,
     callbacks=[
         dmd_callback,

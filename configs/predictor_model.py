@@ -6,8 +6,8 @@ trainable_decoder = True
 # learning rate
 learning_rate = 1e-4
 
-alpha = 1.0
-alpha_ls = 1.0
+alpha_outer = 1.0
+alpha_inner = 1.0
 
 # weight on KL loss
 beta = 0.0
@@ -19,14 +19,14 @@ gamma = 1
 # options: 'identity', 'simpleRNN',
 #          'dense', 'lstm', 'conv3d',
 #          'convlstm', 'DMD', 'DMDc'
-predictor = 'dense'
+predictor = 'DMDc'
 
-lambdaDMD = 0.0
+lambdaDMD = 1.0e-7
 cutoffDMD = 0.1
-alphaDMD = 1.0
+alphaDMD = 0.1
 biasDMD = True
 
-output_filters = 128
+output_filters = 256
 
 convlstm_filters = 64
 
@@ -35,4 +35,4 @@ activation = 'leaky_relu'
 kernel_regularizer = None  # {'L2': 1e-2}
 recurrent_regularizer = None  # {'L2': 1e-2}
 recurrent_dropout = 0.4  # 0.4
-dense_units = 2048
+dense_units = 4

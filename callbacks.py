@@ -38,7 +38,7 @@ class DMD(keras.callbacks.Callback):
         DMDcheck = (
             len(predictor_layer.weights) == 2 and
             'bias' in predictor_layer.weights[0].path and
-            'W_out' in predictor_layer.weights[1].path # and
+            'W_out' in predictor_layer.weights[1].path  # and
             # epoch > 1
         )
 
@@ -380,7 +380,10 @@ class AnalysisBase(keras.callbacks.Callback, ABC):
                 # create kth model input
                 x_k = x_(batch_x, k, x_km1)
                 # perform time step and update x_k
-                x_k['HR_data'][0, 0, ], x_k['latent'] = self.call_model(x_k)
+                x_k['HR_data'][0, 0, ], add_out = self.call_model(x_k)
+                for k, v in add_out.items():
+                    x_k[k] = v
+
                 batch_results.append(x_k)
                 x_km1 = x_k
 
@@ -455,7 +458,7 @@ class AnalysisResNet(AnalysisBase):
         )
         # apply nan mask and detach
         z = (z * self.mask).cpu().detach().numpy()
-        return z, []
+        return z, {}
 
     def restrict_x(self, x):
         # keep relevant keys, ignore lookback
@@ -491,7 +494,7 @@ class AnalysisVAE(AnalysisBase):
         z_mean = z['mean'].cpu().detach().numpy()
         # apply nan mask and detach
         z_decoded = (z_decoded * self.mask).cpu().detach().numpy()
-        return z_decoded, z_mean
+        return z_decoded, {'ls_mean': z_mean}
 
     def restrict_x(self, x):
         # keep relevant keys, ignore lookback
@@ -531,9 +534,13 @@ class AnalysisPredictor(AnalysisBase):
 
         z_decoded = z['decoded']
         z_mean = z['mean'].cpu().detach().numpy()
+        z_ls_pred = z['ls_pred'].cpu().detach().numpy()
         # apply nan mask and detach
         z_decoded = (z_decoded * self.mask).cpu().detach().numpy()
-        return z_decoded, z_mean
+        return z_decoded, {
+            'ls_mean': z_mean,
+            'ls_pred': z_ls_pred,
+        }
 
     def restrict_x(self, x):
         # keep relevant keys, ignore lookback
@@ -572,7 +579,7 @@ class AnalysisHybrid(AnalysisBase):
         z_mean = z['mean'].cpu().detach().numpy()
         # apply nan mask and detach
         z_hybrid = (z_hybrid * self.mask).cpu().detach().numpy()
-        return z_hybrid, z_mean
+        return z_hybrid, {'ls_mean': z_mean}
 
     def restrict_x(self, x):
         # keep relevant keys, ignore lookback

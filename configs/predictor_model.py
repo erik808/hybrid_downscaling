@@ -23,7 +23,7 @@ predictor = 'DMD'
 
 lambdaDMD = 1.0e-7
 cutoffDMD = 0.0
-alphaDMD = 1.0e0
+alphaDMD = 1.0
 biasDMD = True
 
 output_filters = 256

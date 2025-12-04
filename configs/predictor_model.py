@@ -19,13 +19,14 @@ gamma = 1
 # options: 'identity', 'simpleRNN',
 #          'dense', 'lstm', 'conv3d',
 #          'convlstm', 'DMD', 'DMDc'
-predictor = 'DMDc'
+predictor = 'dense'
 
-lambdaDMD = 1e-6
+lambdaDMD = 0.0
 cutoffDMD = 0.1
 alphaDMD = 1.0
+biasDMD = True
 
-output_filters = 64
+output_filters = 128
 
 convlstm_filters = 64
 

@@ -172,9 +172,10 @@ class Hybrid(base_model.BaseModel):
         else:
             ls_size = 0.0
 
-        if False:
+        if True:
             ztest_hybrid = z['hybrid'][0, ..., 0].cpu().detach().numpy()
             ztest_resnet = z['resnet'][0, ..., 0].cpu().detach().numpy()
+            ztest_recons = z['ae_recons'][0, ..., 0].cpu().detach().numpy()
             ztest_predictor = z['predictor'][0, ..., 0].cpu().detach().numpy()
             ztest_comb = z['combination'][0, ..., 0].cpu().detach().numpy()
             xtest = x['HR_data'][0, 0, ..., 0].cpu().detach().numpy()
@@ -185,25 +186,37 @@ class Hybrid(base_model.BaseModel):
                  ops.cast(self.nanmask, self.masking.mask.dtype)
                  )
             self.nanmask = self.nanmask[..., 0].cpu().detach().numpy()
+            import matplotlib.pyplot as plt
+            plt.switch_backend('qtagg')
             plt.clf()
             plt.subplot(3, 3, 1)
             a = plt.pcolormesh(ztest_hybrid * self.nanmask)
             plt.colorbar(a)
+            plt.gca().set_title('hybrid')
             plt.subplot(3, 3, 2)
             a = plt.pcolormesh(ztest_resnet * self.nanmask)
             plt.colorbar(a)
+            plt.gca().set_title('resnet')
             plt.subplot(3, 3, 3)
             a = plt.pcolormesh(ztest_predictor * self.nanmask)
             plt.colorbar(a)
+            plt.gca().set_title('predictor')
             plt.subplot(3, 3, 4)
             a = plt.pcolormesh(xtest)  # , vmin=0, vmax=1)
             plt.colorbar(a)
+            plt.gca().set_title('truth')
             plt.subplot(3, 3, 5)
             a = plt.pcolormesh(ztest_comb * self.nanmask)
             plt.colorbar(a)
+            plt.gca().set_title('combination')
+            plt.subplot(3, 3, 6)
+            a = plt.pcolormesh(ztest_recons * self.nanmask)
+            plt.colorbar(a)
+            plt.gca().set_title('reconstruction')
             plt.subplot(3, 3, 7)
             a = plt.pcolormesh(dtest)
             plt.colorbar(a)
+            plt.gca().set_title('hybrid-truth')
             plt.pause(0.1)
 
         # denselr = self.model.\

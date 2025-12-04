@@ -39,8 +39,10 @@ results_dir = results_dir_org + '/merge'
 plot_machine.set_results_dir(results_dir)
 
 timeseries_hybrid = \
-    ('experiment/hybrid_dmdcL1e-6cut0.1/results/epoch9_20251203_103824/'
+    ('experiment/hybridOpIpLSRe_dmdcbias/results/'
      'timeseries.dill')
+# ('experiment/hybrid_dmdcL1e-6cut0.1/results/epoch9_20251203_103824/'
+#  'timeseries.dill')
 # 'experiment/hybrid_dmdcL1e-7cut0.1/results/timeseries.dill'
 
 timeseries_resnet = \
@@ -109,8 +111,8 @@ data = {
 }
 plt.switch_backend('qtagg')
 plot_machine.plot_spectrum(data,
-                           transect_name='along_flow',
-                           spectrum_type='energy',
-                           direction='spatial',
+                           transect_name='across_flow',
+                           spectrum_type='enstrophy',
+                           direction='temporal',
                            add_powerlaws=False)
 plt.pause(1)

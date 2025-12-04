@@ -35,15 +35,17 @@ class DMD(keras.callbacks.Callback):
                               .get_layer('latent_predictor')
 
         # do some checks
-        DMDcheck = (len(predictor_layer.weights) == 2 and
-                    'bias' in predictor_layer.weights[0].path and
-                    'W_out' in predictor_layer.weights[1].path and
-                    epoch > 1)
+        DMDcheck = (
+            len(predictor_layer.weights) == 2 and
+            'bias' in predictor_layer.weights[0].path and
+            'W_out' in predictor_layer.weights[1].path # and
+            # epoch > 1
+        )
 
         if DMDcheck:
-            print('ESN/DMD layer detected')
+            print('ESN/DMD layer active')
         else:
-            print('ESN/DMD inactive')
+            print('ESN/DMD layer inactive')
             return None
 
         # temp increase batch size
@@ -101,8 +103,8 @@ class DMD(keras.callbacks.Callback):
         elif self.model.predictor == 'DMDc':
             U = np.vstack([X[:, :-1], X_LR[:, :-1]]).T
 
-        Y = (X[:, 1:].T - (1 - self.model.alphaDMD)
-             * X[:, :-1].T) / self.model.alphaDMD
+        Y = (X[:, 1:].T - (1 - self.model.alphaDMD) *
+             X[:, :-1].T) / self.model.alphaDMD
 
         np.random.seed(1)
         esn = ESN_mod.ESN(100, U.shape[1], Y.shape[1])
@@ -113,6 +115,44 @@ class DMD(keras.callbacks.Callback):
         # assign ESN weights to W_out
         bias, W_out = predictor_layer.get_weights()
         predictor_layer.set_weights([bias, esn.W_out])
+
+        plt.figure(figsize=(14, 10))
+        plt.clf()
+        plt.subplot(3, 2, 1)
+        a = plt.pcolormesh(U.T)
+        plt.colorbar(a)
+        plt.gca().set_title('ESN/DMD training input (U)')
+        plt.subplot(3, 2, 2)
+        a = plt.pcolormesh(U[-200:, -200:].T)
+        plt.colorbar(a)
+
+        plt.subplot(3, 2, 3)
+        a = plt.pcolormesh(Y.T)
+        plt.colorbar(a)
+        plt.gca().set_title(
+            'training output (Y) '
+            f'(a={self.model.alphaDMD})'
+        )
+        plt.subplot(3, 2, 4)
+        a = plt.pcolormesh(Y[-200:, -200:].T)
+        plt.colorbar(a)
+
+        plt.subplot(3, 2, 5)
+        a = plt.imshow(np.log(np.abs(esn.W_out[::10, ::10])))
+        plt.gca().set_title(
+            'log(abs(W_out)) (coarsened)'
+        )
+        plt.colorbar(a)
+
+        plt.subplot(3, 2, 6)
+        plt.plot(bias)
+        plt.gca().set_title(
+            'bias'
+        )
+        plt.tight_layout()
+        plt.savefig(
+            f"{self.dgen.dm.dirs['results']}/"
+            f"DMD_analysis_epoch_{epoch}.png")
 
     def on_epoch_end(self, epoch, logs=None):
         return None
@@ -176,13 +216,13 @@ class AnalysisBase(keras.callbacks.Callback, ABC):
         if not self.cfg_printed:
             self.cfg_printed = \
                 tools.print_configuration(self.dgen, self.model)
+        self.plot_machine.create_postfix()
+        self.plot_machine.create_results_dir(epoch)
         return None
 
     def on_epoch_end(self, epoch, logs=None):
         self.update_history(logs)
         plt.close('all')
-        self.plot_machine.create_postfix()
-        self.plot_machine.create_results_dir(epoch)
         self.construct_mask()
         if epoch % 1 == 0 or epoch == self.params['epochs'] - 1:
             self.timestepping(

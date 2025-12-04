@@ -19,11 +19,11 @@ gamma = 1
 # options: 'identity', 'simpleRNN',
 #          'dense', 'lstm', 'conv3d',
 #          'convlstm', 'DMD', 'DMDc'
-predictor = 'DMDc'
+predictor = 'DMD'
 
 lambdaDMD = 1.0e-7
-cutoffDMD = 0.1
-alphaDMD = 0.1
+cutoffDMD = 0.0
+alphaDMD = 1.0e0
 biasDMD = True
 
 output_filters = 256

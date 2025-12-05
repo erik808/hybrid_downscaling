@@ -6,12 +6,16 @@ import vae_model
 import predictor_model
 import callbacks
 import sys
+from keras import backend as K
 
 importlib.reload(data_manager_cmems)
 importlib.reload(data_generator_cmems)
 importlib.reload(vae_model)
 importlib.reload(predictor_model)
 importlib.reload(callbacks)
+
+K.clear_session()
+keras.utils.set_random_seed(123)
 
 if len(sys.argv) < 2:
     experiment_id = 'train_predictor'
@@ -76,7 +80,7 @@ model_checkpoint_callback = keras.callbacks.ModelCheckpoint(
 
 hist = predictor.fit(
     x=dgen_train,
-    epochs=100,
+    epochs=1,
     validation_data=dgen_test,
     callbacks=[
         dmd_callback,

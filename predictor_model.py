@@ -56,6 +56,16 @@ class Predictor(base_model.BaseModel):
 
         self.sampler = vae_model.model.get_layer('vae_sampling')
 
+        self.hidden_state_dim = \
+            self.esn_pars['Nr'] if 'ESN' in self.predictor else \
+            self.data_gen.hidden_states.shape[1]
+
+        hidden_shape = (
+            self.data_gen.hidden_states.shape[0],
+            self.hidden_state_dim,
+        )
+        self.data_gen.hidden_states = ops.zeros(hidden_shape)
+
         self.decoder = keras.Model(
             inputs=sampled,
             outputs=[decoder_output, decoder_skip_output],
@@ -94,10 +104,13 @@ class Predictor(base_model.BaseModel):
             ops.nan_to_num(inputs[self.input_name_HR]),
             self.input_name_LR:
             ops.nan_to_num(inputs[self.input_name_LR]),
+            'hidden':
+            inputs['hidden'],
         }
 
     def train_step(self, data, training=True):
         x, y = data
+
         if training:
             self.zero_grad()
 
@@ -213,17 +226,24 @@ class Predictor(base_model.BaseModel):
         input_LR = layers.Input(
             shape=self.input_shape_LR,
             name='LR_data')
-        control_last = ops.split(
+        control = ops.split(
             input_LR,
             self.input_shape_LR[0],
             axis=1)[0]
 
+        # get hidden state
+        hidden_state = layers.Input(
+            shape=(self.hidden_state_dim,),
+            name='hidden_state',
+        )
+
         # do prediction in latent space
-        prediction = LSPredictor(
+        prediction, hidden_state_new = LSPredictor(
             name="latent_predictor"
         )(
             encoded_series,
-            control_last,
+            hidden_state,
+            control,
         )
 
         prediction_decoded, skipped = self.decoder(prediction)
@@ -232,6 +252,7 @@ class Predictor(base_model.BaseModel):
             'decoded': prediction_decoded,
             'ls_pred': prediction,
             'mean': mean,
+            'hidden': hidden_state_new,
             'logvar': logvar,
             'ae_recons': ae_reconstruction,
             'skip_vae_output': skipped,
@@ -239,6 +260,7 @@ class Predictor(base_model.BaseModel):
         inputs = {
             self.input_name_HR: input_HR,
             self.input_name_LR: input_LR,
+            'hidden': hidden_state,
         }
         return inputs, outputs
 
@@ -262,7 +284,7 @@ class LSPredictor(layers.Layer):
     def build(self, input_shape):
         dims = input_shape[0][1:]  # ignore batch dim
         lb_dim = len(input_shape)
-        self.combine_control = CombineControl(mode='bypass')
+        self.combine_inputs = CombineInputs(mode='bypass')
 
         if self.predictor == 'simpleRNN':
             self.input_transf = FlattenAndStack()
@@ -374,13 +396,15 @@ class LSPredictor(layers.Layer):
 
         elif (
                 self.predictor == 'DMD' or
-                self.predictor == 'DMDc'
+                self.predictor == 'DMDc' or
+                self.predictor == 'ESN' or
+                self.predictor == 'ESNc'
         ):
             self.input_transf = keras.Sequential([
                 Last(),
                 layers.Flatten(),
             ])
-            self.combine_control = CombineControl(mode='append')
+            self.combine_inputs = CombineInputs(mode='append')
             self.predictmod = DMD(
                 name='dmd_operator',
                 mode=self.predictor,
@@ -391,13 +415,16 @@ class LSPredictor(layers.Layer):
         else:
             raise Exception("Invalid predictor")
 
-    def call(self, inputs, control=None):
+    def call(self, inputs, hidden=None, control=None):
         x = self.input_transf(inputs)
-        if control is not None:
-            x = self.combine_control(x, control)
+        x = self.combine_inputs(x, hidden, control)
         x = self.predictmod(x)
+
+        if isinstance(x, tuple):
+            x, hidden = x
+
         out = self.output_transf(x)
-        return out
+        return out, hidden
 
 
 class Stack(layers.Layer):
@@ -448,51 +475,104 @@ class DMD(layers.Layer):
         self.concat = False
 
     def build(self, input_shape):
-        if self.mode == 'DMD' and isinstance(input_shape[0], tuple):
-            self.concat = False
-            rows = input_shape[0][-1]
-            cols = input_shape[0][-1]
-        elif self.mode == 'DMDc' and isinstance(input_shape[0], tuple):
-            self.concat = True
-            rows = input_shape[0][-1]
-            cols = input_shape[0][-1] + input_shape[1][-1]
+
+        if isinstance(input_shape[0], tuple):
+            xk_shape, hidden_shape, control_shape = input_shape
         else:
-            rows = input_shape[-1]
-            cols = input_shape[-1]
+            raise Exception('DMD needs to be called '
+                            'with hidden and control inputs')
+
+        W_shape = (hidden_shape[-1], hidden_shape[-1])
+
+        if self.mode == 'DMD':
+            self.concat = False
+            W_in_shape = (
+                hidden_shape[-1],
+                xk_shape[-1],
+            )
+            W_out_shape = (
+                xk_shape[-1],
+                xk_shape[-1],
+            )
+
+        elif self.mode == 'DMDc':
+            self.concat = True
+            W_in_shape = (
+                hidden_shape[-1],
+                xk_shape[-1] + control_shape[-1],
+            )
+            W_out_shape = (
+                xk_shape[-1],
+                xk_shape[-1] + control_shape[-1],
+            )
+
+        elif self.mode == 'ESN':
+            W_in_shape = (
+                hidden_shape[-1],
+                xk_shape[-1],
+            )
+            W_out_shape = (
+                xk_shape[-1],
+                hidden_shape[-1],
+            )
+
+        elif self.mode == 'ESNc':
+            W_in_shape = (
+                hidden_shape[-1],
+                xk_shape[-1] + control_shape[-1],
+            )
+            W_out_shape = (
+                xk_shape[-1],
+                hidden_shape[-1] + control_shape[-1],
+            )
+
+        self.W = self.add_weight(
+            shape=W_shape,
+            trainable=False,
+            name='W',
+        )
+        self.W_in = self.add_weight(
+            shape=W_in_shape,
+            trainable=False,
+            name='W',
+        )
         self.W_out = self.add_weight(
-            shape=(rows, cols),
-            initializer='identity',
+            shape=W_out_shape,
             trainable=False,
             name='W_out',
         )
+
         if self.use_bias:
             self.bias = self.add_weight(
-                shape=(rows,),
+                shape=(W_out_shape[0],),
                 initializer='zeros',
                 trainable=True,
                 name='DMD_bias',
             )
+
         self.built = True
 
     def call(self, inputs):
-        xk = inputs
+        if 'DMD' in self.mode:
+            return self.call_DMD(inputs)
+        elif 'ESN' in self.mode:
+            return self.call_ESN(inputs)
 
+    def call_DMD(self, inputs):
         if self.concat and isinstance(inputs, list):
-            xk = inputs[0]
-            inputs = ops.concatenate(inputs, -1)
+            # ignore the hidden state
+            inputs = ops.concatenate([inputs[0], inputs[2]], -1)
         elif isinstance(inputs, list):
-            xk = inputs[0]
             inputs = inputs[0]
 
-        result = ops.matmul(self.W_out, inputs.T).T
-        output = (1 - self.alpha) * xk + self.alpha * result
+        output = ops.matmul(self.W_out, inputs.T).T
         if self.use_bias:
             output = ops.add(output, self.bias)
 
         return output
 
 
-class CombineControl(layers.Layer):
+class CombineInputs(layers.Layer):
     def __init__(
             self,
             mode='bypass',
@@ -505,13 +585,18 @@ class CombineControl(layers.Layer):
         self.flat = layers.Flatten()
         self.built = True
 
-    def call(self, inputs, control=None):
-        if control is None:
-            return inputs
+    def call(self, inputs, hidden=None, control=None):
 
-        control = self.flat(control)
+        x = inputs
+        if hidden is not None:
+            x = [x, hidden]
+
+        if control is not None:
+            control = self.flat(control)
+            x = [*x, control] if isinstance(x, list) else [x, control]
+
         if self.mode == 'append':
-            return [inputs, control]
+            return x
         elif self.mode == 'bypass':
             return inputs
         else:

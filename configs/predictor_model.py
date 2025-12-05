@@ -19,9 +19,17 @@ gamma = 1
 # options: 'identity', 'simpleRNN',
 #          'dense', 'lstm', 'conv3d',
 #          'convlstm', 'DMD', 'DMDc'
-predictor = 'DMD'
+predictor = 'DMDc'
 
-lambdaDMD = 1.0e-7
+esn_pars = {
+    'tikhonov_lambda': 1.0e-1,
+    'fCutoff': 0.1,
+    'Nr': 1000,
+    'rhoMax': 0.4,
+    'entriesPerRow': 3,
+}
+
+lambdaDMD = 1.0e-1
 cutoffDMD = 0.0
 alphaDMD = 1.0
 biasDMD = True

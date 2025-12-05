@@ -328,7 +328,7 @@ class PlotMachine():
         plt.savefig(fig_name)
 
         # plot laten variables in time
-        ls = np.concatenate([r['mean'] for r in results], 0)
+        ls = np.concatenate([r['ls_mean'] for r in results], 0)
         if len(ls) > 0:
             ls = np.reshape(ls, (ls.shape[0], -1))
             ls = ls.transpose()

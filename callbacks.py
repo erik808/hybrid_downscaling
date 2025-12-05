@@ -36,9 +36,9 @@ class DMD(keras.callbacks.Callback):
 
         # do some checks
         DMDcheck = (
-            len(predictor_layer.weights) == 2 and
+            len(predictor_layer.weights) == 4 and
             'bias' in predictor_layer.weights[0].path and
-            'W_out' in predictor_layer.weights[1].path  # and
+            'W_out' in predictor_layer.weights[3].path  # and
             # epoch > 1
         )
 
@@ -89,37 +89,57 @@ class DMD(keras.callbacks.Callback):
 
         X_LR = np.concatenate(x_enc_LR_mat, 0)
         X_LR = (X_LR.reshape(X_LR.shape[0], -1)).T
+        N = X.shape[0]
+        N_LR = X_LR.shape[0]
 
         esn_pars = {}
-        esn_pars['scalingType'] = 'none'
-        esn_pars['dmdMode'] = True
+        esn_pars.update(self.model.esn_pars)
+
+        if 'DMD' in self.model.predictor:
+            esn_pars['dmdMode'] = True
+            esn_pars['Nr'] = self.dgen.hidden_states.shape[1]
+            esn_pars['feedThrough'] = True
+
+        use_control = True if (
+            self.model.predictor == 'DMDc' or
+            self.model.predictor == 'ESNc'
+        ) else False
+
+        if self.model.predictor == 'ESNc':
+            esn_pars['feedThrough'] = True
+            esn_pars['ftRange'] = range(N, N + N_LR)
+
         esn_pars['tikhonov_lambda'] = self.model.lambdaDMD
-        esn_pars['feedThrough'] = True
         # esn_pars['ftRange'] = range(0, N)
         esn_pars['fCutoff'] = self.model.cutoffDMD
 
-        if self.model.predictor == 'DMD':
-            U = X[:, :-1].T
-        elif self.model.predictor == 'DMDc':
+        if use_control:
             U = np.vstack([X[:, :-1], X_LR[:, :-1]]).T
+        else:
+            U = X[:, :-1].T
 
-        Y = (X[:, 1:].T - (1 - self.model.alphaDMD) *
-             X[:, :-1].T) / self.model.alphaDMD
+        Y = X[:, 1:].T
 
         np.random.seed(1)
-        esn = ESN_mod.ESN(100, U.shape[1], Y.shape[1])
+        esn = ESN_mod.ESN(esn_pars['Nr'], U.shape[1], Y.shape[1])
         esn.setPars(esn_pars)
         esn.initialize()
         esn.train(U, Y)
 
         # assign ESN weights to W_out
-        bias, W_out = predictor_layer.get_weights()
-        predictor_layer.set_weights([bias, esn.W_out])
+        bias, W, W_in, W_out = predictor_layer.get_weights()
+        predictor_layer.set_weights(
+            [
+                bias,
+                esn.W.todense(),
+                esn.W_in.todense(),
+                esn.W_out,
+            ])
 
+        print('plotting ESN/DMD training data', end='')
         plt.figure(figsize=(14, 10))
-        plt.clf()
         plt.subplot(3, 2, 1)
-        a = plt.pcolormesh(U.T)
+        a = plt.pcolormesh(U[::10, ::10].T)
         plt.colorbar(a)
         plt.gca().set_title('ESN/DMD training input (U)')
         plt.subplot(3, 2, 2)
@@ -127,14 +147,13 @@ class DMD(keras.callbacks.Callback):
         plt.colorbar(a)
 
         plt.subplot(3, 2, 3)
-        a = plt.pcolormesh(Y.T)
+        a = plt.pcolormesh(esn.X[::10, ::10].T)
         plt.colorbar(a)
         plt.gca().set_title(
-            'training output (Y) '
-            f'(a={self.model.alphaDMD})'
+            'esn X '
         )
         plt.subplot(3, 2, 4)
-        a = plt.pcolormesh(Y[-200:, -200:].T)
+        a = plt.pcolormesh(esn.X[-200:, -200:].T)
         plt.colorbar(a)
 
         plt.subplot(3, 2, 5)
@@ -153,6 +172,7 @@ class DMD(keras.callbacks.Callback):
         plt.savefig(
             f"{self.dgen.dm.dirs['results']}/"
             f"DMD_analysis_epoch_{epoch}.png")
+        print(' done')
 
     def on_epoch_end(self, epoch, logs=None):
         return None
@@ -342,6 +362,7 @@ class AnalysisBase(keras.callbacks.Callback, ABC):
             """ create timestepping model input from batch """
             x_HR = np.expand_dims(batch_x['HR_data'][b_i,].copy(), 0)
             x_LR = np.expand_dims(batch_x['LR_data'][b_i,].copy(), 0)
+            hidden = np.expand_dims(batch_x['hidden'][b_i,].copy(), 0)
             time = pd.to_datetime(batch_x['meta']['time'][b_i, 0], unit="s")
 
             # remove truth (just to be sure)
@@ -351,10 +372,12 @@ class AnalysisBase(keras.callbacks.Callback, ABC):
             # available
             if x_old is not None:
                 x_HR[0, 1:, ] = x_old['HR_data'][0, :-1, ]
+                hidden = x_old['hidden']
 
             return {
                 'HR_data': x_HR,
                 'LR_data': x_LR,
+                'hidden': hidden,
                 'time': time,
             }
 
@@ -384,6 +407,7 @@ class AnalysisBase(keras.callbacks.Callback, ABC):
                 for k, v in add_out.items():
                     x_k[k] = v
 
+                x_k['hidden'] = add_out['hidden']
                 batch_results.append(x_k)
                 x_km1 = x_k
 
@@ -525,14 +549,17 @@ class AnalysisPredictor(AnalysisBase):
         super().__init__(data_gen, **kwargs)
 
     def call_model(self, x):
+        breakpoint()
         z = self.model(
             {
                 'HR_data': ops.nan_to_num(x['HR_data']),
                 'LR_data': ops.nan_to_num(x['LR_data']),
+                'hidden': ops.nan_to_num(x['hidden']),
             },
             training=False)
 
         z_decoded = z['decoded']
+        z_hidden = z['hidden']
         z_mean = z['mean'].cpu().detach().numpy()
         z_ls_pred = z['ls_pred'].cpu().detach().numpy()
         # apply nan mask and detach
@@ -540,6 +567,7 @@ class AnalysisPredictor(AnalysisBase):
         return z_decoded, {
             'ls_mean': z_mean,
             'ls_pred': z_ls_pred,
+            'hidden': z_hidden
         }
 
     def restrict_x(self, x):

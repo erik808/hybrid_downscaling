@@ -29,8 +29,10 @@ class DataGeneratorCMEMS(keras.utils.PyDataset):
         assert lookback > 0, "lookback needs to be greater than 0"
 
         self.shuffle = shuffle
-
         self.create_indices()
+
+        # placeholder values for hidden states
+        self.hidden_states = keras.ops.ones((self.dm.test_range.stop, 10))
 
     def create_indices(self):
         self.index_range = self.dm.train_range if self.mode == 'train' \
@@ -63,8 +65,12 @@ class DataGeneratorCMEMS(keras.utils.PyDataset):
             self.create_batch(inds, self.dm.ds_LR,
                               self.lookback, self.dm.scalers['LR'])
 
+        hidden = \
+            self.hidden_states[inds,]
+
         batch_x = {'LR_data': LR_data,
                    'HR_data': HR_data,
+                   'hidden': hidden,
                    'meta' : {
                        'time':
                        time.astype("datetime64[s]").astype(np.float32),

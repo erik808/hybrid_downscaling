@@ -410,6 +410,7 @@ class LSPredictor(layers.Layer):
                 mode=self.predictor,
                 alpha=self.esn_dmd_pars['alpha'],
                 use_bias=self.esn_dmd_bias,
+                squaredStates=self.esn_dmd_pars['squaredStates'],
             )
             self.output_transf = layers.Reshape(dims)
         else:
@@ -466,7 +467,7 @@ class DMD(layers.Layer):
             self,
             mode='DMD',
             alpha=1.0,
-            use_bias=True,
+            use_bias=False,
             squaredStates='even',
             **kwargs,
     ):
@@ -577,21 +578,23 @@ ESN"""
 
         pre = (ops.matmul(self.W, hidden.T).T +
                ops.matmul(self.W_in, u_in.T).T)
+
         if self.use_bias:
             pre = ops.add(pre, self.bias)
 
         hidden = self.alpha * ops.tanh(pre) + (1 - self.alpha) * hidden
+        hidden_pre = ops.add(hidden, 0)
 
         # apply squaredStates
         if self.squaredStates == 'even':
             even_inds = range(1, self.Nr, 2)
-            hidden[..., even_inds] = ops.square(hidden[..., even_inds])
+            hidden_pre[..., even_inds] = hidden_pre[..., even_inds]**2
 
         # compute prediction
         if self.mode == 'ESNc':
-            x = ops.concatenate([control, hidden], -1)
+            x = ops.concatenate([control, hidden_pre], -1)
         else:
-            x = hidden
+            x = hidden_pre
 
         output = ops.matmul(self.W_out, x.T).T
 

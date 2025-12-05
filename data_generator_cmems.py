@@ -56,17 +56,17 @@ class DataGeneratorCMEMS(keras.utils.PyDataset):
     def __getitem__(self, index):
         low  = index * self.batch_size
         high = np.min([low + self.batch_size, self.n])
-        inds = self.indices[low:high]
+        self.inds = self.indices[low:high]
 
         HR_data, _ = \
-            self.create_batch(inds, self.dm.ds_HR,
+            self.create_batch(self.inds, self.dm.ds_HR,
                               self.lookback, self.dm.scalers['HR'])
         LR_data, time = \
-            self.create_batch(inds, self.dm.ds_LR,
+            self.create_batch(self.inds, self.dm.ds_LR,
                               self.lookback, self.dm.scalers['LR'])
 
         hidden = \
-            self.dm.hidden_states[inds,]
+            self.dm.hidden_states[self.inds,]
 
         batch_x = {'LR_data': LR_data,
                    'HR_data': HR_data,

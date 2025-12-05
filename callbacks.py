@@ -28,8 +28,7 @@ class DMD(keras.callbacks.Callback):
         super().__init__(**kwargs)
         self.dgen = data_gen
 
-    def on_epoch_begin(self, epoch, logs=None):
-
+    def train_esn_dmd(self, epoch, logs=None):
         predictor_layer = self.model\
                               .model\
                               .get_layer('latent_predictor')
@@ -74,7 +73,7 @@ class DMD(keras.callbacks.Callback):
             )[0].cpu().detach().numpy()  # take only the mean
 
             x_enc_mat += [x_enc]
-            x_enc_LR_mat += [ops.squeeze(batch_x['LR_data'][:, 0, ...])
+            x_enc_LR_mat += [ops.squeeze(batch_x['LR_data'][:, 1, ...])
                              .cpu().detach().numpy()]
 
         # decrease batch size again
@@ -110,7 +109,7 @@ class DMD(keras.callbacks.Callback):
             esn_dmd_pars['ftRange'] = range(N, N + N_LR)
 
         if use_control:
-            U = np.vstack([X[:, :-1], X_LR[:, :-1]]).T
+            U = np.vstack([X[:, :-1], X_LR[:, 1:]]).T
         else:
             U = X[:, :-1].T
 
@@ -133,8 +132,10 @@ class DMD(keras.callbacks.Callback):
             ])
 
         # fill hidden state in datagenerator
-        inds = np.sort(self.dgen.indices)[1:-1]
-        self.dgen.dm.hidden_states[inds, :] = esn.X[1:,]
+        inds = np.sort(self.dgen.indices)[1:]
+        self.dgen.dm.hidden_states[inds, :] = esn.X
+        print(np.linalg.norm(esn.X[-5:, :], ord=2, axis=1))
+        print(np.linalg.norm(U[-5:, :], ord=2, axis=1))
         # self.dgen.dm.hidden_states[inds[-1] + 1:, :] = esn.X[-1, :]
 
         print('plotting ESN/DMD training data', end='')
@@ -175,7 +176,12 @@ class DMD(keras.callbacks.Callback):
             f"DMD_analysis_epoch_{epoch}.png")
         print(' done')
 
+    def on_epoch_begin(self, epoch, logs=None):
+        self.train_esn_dmd(epoch, logs)
+
+
     def on_epoch_end(self, epoch, logs=None):
+        # self.train_esn_dmd(epoch, logs)
         return None
 
 
@@ -371,6 +377,7 @@ class AnalysisBase(keras.callbacks.Callback, ABC):
 
             # update x lookback dimension with previous time step if
             # available
+
             if x_old is not None:
                 x_HR[0, 1:, ] = x_old['HR_data'][0, :-1, ]
                 hidden = x_old['hidden']
@@ -386,7 +393,7 @@ class AnalysisBase(keras.callbacks.Callback, ABC):
         batch_size_org = self.dgen.batch_size
         self.dgen.batch_size = batch_size_org * 100
         num_batches = self.dgen.__len__()
-        print(self.dgen.__getitem__(0)[0]['hidden'][0,])
+
         # initialization
         x_km1 = None
         results = []
@@ -404,11 +411,17 @@ class AnalysisBase(keras.callbacks.Callback, ABC):
                 # create kth model input
                 x_k = x_(batch_x, k, x_km1)
                 # perform time step and update x_k
+                # print(ops.norm(x_k['hidden'], ord=2).cpu().detach().numpy())
                 x_k['HR_data'][0, 0, ], add_out = self.call_model(x_k)
 
                 for k, v in add_out.items():
                     x_k[k] = v
+                # print(ops.norm(x_k['hidden'], ord=2).cpu().detach().numpy())
 
+                print(ops.norm(x_k['hidden'], ord=2),
+                      ops.norm(x_k['ls_mean']),
+                      ops.norm(x_k['ls_pred']),
+                      )
                 batch_results.append(x_k)
                 x_km1 = x_k
 
@@ -564,7 +577,7 @@ class AnalysisPredictor(AnalysisBase):
         z_ls_pred = z['ls_pred'].cpu().detach().numpy()
         # apply nan mask and detach2
         z_decoded = (z_decoded * self.mask).cpu().detach().numpy()
-        print(z_hidden[0, :4])
+        # print(z_hidden[0, :4])
         return z_decoded, {
             'ls_mean': z_mean,
             'ls_pred': z_ls_pred,

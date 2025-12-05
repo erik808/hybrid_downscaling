@@ -57,14 +57,14 @@ class Predictor(base_model.BaseModel):
         self.sampler = vae_model.model.get_layer('vae_sampling')
 
         self.hidden_state_dim = \
-            self.esn_pars['Nr'] if 'ESN' in self.predictor else \
-            self.data_gen.hidden_states.shape[1]
+            self.esn_dmd_pars['Nr'] if 'ESN' in self.predictor else \
+            self.data_gen.dm.hidden_states.shape[1]
 
         hidden_shape = (
-            self.data_gen.hidden_states.shape[0],
+            self.data_gen.dm.hidden_states.shape[0],
             self.hidden_state_dim,
         )
-        self.data_gen.hidden_states = ops.zeros(hidden_shape)
+        self.data_gen.dm.hidden_states = np.zeros(hidden_shape)
 
         self.decoder = keras.Model(
             inputs=sampled,
@@ -408,8 +408,8 @@ class LSPredictor(layers.Layer):
             self.predictmod = DMD(
                 name='dmd_operator',
                 mode=self.predictor,
-                alpha=self.alphaDMD,
-                use_bias=self.biasDMD,
+                alpha=self.esn_dmd_pars['alpha'],
+                use_bias=self.esn_dmd_bias,
             )
             self.output_transf = layers.Reshape(dims)
         else:
@@ -424,6 +424,7 @@ class LSPredictor(layers.Layer):
             x, hidden = x
 
         out = self.output_transf(x)
+        # print(hidden[0, :5])
         return out, hidden
 
 
@@ -466,12 +467,14 @@ class DMD(layers.Layer):
             mode='DMD',
             alpha=1.0,
             use_bias=True,
+            squaredStates='even',
             **kwargs,
     ):
         super().__init__(**kwargs)
         self.mode = mode
         self.alpha = alpha
         self.use_bias = use_bias
+        self.squaredStates = squaredStates
         self.concat = False
 
     def build(self, input_shape):
@@ -483,6 +486,7 @@ class DMD(layers.Layer):
                             'with hidden and control inputs')
 
         W_shape = (hidden_shape[-1], hidden_shape[-1])
+        self.Nr = W_shape[0]
 
         if self.mode == 'DMD':
             self.concat = False
@@ -494,6 +498,7 @@ class DMD(layers.Layer):
                 xk_shape[-1],
                 xk_shape[-1],
             )
+            bias_shape = (W_out_shape[0],)
 
         elif self.mode == 'DMDc':
             self.concat = True
@@ -505,6 +510,7 @@ class DMD(layers.Layer):
                 xk_shape[-1],
                 xk_shape[-1] + control_shape[-1],
             )
+            bias_shape = (W_out_shape[0],)
 
         elif self.mode == 'ESN':
             W_in_shape = (
@@ -515,6 +521,7 @@ class DMD(layers.Layer):
                 xk_shape[-1],
                 hidden_shape[-1],
             )
+            bias_shape = (hidden_shape[-1],)
 
         elif self.mode == 'ESNc':
             W_in_shape = (
@@ -525,6 +532,7 @@ class DMD(layers.Layer):
                 xk_shape[-1],
                 hidden_shape[-1] + control_shape[-1],
             )
+            bias_shape = (hidden_shape[-1],)
 
         self.W = self.add_weight(
             shape=W_shape,
@@ -534,7 +542,7 @@ class DMD(layers.Layer):
         self.W_in = self.add_weight(
             shape=W_in_shape,
             trainable=False,
-            name='W',
+            name='W_in',
         )
         self.W_out = self.add_weight(
             shape=W_out_shape,
@@ -542,13 +550,12 @@ class DMD(layers.Layer):
             name='W_out',
         )
 
-        if self.use_bias:
-            self.bias = self.add_weight(
-                shape=(W_out_shape[0],),
-                initializer='zeros',
-                trainable=True,
-                name='DMD_bias',
-            )
+        self.bias = self.add_weight(
+            shape=bias_shape,
+            initializer='zeros',
+            trainable=True,
+            name='DMD_bias',
+        )
 
         self.built = True
 
@@ -557,6 +564,38 @@ class DMD(layers.Layer):
             return self.call_DMD(inputs)
         elif 'ESN' in self.mode:
             return self.call_ESN(inputs)
+
+    def call_ESN(self, inputs):
+        """this is basically a keras of equivalent of the implementation in
+ESN"""
+
+        xkm1, hidden, control = inputs
+
+        # update hidden state
+        u_in = ops.concatenate([xkm1, control], -1)\
+            if self.mode == 'ESNc' else xkm1
+
+        pre = (ops.matmul(self.W, hidden.T).T +
+               ops.matmul(self.W_in, u_in.T).T)
+        if self.use_bias:
+            pre = ops.add(pre, self.bias)
+
+        hidden = self.alpha * ops.tanh(pre) + (1 - self.alpha) * hidden
+
+        # apply squaredStates
+        if self.squaredStates == 'even':
+            even_inds = range(1, self.Nr, 2)
+            hidden[..., even_inds] = ops.square(hidden[..., even_inds])
+
+        # compute prediction
+        if self.mode == 'ESNc':
+            x = ops.concatenate([control, hidden], -1)
+        else:
+            x = hidden
+
+        output = ops.matmul(self.W_out, x.T).T
+
+        return output, hidden
 
     def call_DMD(self, inputs):
         if self.concat and isinstance(inputs, list):

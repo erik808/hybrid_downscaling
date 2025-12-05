@@ -3,14 +3,17 @@
 # --------------------------------------------------------------------
 compute_data = False
 split_factor = 23 / 24
-split_factor = 99 / 100
+split_factor = 1 / 2
 time_range = slice('2023-01-01', '2024-12-31')
 # time_range = slice('2023-01-01', '2023-04-01')
 
 # short range for integration tests
 # time_range_testing = slice('2023-09-01', '2023-12-31')
-time_range_testing = slice('2023-09-01', '2023-09-03')
 time_range_testing = slice('2023-06-01', '2023-12-01')
+time_range_testing = slice('2023-09-01', '2023-09-03')
+
+# overlap between training and testing dataset (in samples)
+overlap = 10
 
 # important directories and files
 data_dir = 'data'

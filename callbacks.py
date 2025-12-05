@@ -35,14 +35,14 @@ class DMD(keras.callbacks.Callback):
                               .get_layer('latent_predictor')
 
         # do some checks
-        DMDcheck = (
+        layer_check = (
             len(predictor_layer.weights) == 4 and
             'bias' in predictor_layer.weights[0].path and
             'W_out' in predictor_layer.weights[3].path  # and
             # epoch > 1
         )
 
-        if DMDcheck:
+        if layer_check:
             print('ESN/DMD layer active')
         else:
             print('ESN/DMD layer inactive')
@@ -92,13 +92,13 @@ class DMD(keras.callbacks.Callback):
         N = X.shape[0]
         N_LR = X_LR.shape[0]
 
-        esn_pars = {}
-        esn_pars.update(self.model.esn_pars)
+        esn_dmd_pars = {}
+        esn_dmd_pars.update(self.model.esn_dmd_pars)
 
         if 'DMD' in self.model.predictor:
-            esn_pars['dmdMode'] = True
-            esn_pars['Nr'] = self.dgen.hidden_states.shape[1]
-            esn_pars['feedThrough'] = True
+            esn_dmd_pars['dmdMode'] = True
+            esn_dmd_pars['Nr'] = self.dgen.dm.hidden_states.shape[1]
+            esn_dmd_pars['feedThrough'] = True
 
         use_control = True if (
             self.model.predictor == 'DMDc' or
@@ -106,12 +106,8 @@ class DMD(keras.callbacks.Callback):
         ) else False
 
         if self.model.predictor == 'ESNc':
-            esn_pars['feedThrough'] = True
-            esn_pars['ftRange'] = range(N, N + N_LR)
-
-        esn_pars['tikhonov_lambda'] = self.model.lambdaDMD
-        # esn_pars['ftRange'] = range(0, N)
-        esn_pars['fCutoff'] = self.model.cutoffDMD
+            esn_dmd_pars['feedThrough'] = True
+            esn_dmd_pars['ftRange'] = range(N, N + N_LR)
 
         if use_control:
             U = np.vstack([X[:, :-1], X_LR[:, :-1]]).T
@@ -121,8 +117,8 @@ class DMD(keras.callbacks.Callback):
         Y = X[:, 1:].T
 
         np.random.seed(1)
-        esn = ESN_mod.ESN(esn_pars['Nr'], U.shape[1], Y.shape[1])
-        esn.setPars(esn_pars)
+        esn = ESN_mod.ESN(esn_dmd_pars['Nr'], U.shape[1], Y.shape[1])
+        esn.setPars(esn_dmd_pars)
         esn.initialize()
         esn.train(U, Y)
 
@@ -135,6 +131,11 @@ class DMD(keras.callbacks.Callback):
                 esn.W_in.todense(),
                 esn.W_out,
             ])
+
+        # fill hidden state in datagenerator
+        inds = np.sort(self.dgen.indices)[1:-1]
+        self.dgen.dm.hidden_states[inds, :] = esn.X[1:,]
+        # self.dgen.dm.hidden_states[inds[-1] + 1:, :] = esn.X[-1, :]
 
         print('plotting ESN/DMD training data', end='')
         plt.figure(figsize=(14, 10))
@@ -362,7 +363,7 @@ class AnalysisBase(keras.callbacks.Callback, ABC):
             """ create timestepping model input from batch """
             x_HR = np.expand_dims(batch_x['HR_data'][b_i,].copy(), 0)
             x_LR = np.expand_dims(batch_x['LR_data'][b_i,].copy(), 0)
-            hidden = ops.expand_dims(batch_x['hidden'][b_i,], 0)
+            hidden = np.expand_dims(batch_x['hidden'][b_i,].copy(), 0)
             time = pd.to_datetime(batch_x['meta']['time'][b_i, 0], unit="s")
 
             # remove truth (just to be sure)
@@ -385,7 +386,7 @@ class AnalysisBase(keras.callbacks.Callback, ABC):
         batch_size_org = self.dgen.batch_size
         self.dgen.batch_size = batch_size_org * 100
         num_batches = self.dgen.__len__()
-
+        print(self.dgen.__getitem__(0)[0]['hidden'][0,])
         # initialization
         x_km1 = None
         results = []
@@ -561,8 +562,9 @@ class AnalysisPredictor(AnalysisBase):
         z_hidden = z['hidden']
         z_mean = z['mean'].cpu().detach().numpy()
         z_ls_pred = z['ls_pred'].cpu().detach().numpy()
-        # apply nan mask and detach
+        # apply nan mask and detach2
         z_decoded = (z_decoded * self.mask).cpu().detach().numpy()
+        print(z_hidden[0, :4])
         return z_decoded, {
             'ls_mean': z_mean,
             'ls_pred': z_ls_pred,

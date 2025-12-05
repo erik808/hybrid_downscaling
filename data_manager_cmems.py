@@ -54,7 +54,7 @@ class DataManagerCMEMS(data_manager_base.DataManagerBase):
         T = len(self.ds_LR.time)
         self.split_index = int(self.split_factor * T)
         self.train_range = slice(0, self.split_index)
-        self.test_range = slice(self.split_index, T)
+        self.test_range = slice(self.split_index - self.overlap, T)
 
     def load_grid(self):
         # 3d mask

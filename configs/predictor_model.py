@@ -19,20 +19,19 @@ gamma = 1
 # options: 'identity', 'simpleRNN',
 #          'dense', 'lstm', 'conv3d',
 #          'convlstm', 'DMD', 'DMDc'
-predictor = 'DMDc'
+predictor = 'ESN'
 
-esn_pars = {
-    'tikhonov_lambda': 1.0e-1,
-    'fCutoff': 0.1,
-    'Nr': 1000,
-    'rhoMax': 0.4,
+esn_dmd_bias = False,
+
+esn_dmd_pars = {
+    'Nr': 5000,
+    'rhoMax': 0.8,
     'entriesPerRow': 3,
+    'alpha': 0.2,
+    'tikhonov_lambda': 1.0e-5,
+    'fCutoff': 0.1,
+    'squaredStates': 'even',
 }
-
-lambdaDMD = 1.0e-1
-cutoffDMD = 0.0
-alphaDMD = 1.0
-biasDMD = True
 
 output_filters = 256
 

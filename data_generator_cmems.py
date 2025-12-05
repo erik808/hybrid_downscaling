@@ -32,7 +32,7 @@ class DataGeneratorCMEMS(keras.utils.PyDataset):
         self.create_indices()
 
         # placeholder values for hidden states
-        self.hidden_states = keras.ops.ones((self.dm.test_range.stop, 10))
+        self.dm.hidden_states = np.ones((self.dm.test_range.stop, 10))
 
     def create_indices(self):
         self.index_range = self.dm.train_range if self.mode == 'train' \
@@ -66,7 +66,7 @@ class DataGeneratorCMEMS(keras.utils.PyDataset):
                               self.lookback, self.dm.scalers['LR'])
 
         hidden = \
-            self.hidden_states[inds,]
+            self.dm.hidden_states[inds,]
 
         batch_x = {'LR_data': LR_data,
                    'HR_data': HR_data,

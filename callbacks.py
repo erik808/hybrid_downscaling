@@ -362,7 +362,7 @@ class AnalysisBase(keras.callbacks.Callback, ABC):
             """ create timestepping model input from batch """
             x_HR = np.expand_dims(batch_x['HR_data'][b_i,].copy(), 0)
             x_LR = np.expand_dims(batch_x['LR_data'][b_i,].copy(), 0)
-            hidden = np.expand_dims(batch_x['hidden'][b_i,].copy(), 0)
+            hidden = ops.expand_dims(batch_x['hidden'][b_i,], 0)
             time = pd.to_datetime(batch_x['meta']['time'][b_i, 0], unit="s")
 
             # remove truth (just to be sure)
@@ -404,10 +404,10 @@ class AnalysisBase(keras.callbacks.Callback, ABC):
                 x_k = x_(batch_x, k, x_km1)
                 # perform time step and update x_k
                 x_k['HR_data'][0, 0, ], add_out = self.call_model(x_k)
+
                 for k, v in add_out.items():
                     x_k[k] = v
 
-                x_k['hidden'] = add_out['hidden']
                 batch_results.append(x_k)
                 x_km1 = x_k
 
@@ -549,7 +549,6 @@ class AnalysisPredictor(AnalysisBase):
         super().__init__(data_gen, **kwargs)
 
     def call_model(self, x):
-        breakpoint()
         z = self.model(
             {
                 'HR_data': ops.nan_to_num(x['HR_data']),

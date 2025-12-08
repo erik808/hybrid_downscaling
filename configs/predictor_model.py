@@ -6,14 +6,19 @@ trainable_decoder = True
 # learning rate
 learning_rate = 1e-4
 
+# select losses to include: 'outer_pred', 'inner_pred',
+# 'reconstruction', 'KL', 'ls_size'
+loss_list = ['outer_pred', 'inner_pred', 'ls_size', 'reconstruction']
+
 alpha_outer = 1.0
 alpha_inner = 1.0
+alpha_ls = 1e-4
 
 # weight on KL loss
-beta = 0.0
+beta = 1e-3
 
 # weight on reconstruction loss
-gamma = 1
+gamma = 1e1
 
 # model that does the actual prediction in the latent space
 # options: 'identity', 'simpleRNN',

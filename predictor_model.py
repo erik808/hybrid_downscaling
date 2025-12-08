@@ -81,22 +81,15 @@ class Predictor(base_model.BaseModel):
         self.compiler = keras.optimizers.Adam(
             learning_rate=self.learning_rate)
 
-        self.loss_KL = vae_model.loss_KL
-        self.loss_tracker = keras.metrics.Mean(name="loss")
-        self.re_loss_tracker = keras.metrics.Mean(name="reconstruction")
-        self.KL_loss_tracker = keras.metrics.Mean(name="KLloss")
-        self.pred_loss_tracker = keras.metrics.Mean(name="prediction")
-        self.lspred_loss_tracker = keras.metrics.Mean(name="ls_pred")
+        self.trackers = []
+        self.trackers.append(keras.metrics.Mean(name="loss"))
+
+        for loss_name in self.loss_list:
+            self.trackers.append(keras.metrics.Mean(name=loss_name))
 
     @property
     def metrics(self):
-        return [
-            self.loss_tracker,
-            self.re_loss_tracker,
-            self.KL_loss_tracker,
-            self.pred_loss_tracker,
-            self.lspred_loss_tracker,
-        ]
+        return self.trackers
 
     def create_input(self, inputs):
         return {
@@ -120,29 +113,32 @@ class Predictor(base_model.BaseModel):
                                  self.masking.rows,
                                  self.masking.cols,
                                  :]
-        z_ls_pred = z['ls_pred']
-        z_ae_recons = z['ae_recons'][:,
-                                     self.masking.rows,
-                                     self.masking.cols,
-                                     :]
-        z_mean = z['mean']
-        z_logvar = z['logvar']
-        # kl loss variance formulation
-        kl_loss = self.loss_KL(z_mean, z_logvar, beta=self.beta)
 
-        y_ls = \
-            self.encoder(
-                ops.nan_to_num(
-                    ops.squeeze(
-                        y[self.input_name_HR][:,
-                                              0,  # target lookback index
-                                              ...],
-                        axis=1)),
-                training=training,
-            )[0]  # take only the mean
+        if 'KL' in self.loss_list:
+            z_mean = z['mean']
+            z_logvar = z['logvar']
+            # kl loss variance formulation
+            kl_loss = self.loss_KL(z_mean, z_logvar, beta=self.beta)
+        else:
+            kl_loss = 0.0
 
-        # prediction loss in the latent space
-        lspred_loss = self.loss_MSE(z_ls_pred, y_ls) * self.alpha_inner
+        if 'inner_pred' in self.loss_list:
+            z_ls_pred = z['ls_pred']
+            y_ls = \
+                self.encoder(
+                    ops.nan_to_num(
+                        ops.squeeze(
+                            y[self.input_name_HR][:,
+                                                  0,  # target lookback index
+                                                  ...],
+                            axis=1)),
+                    training=training,
+                )[0]  # take only the mean
+
+            # prediction loss in the latent space
+            lspred_loss = self.loss_MSE(z_ls_pred, y_ls) * self.alpha_inner
+        else:
+            lspred_loss = 0.0
 
         def y_k(k):
             return \
@@ -152,18 +148,31 @@ class Predictor(base_model.BaseModel):
                                       self.masking.cols,
                                       :]
 
-        # prediction loss, compare against target
-        pred_loss = self.loss_MSLE(z_decoded, y_k(0)) * self.alpha_outer
-
-        # reconstruction loss, compare using most recent, only used
-        # when the VAE weights are trainable
-        if self.trainable_VAE:
+        if 'reconstruction' in self.loss_list:
+            # reconstruction loss, compare using most recent
+            z_ae_recons = z['ae_recons'][:,
+                                         self.masking.rows,
+                                         self.masking.cols,
+                                         :]
             re_loss = self.loss_MSLE(z_ae_recons, y_k(1)) * self.gamma
         else:
             re_loss = 0.0
 
+        if 'outer_pred' in self.loss_list:
+            # prediction loss, compare against target
+            pred_loss = self.loss_MSLE(z_decoded, y_k(0)) * self.alpha_outer
+        else:
+            pred_loss = 0.0
+
+        if 'ls_size' in self.loss_list:
+            # latent space size loss
+            z_mean = z['mean']
+            ls_size = ops.mean(ops.abs(z_mean)) * self.alpha_ls
+        else:
+            ls_size = 0.0
+
         # combine losses
-        loss = pred_loss + lspred_loss + re_loss + kl_loss
+        loss = pred_loss + lspred_loss + re_loss + kl_loss + ls_size
 
         if training:
             loss.backward()
@@ -177,13 +186,15 @@ class Predictor(base_model.BaseModel):
         for metric in self.metrics:
             if metric.name == "loss":
                 metric.update_state(loss)
-            if metric.name == "prediction":
+            if metric.name == "outer_pred":
                 metric.update_state(pred_loss)
-            if metric.name == "ls_pred":
+            if metric.name == "inner_pred":
                 metric.update_state(lspred_loss)
             if metric.name == "reconstruction":
                 metric.update_state(re_loss)
-            if metric.name == "KLloss":
+            if metric.name == "ls_size":
+                metric.update_state(ls_size)
+            if metric.name == "KL":
                 metric.update_state(kl_loss)
 
         return {m.name: m.result() for m in self.metrics}

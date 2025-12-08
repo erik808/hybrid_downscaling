@@ -90,7 +90,6 @@ analysis_callback = callbacks.AnalysisHybrid(
 )
 
 dmd_train = callbacks.DMD(data_gen=dgen_train)
-dmd_test = callbacks.DMD(data_gen=dgen_test)
 
 hist = hybrid.fit(
     x=dgen_train,
@@ -99,7 +98,6 @@ hist = hybrid.fit(
     validation_data=dgen_test,
     callbacks=[
         dmd_train,
-        dmd_test,
         analysis_callback,
         # model_checkpoint_callback,
     ]

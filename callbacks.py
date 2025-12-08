@@ -305,13 +305,15 @@ class DMD(keras.callbacks.Callback):
         # self.test_esn_dmd(epoch, logs)
 
         # breakpoint()
-
-        if self.dgen.mode == 'train':
+        if self.dgen.mode == 'train' and epoch == 0:
             self.train_esn_dmd(epoch, logs)
-        elif self.dgen.mode == 'test':
+        elif self.dgen.mode == 'test' and epoch == 0:
             self.test_esn_dmd(epoch, logs)
 
     def on_epoch_end(self, epoch, logs=None):
+
+        if self.dgen.mode == 'train':
+            self.train_esn_dmd(epoch, logs)
         # self.train_esn_dmd(epoch, logs)
         return None
 

@@ -14,7 +14,7 @@ learning_rate = 1e-4
 alpha_outer = 1
 
 # weight on prediction loss in the latent space (inner prediction)
-alpha_inner = 1e-1
+alpha_inner = 1
 
 # weight on latent space size
 alpha_ls = 1e-4
@@ -23,7 +23,7 @@ alpha_ls = 1e-4
 beta = 1e-3
 
 # weight on VAE reconstruction loss
-gamma = 1e-1
+gamma = 1e1
 
 # hybridization: 'product', 'concat', 'add'
 hybridization = 'add'

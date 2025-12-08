@@ -418,10 +418,10 @@ class AnalysisBase(keras.callbacks.Callback, ABC):
                     x_k[k] = v
                 # print(ops.norm(x_k['hidden'], ord=2).cpu().detach().numpy())
 
-                print(ops.norm(x_k['hidden'], ord=2),
-                      ops.norm(x_k['ls_mean']),
-                      ops.norm(x_k['ls_pred']),
-                      )
+                # print(ops.norm(x_k['hidden'], ord=2),
+                #       ops.norm(x_k['ls_mean']),
+                #       ops.norm(x_k['ls_pred']),
+                #       )
                 batch_results.append(x_k)
                 x_km1 = x_k
 

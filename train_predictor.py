@@ -24,7 +24,7 @@ else:
 
 dmgr_cmems = \
     data_manager_cmems.DataManagerCMEMS(experiment_id=experiment_id,
-                                        testing=True,
+                                        testing=False,
                                         force_rebuild=False)
 dmgr_cmems.create_training_data()
 
@@ -80,7 +80,7 @@ model_checkpoint_callback = keras.callbacks.ModelCheckpoint(
 
 hist = predictor.fit(
     x=dgen_train,
-    epochs=1,
+    epochs=5,
     validation_data=dgen_test,
     callbacks=[
         dmd_callback,

@@ -1,7 +1,7 @@
 # Set True if the encoder and decoder weights are allowed to get
 # updated during training
-trainable_encoder = False
-trainable_decoder = False
+trainable_encoder = True
+trainable_decoder = True
 
 # learning rate
 learning_rate = 1e-4
@@ -24,10 +24,10 @@ predictor = 'ESNc'
 esn_dmd_bias = False,
 
 esn_dmd_pars = {
-    'Nr': 5000,
+    'Nr': 10000,
     'rhoMax': 0.8,
     'entriesPerRow': 3,
-    'alpha': 0.2,
+    'alpha': 1.0,
     'tikhonov_lambda': 1.0e-5,
     'fCutoff': 0.1,
     'squaredStates': 'even',

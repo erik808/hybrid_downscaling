@@ -87,6 +87,8 @@ class Predictor(base_model.BaseModel):
         for loss_name in self.loss_list:
             self.trackers.append(keras.metrics.Mean(name=loss_name))
 
+        self.loss_KL = vae_model.loss_KL
+
     @property
     def metrics(self):
         return self.trackers

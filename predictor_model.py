@@ -583,6 +583,8 @@ ESN"""
             pre = ops.add(pre, self.bias)
 
         hidden = self.alpha * ops.tanh(pre) + (1 - self.alpha) * hidden
+
+        # copy tensor
         hidden_pre = ops.add(hidden, 0)
 
         # apply squaredStates

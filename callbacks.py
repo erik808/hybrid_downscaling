@@ -614,14 +614,21 @@ class AnalysisHybrid(AnalysisBase):
 
     def call_model(self, x):
         z = self.model({'HR_data': ops.nan_to_num(x['HR_data']),
-                        'LR_data': ops.nan_to_num(x['LR_data'])
+                        'LR_data': ops.nan_to_num(x['LR_data']),
+                        'hidden': ops.nan_to_num(x['hidden']),
                         },
                        training=False)
         z_hybrid = z['hybrid']
+        z_hidden = z['hidden']
         z_mean = z['mean'].cpu().detach().numpy()
+        z_ls_pred = z['ls_pred'].cpu().detach().numpy()
         # apply nan mask and detach
         z_hybrid = (z_hybrid * self.mask).cpu().detach().numpy()
-        return z_hybrid, {'ls_mean': z_mean}
+        return z_hybrid, {
+            'ls_mean': z_mean,
+            'ls_pred': z_ls_pred,
+            'hidden': z_hidden,
+        }
 
     def restrict_x(self, x):
         # keep relevant keys, ignore lookback

@@ -27,7 +27,7 @@ esn_dmd_pars = {
     'Nr': 10000,
     'rhoMax': 0.8,
     'entriesPerRow': 3,
-    'alpha': 1.0,
+    'alpha': 0.5,
     'tikhonov_lambda': 1.0e-5,
     'fCutoff': 0.1,
     'squaredStates': 'even',

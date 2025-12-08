@@ -5,12 +5,11 @@ compute_data = False
 split_factor = 9 / 10
 split_factor = 23 / 24
 time_range = slice('2023-01-01', '2024-12-31')
-# time_range = slice('2023-01-01', '2023-04-01')
 
 # short range for integration tests
 # time_range_testing = slice('2023-09-01', '2023-12-31')
-time_range_testing = slice('2023-09-01', '2023-09-13')
 time_range_testing = slice('2023-06-01', '2023-12-01')
+time_range_testing = slice('2023-09-01', '2023-09-05')
 
 # overlap between training and testing dataset (in samples)
 overlap = 5

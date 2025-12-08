@@ -38,17 +38,19 @@ class Hybrid(base_model.BaseModel):
             predictor_model.model.input['HR_data']
         self.predictor_input_LR = \
             predictor_model.model.input['LR_data']
+        self.predictor_hidden = \
+            predictor_model.model.input['hidden']
 
         self.predictor = predictor_model.predictor
-        self.lambdaDMD = predictor_model.lambdaDMD
-        self.alphaDMD = predictor_model.alphaDMD
-        self.cutoffDMD = predictor_model.cutoffDMD
+        self.esn_dmd_pars = predictor_model.esn_dmd_pars
 
         self.predictor_output = \
             predictor_model.model.output['skip_vae_output']
 
         self.ae_mean = \
             predictor_model.model.output['mean']
+        self.ae_hidden = \
+            predictor_model.model.output['hidden']
         self.ae_logvar = \
             predictor_model.model.output['logvar']
         self.ae_recons = \
@@ -67,7 +69,8 @@ class Hybrid(base_model.BaseModel):
 
         self.predictor_layers = keras.Model(
             inputs={'HR_data': self.predictor_input_HR,
-                    'LR_data': self.predictor_input_LR},
+                    'LR_data': self.predictor_input_LR,
+                    'hidden': self.predictor_hidden},
             outputs=self.predictor_output,
             name="predictor_submodel",
         )
@@ -104,7 +107,10 @@ class Hybrid(base_model.BaseModel):
         return {self.input_name_HR:
                 ops.nan_to_num(inputs[self.input_name_HR]),
                 self.input_name_LR:
-                ops.nan_to_num(inputs[self.input_name_LR])}
+                ops.nan_to_num(inputs[self.input_name_LR]),
+                'hidden':
+                inputs['hidden'],
+                }
 
     def train_step(self, data, training=True):
         x, y = data
@@ -259,6 +265,7 @@ class Hybrid(base_model.BaseModel):
         # reusing predictor input
         input_HR = self.predictor_input_HR
         input_LR = self.predictor_input_LR
+        hidden = self.predictor_hidden
 
         assert input_HR.shape[1] > 1, \
             "need at least lookback=2 to make predictions"
@@ -273,7 +280,9 @@ class Hybrid(base_model.BaseModel):
             base_model.Activation('linear')(
                 self.predictor_layers({
                     'HR_data': input_HR,
-                    'LR_data': input_LR}))
+                    'LR_data': input_LR,
+                    'hidden': hidden,
+                }))
 
         assert resnet_result.shape[1:-1] == predictor_result.shape[1:-1], \
             "resnet and predictor have different rows/cols"
@@ -312,6 +321,7 @@ class Hybrid(base_model.BaseModel):
                    'predictor': predictor_result,
                    'combination': x,
                    'mean': self.ae_mean,
+                   'hidden': self.ae_hidden,
                    'logvar': self.ae_logvar,
                    'ae_recons': self.ae_recons,
                    'ls_pred': self.ls_pred,
@@ -320,6 +330,7 @@ class Hybrid(base_model.BaseModel):
 
         inputs = {self.input_name_HR: input_HR,
                   self.input_name_LR: input_LR,
+                  'hidden': hidden,
                   }
 
         return inputs, outputs

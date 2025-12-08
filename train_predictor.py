@@ -31,7 +31,7 @@ dmgr_cmems.create_training_data()
 dgen_args = {
     'dm': dmgr_cmems,
     'batch_size': 4,
-    'lookback': 4,
+    'lookback': 2,
     'shuffle': True,
     'use_multiprocessing': True,
     'workers': 4,
@@ -56,10 +56,6 @@ predictor = predictor_model.Predictor(data_gen=dgen_train,
 predictor.build_model("predictor")
 predictor.summary(line_length=80)
 predictor.compile(predictor.compiler)
-
-# predictor_checkpoint = \
-#     'experiments/train_predictor/checkpoints/checkpoint.predictor.keras'
-# predictor.load_weights(predictor_checkpoint)
 
 analysis_callback = callbacks.AnalysisPredictor(data_gen=dgen_test,
                                                 plot=[

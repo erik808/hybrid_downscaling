@@ -183,7 +183,7 @@ class DMD(keras.callbacks.Callback):
         plt.savefig(figname)
         print(figname)
 
-        plt.pause(10)
+        plt.pause(1)
         breakpoint()
 
         self.model.stop_training = True
@@ -272,7 +272,7 @@ class DMD(keras.callbacks.Callback):
             'log(abs(W_out)) (coarsened)'
         )
         plt.colorbar(a)
-        
+
         plt.subplot(3, 2, 6)
         plt.plot(bias)
         plt.gca().set_title(
@@ -286,31 +286,30 @@ class DMD(keras.callbacks.Callback):
 
     def on_epoch_begin(self, epoch, logs=None):
 
-        self.model.esn_dmd_pars = {
-            'Nr': 10000,
-            'rhoMax': 0.8,
-            'entriesPerRow': 3,
-            'alpha': 0.5,
-            'tikhonov_lambda': 1.0e2,
-            'fCutoff': 0.0,
-            'squaredStates': 'even',
-        }
+        # self.model.esn_dmd_pars = {
+        #     'Nr': 10000,
+        #     'rhoMax': 0.8,
+        #     'entriesPerRow': 3,
+        #     'alpha': 1.0,
+        #     'tikhonov_lambda': 1.0e-1,
+        #     'fCutoff': 0.1,
+        #     'squaredStates': 'even',
+        # }
 
-        self.dgen.mode = 'train'
-        self.dgen.create_indices()
-        self.train_esn_dmd(epoch, logs)
+        # self.dgen.mode = 'train'
+        # self.dgen.create_indices()
+        # self.train_esn_dmd(epoch, logs)
 
-        self.dgen.mode = 'test'
-        self.dgen.create_indices()
-        self.test_esn_dmd(epoch, logs)
+        # self.dgen.mode = 'test'
+        # self.dgen.create_indices()
+        # self.test_esn_dmd(epoch, logs)
 
-        breakpoint()
+        # breakpoint()
 
         if self.dgen.mode == 'train':
             self.train_esn_dmd(epoch, logs)
         elif self.dgen.mode == 'test':
             self.test_esn_dmd(epoch, logs)
-
 
     def on_epoch_end(self, epoch, logs=None):
         # self.train_esn_dmd(epoch, logs)

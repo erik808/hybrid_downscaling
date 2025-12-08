@@ -77,11 +77,11 @@ model_checkpoint_callback = keras.callbacks.ModelCheckpoint(
 
 hist = predictor.fit(
     x=dgen_train,
-    epochs=1,
+    epochs=10,
     validation_data=dgen_test,
     callbacks=[
-        # dmd_train,
-        dmd_test,
+        dmd_train,
+        # dmd_test,
         analysis_callback,
         # model_checkpoint_callback,
     ]

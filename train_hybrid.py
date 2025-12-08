@@ -32,7 +32,7 @@ else:
 dmgr_cmems = \
     data_manager_cmems.DataManagerCMEMS(
         experiment_id=experiment_id,
-        testing=False,
+        testing=True,
         force_rebuild=False,
     )
 
@@ -89,7 +89,8 @@ analysis_callback = callbacks.AnalysisHybrid(
     ]
 )
 
-dmd_callback = callbacks.DMD(data_gen=dgen_train)
+dmd_train = callbacks.DMD(data_gen=dgen_train)
+dmd_test = callbacks.DMD(data_gen=dgen_test)
 
 hist = hybrid.fit(
     x=dgen_train,
@@ -97,8 +98,9 @@ hist = hybrid.fit(
     shuffle=False,
     validation_data=dgen_test,
     callbacks=[
+        dmd_train,
+        dmd_test,
         analysis_callback,
-        dmd_callback,
         # model_checkpoint_callback,
     ]
 )

@@ -24,7 +24,7 @@ else:
 
 dmgr_cmems = \
     data_manager_cmems.DataManagerCMEMS(experiment_id=experiment_id,
-                                        testing=False,
+                                        testing=True,
                                         force_rebuild=False)
 dmgr_cmems.create_training_data()
 
@@ -64,7 +64,8 @@ analysis_callback = callbacks.AnalysisPredictor(data_gen=dgen_test,
                                                 ]
                                                 )
 
-dmd_callback = callbacks.DMD(data_gen=dgen_train)
+dmd_train = callbacks.DMD(data_gen=dgen_train)
+dmd_test = callbacks.DMD(data_gen=dgen_test)
 
 checkpoint_filepath = \
     f'{dmgr_cmems.dirs["checkpoints"]}/checkpoint.predictor.keras'
@@ -76,10 +77,11 @@ model_checkpoint_callback = keras.callbacks.ModelCheckpoint(
 
 hist = predictor.fit(
     x=dgen_train,
-    epochs=5,
+    epochs=1,
     validation_data=dgen_test,
     callbacks=[
-        dmd_callback,
+        # dmd_train,
+        dmd_test,
         analysis_callback,
         # model_checkpoint_callback,
     ]

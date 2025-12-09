@@ -41,6 +41,12 @@ plot_machine.set_results_dir(results_dir)
 timeseries_hybrid = \
     ('experiment/train_predictor/results/'
      'timeseries.dill')
+
+timeseries_hybrid = \
+    ('experiment/hybrid_ESNcv0/results/'
+     'timeseries.dill')
+
+# predictor_ESNcNr10e3Tikh5_v2
 # ('experiment/hybrid_dmdcL1e-6cut0.1/results/epoch9_20251203_103824/'
 #  'timeseries.dill')
 # 'experiment/hybrid_dmdcL1e-7cut0.1/results/timeseries.dill'
@@ -55,12 +61,12 @@ _, _, z_hybrid = load_timeseries(timeseries_hybrid)
 
 
 scaler_list = ['LR', 'HR', 'HR', 'HR']
-x, y_resnet, y_hybrid, z = \
+x, y, z_resnet, z_hybrid = \
     [tools.unscale_var(d, dmgr_cmems.scalers[res])
      for d, res in zip([x, y, z_resnet, z_hybrid], scaler_list)]
 
 
-if x.shape != z.shape:
+if x.shape != y.shape:
     # upsample unscaled x (bilinear interpolation)
     x = np.ascontiguousarray(x.transpose((0, 3, 1, 2)))
     x = dmgr_cmems\
@@ -113,6 +119,6 @@ plt.switch_backend('qtagg')
 plot_machine.plot_spectrum(data,
                            transect_name='along_flow',
                            spectrum_type='ssh',
-                           direction='temporal',
+                           direction='spatial',
                            add_powerlaws=False)
 plt.pause(1)

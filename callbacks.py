@@ -364,9 +364,18 @@ class AnalysisBase(keras.callbacks.Callback, ABC):
         self.plot_machine.create_results_dir(epoch)
         self.construct_mask()
         # self.model.stop_training = True
+        self.timestepping(
+            epoch,
+            logs,
+            spectra=self.spectra,
+            reconstruction=self.reconstruction,
+        )
+
         return None
 
     def on_epoch_end(self, epoch, logs=None):
+        self.plot_machine.create_postfix()
+        self.plot_machine.create_results_dir(epoch)
         self.update_history(logs)
         plt.close('all')
         self.timestepping(

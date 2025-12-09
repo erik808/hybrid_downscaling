@@ -99,7 +99,7 @@ class DMD(keras.callbacks.Callback):
         sk = np.expand_dims(S[0,], 0)
         xk = np.expand_dims(X[0,], 0)
         Z = np.zeros_like(X)
-        ZS =np.zeros_like(S)
+        ZS = np.zeros_like(S)
         predictor_layer = self.get_predictor_layer()
         for i in range(self.dgen.n):
             xk_LR = np.expand_dims(X_LR[i,], 0)
@@ -185,7 +185,7 @@ class DMD(keras.callbacks.Callback):
 
         plt.pause(1)
 
-        self.model.stop_training = True
+        # self.model.stop_training = True
 
     def train_esn_dmd(self, epoch, logs=None):
         np.random.seed(1)
@@ -285,16 +285,6 @@ class DMD(keras.callbacks.Callback):
 
     def on_epoch_begin(self, epoch, logs=None):
 
-        # self.model.esn_dmd_pars = {
-        #     'Nr': 10000,
-        #     'rhoMax': 0.8,
-        #     'entriesPerRow': 3,
-        #     'alpha': 1.0,
-        #     'tikhonov_lambda': 1.0e-1,
-        #     'fCutoff': 0.1,
-        #     'squaredStates': 'even',
-        # }
-
         # self.dgen.mode = 'train'
         # self.dgen.create_indices()
         # self.train_esn_dmd(epoch, logs)
@@ -303,17 +293,12 @@ class DMD(keras.callbacks.Callback):
         # self.dgen.create_indices()
         # self.test_esn_dmd(epoch, logs)
 
-        if self.dgen.mode == 'train' and epoch == 0:
+        if self.dgen.mode == 'train':
             self.train_esn_dmd(epoch, logs)
-        elif self.dgen.mode == 'test' and epoch == 0:
+        elif self.dgen.mode == 'test':
             self.test_esn_dmd(epoch, logs)
 
     def on_epoch_end(self, epoch, logs=None):
-
-        # if self.dgen.mode == 'train':
-        #     self.train_esn_dmd(epoch, logs)
-        # self.train_esn_dmd(epoch, logs)
-
         return None
 
 
@@ -378,20 +363,19 @@ class AnalysisBase(keras.callbacks.Callback, ABC):
         self.plot_machine.create_postfix()
         self.plot_machine.create_results_dir(epoch)
         self.construct_mask()
+        # self.model.stop_training = True
+        return None
+
+    def on_epoch_end(self, epoch, logs=None):
+        self.update_history(logs)
+        plt.close('all')
         self.timestepping(
             epoch,
             logs,
             spectra=self.spectra,
             reconstruction=self.reconstruction,
         )
-        self.model.stop_training = True
         return None
-
-    def on_epoch_end(self, epoch, logs=None):
-        self.update_history(logs)
-        plt.close('all')
-        return None
-
 
     def update_history(self, logs):
         for key, value in logs.items():

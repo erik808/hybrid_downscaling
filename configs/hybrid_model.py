@@ -26,4 +26,4 @@ beta = 1e-3
 gamma = 1e1
 
 # hybridization: 'product', 'concat', 'add'
-hybridization = 'add'
+hybridization = 'product'

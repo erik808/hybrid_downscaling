@@ -26,18 +26,18 @@ gamma = 1e1
 #          'convlstm', 'DMD', 'DMDc'
 predictor = 'ESNc'
 
-esn_dmd_bias = False,
 
 esn_dmd_pars = {
     'Nr': 10000,
-    'rhoMax': 0.8,
+    'rhoMax': 1,
     'entriesPerRow': 3,
     'alpha': 1.0,
-    'tikhonov_lambda': 1.0e-5,
-    'fCutoff': 0.1,
+    'tikhonov_lambda': 5.0e0,
+    'fCutoff': 0.0,
     'squaredStates': 'even',
 }
 
+esn_dmd_bias = False,
 output_filters = 256
 
 convlstm_filters = 64

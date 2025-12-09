@@ -1,6 +1,7 @@
 import numpy as np
 import os
 import tools
+import scipy
 import matplotlib.pyplot as plt
 import dill
 from scipy.stats import binned_statistic
@@ -76,7 +77,6 @@ class ComputeTool():
         elif spectrum_type == 'ssh':
             ssh = self.get_ssh(data, scaler)
             transect_data = self.do_regridding(ssh)
-
         return transect_data
 
     def compute_spectrum_along_transect(
@@ -147,7 +147,6 @@ class ComputeTool():
         remdim = (fftdim + 1) % 2
         reorder = (remdim, fftdim) + tuple(range(2, len(data.shape)))
         data = data.transpose(reorder)
-
         data_tp = self.taper_data(data)
 
         H = np.fft.fft(data_tp, axis=1)
@@ -241,6 +240,7 @@ class ComputeTool():
         data = self.inverse_transform(data, scaler)
         # assume last dimension has variables, ordered as (u,v,ssh)
         ssh = data[..., 2]
+        
         return ssh
 
     def divergence(self, data, scaler, crop=True):

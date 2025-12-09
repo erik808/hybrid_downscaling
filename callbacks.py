@@ -184,7 +184,6 @@ class DMD(keras.callbacks.Callback):
         print(figname)
 
         plt.pause(1)
-        breakpoint()
 
         self.model.stop_training = True
 
@@ -304,7 +303,6 @@ class DMD(keras.callbacks.Callback):
         # self.dgen.create_indices()
         # self.test_esn_dmd(epoch, logs)
 
-        # breakpoint()
         if self.dgen.mode == 'train' and epoch == 0:
             self.train_esn_dmd(epoch, logs)
         elif self.dgen.mode == 'test' and epoch == 0:
@@ -312,9 +310,10 @@ class DMD(keras.callbacks.Callback):
 
     def on_epoch_end(self, epoch, logs=None):
 
-        if self.dgen.mode == 'train':
-            self.train_esn_dmd(epoch, logs)
+        # if self.dgen.mode == 'train':
+        #     self.train_esn_dmd(epoch, logs)
         # self.train_esn_dmd(epoch, logs)
+
         return None
 
 
@@ -378,19 +377,21 @@ class AnalysisBase(keras.callbacks.Callback, ABC):
                 tools.print_configuration(self.dgen, self.model)
         self.plot_machine.create_postfix()
         self.plot_machine.create_results_dir(epoch)
+        self.construct_mask()
+        self.timestepping(
+            epoch,
+            logs,
+            spectra=self.spectra,
+            reconstruction=self.reconstruction,
+        )
+        self.model.stop_training = True
         return None
 
     def on_epoch_end(self, epoch, logs=None):
         self.update_history(logs)
         plt.close('all')
-        self.construct_mask()
-        if epoch % 1 == 0 or epoch == self.params['epochs'] - 1:
-            self.timestepping(
-                epoch,
-                logs,
-                spectra=self.spectra,
-                reconstruction=self.reconstruction,
-            )
+        return None
+
 
     def update_history(self, logs):
         for key, value in logs.items():

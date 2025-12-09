@@ -39,7 +39,7 @@ results_dir = results_dir_org + '/merge'
 plot_machine.set_results_dir(results_dir)
 
 timeseries_hybrid = \
-    ('experiment/hybrid_conv3d/results/'
+    ('experiment/train_predictor/results/'
      'timeseries.dill')
 # ('experiment/hybrid_dmdcL1e-6cut0.1/results/epoch9_20251203_103824/'
 #  'timeseries.dill')
@@ -71,16 +71,6 @@ plt.close('all')
 
 cmap = plt.get_cmap('tab10')
 data = {
-    # 'lowres': {
-    #     'data': np.nan_to_num(x),
-    #     'plotkwargs': {
-    #         'label': 'bilinear interpolation',
-    #         'linestyle': '--',
-    #         'color': cmap(5),
-    #         'zorder': 0,
-
-    #     },
-    # },
     'truth': {
         'data': np.nan_to_num(y),
         'plotkwargs': {
@@ -88,6 +78,16 @@ data = {
             'linestyle': '-',
             'color': cmap(0),
             'zorder': 10,
+        },
+    },
+    'lowres': {
+        'data': np.nan_to_num(x),
+        'plotkwargs': {
+            'label': 'bilinear interpolation',
+            'linestyle': '-',
+            'color': cmap(5),
+            'zorder': 0,
+
         },
     },
     'pred_resnet': {

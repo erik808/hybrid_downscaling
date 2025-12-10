@@ -240,10 +240,8 @@ class DMD(keras.callbacks.Callback):
 
         # fill hidden state in datagenerator
         inds = np.sort(self.dgen.indices)[1:]
-        self.dgen.dm.hidden_states[inds, :] = esn.X
-        print(np.linalg.norm(esn.X[-5:, :], ord=2, axis=1))
-        print(np.linalg.norm(U[-5:, :], ord=2, axis=1))
-        # self.dgen.dm.hidden_states[inds[-1] + 1:, :] = esn.X[-1, :]
+        if 'ESN' in self.model.predictor:  # use hidden states
+            self.dgen.dm.hidden_states[inds, :] = esn.X
 
         print('plotting ESN/DMD training data', end='')
         plt.figure(figsize=(14, 10))

@@ -99,7 +99,7 @@ class PlotMachine():
         plt.tight_layout()
         plt.savefig(fig_name, bbox_inches='tight')
 
-    def spectra_wrapper(self, x, y, z):
+    def spectra_wrapper(self, x, y, z, t):
         scaler_list = ['LR', 'HR', 'HR']
         if x.shape == z.shape:
             scaler_list[0] = 'HR'
@@ -121,6 +121,7 @@ class PlotMachine():
         data = {
             'lowres': {
                 'data': np.nan_to_num(x_unscaled),
+                'time': [],
                 'plotkwargs': {
                     'label': 'bilinear interpolation',
                     'linestyle': '--',
@@ -130,6 +131,7 @@ class PlotMachine():
             },
             'truth': {
                 'data': np.nan_to_num(y_unscaled),
+                'time': [],
                 'plotkwargs': {
                     'label': 'high-resolution truth',
                     'linestyle': '-',
@@ -139,6 +141,7 @@ class PlotMachine():
             },
             'pred': {
                 'data': np.nan_to_num(z_unscaled),
+                'time': [],
                 'plotkwargs': {
                     'label': 'prediction',
                     'linestyle': '-',
@@ -149,7 +152,7 @@ class PlotMachine():
         }
 
         # do not create temporal plots when time dimension is limited
-        # (during testing)
+        # (during testing mainly)
         Nt = x.shape[0]
         directions = ['spatial', 'temporal'] if Nt > 100 else ['spatial']
 
@@ -388,6 +391,7 @@ class PlotMachine():
             k[key], S[key], T[key] = \
                 self.ct.compute_spectrum_along_transect(
                     value['data'],
+                    value['time'],
                     transect_name=transect_name,
                     spectrum_type=spectrum_type,
                     direction=direction)

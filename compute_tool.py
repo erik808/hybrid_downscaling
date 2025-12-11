@@ -61,27 +61,46 @@ class ComputeTool():
                                         resolution=resolution,
                                         **transect)
 
+    def detide(self, data, time):
+        import pytide
+        wt = pytide.WaveTable(["M2", "S2", "N2", "K1",
+                               "O1", "Q1", "M4",
+                               "K2", "P1", "Mf", "Mm"])
+
+        dates = time.values
+        f, vu = wt.compute_nodal_modulations(dates)
+        breakpoint()
+
     def hovmöller_along_transect(
             self,
             data,
+            time,
             scaler=None,
+            detide=False,
             transect_name='along_flow',
             spectrum_type='energy',
     ):
         self.get_regridder(transect_name)
+
         if spectrum_type == 'energy':
             transect_data = self.invert_and_regrid(data, scaler)
+
         elif spectrum_type == 'enstrophy':
             zeta = self.vorticity(data, scaler, crop=False)
             transect_data = self.do_regridding(zeta)
+
         elif spectrum_type == 'ssh':
             ssh = self.get_ssh(data, scaler)
             transect_data = self.do_regridding(ssh)
+
+        if detide:
+            transect_data = self.detide(transect_data, time)
         return transect_data
 
     def compute_spectrum_along_transect(
             self,
             data,
+            time,
             scaler=None,
             transect_name='along_flow',
             spectrum_type='energy',
@@ -90,6 +109,7 @@ class ComputeTool():
 
         transect_data = self.hovmöller_along_transect(
             data,
+            time,
             scaler=scaler,
             transect_name=transect_name,
             spectrum_type=spectrum_type,
@@ -100,7 +120,7 @@ class ComputeTool():
             spectrum_type=spectrum_type,
             direction=direction,
         )
-
+        
         return k, S, transect_data
 
     def taper_data(self, data):
@@ -124,12 +144,14 @@ class ComputeTool():
             data,
             spectrum_type,
             direction='spatial',
+            method='welch',
     ):
         if spectrum_type == 'energy':
             # take only u and v
             data = data[..., :2]
             data = (data.transpose(1, 0, 2) - np.mean(data, axis=1))\
                 .transpose(1, 0, 2)  # remove spatial average
+
         elif (spectrum_type == 'enstrophy' or
               spectrum_type == 'ssh'):
             # remove spatial average
@@ -139,34 +161,38 @@ class ComputeTool():
         if data.shape[0] > 1:
             data = data - np.mean(data, axis=0)
 
-        # H = np.fft.rfft(data_tp, axis=1)
-        # S = 0.5 * np.sum(np.square(np.abs(H)), axis=2)
-        # S = S / np.max(S)
-
         fftdim = 1 if direction == 'spatial' else 0
         remdim = (fftdim + 1) % 2
         reorder = (remdim, fftdim) + tuple(range(2, len(data.shape)))
         data = data.transpose(reorder)
+
         data_tp = self.taper_data(data)
 
-        H = np.fft.fft(data_tp, axis=1)
         if spectrum_type == 'energy':
-            S = 0.5 * np.sum(np.square(np.abs(H)), axis=2)
+            data_tp = 0.5 * np.sum(np.square(np.abs(data_tp)), axis=2)
         elif (
                 spectrum_type == 'enstrophy' or
                 spectrum_type == 'ssh'
         ):
-            S = 0.5 * np.square(np.abs(H))
+            data_tp = 0.5 * np.square(np.abs(data_tp))
 
-        n = S.shape[-1]
-        freqs = np.abs(np.fft.fftfreq(n) * n)
-        kbins = np.arange(0.5, n / 2, 1.)
-        k = 0.5 * (kbins[1:] + kbins[:-1])
-        S, _, _ = binned_statistic(freqs, S,
-                                   statistic='mean',
-                                   bins=kbins)
+        if method == 'fft':
+            S = (np.abs(np.fft.fft(data_tp, axis=1)))
+            S = (np.abs(np.fft.fft(data_tp, axis=1))**2) / data_tp.shape[1]
+            f = np.abs(np.fft.fftfreq(data_tp.shape[1]))
+        elif method == 'welch':
+            f, S = scipy.signal.welch(
+                data_tp,
+                axis=1,
+                nperseg=400,
+                # noverlap=64,
+                scaling='density',
+                average='median',
+            )
 
-        return k, S
+        breakpoint()
+
+        return f, S
 
     def do_regridding(self, field):
         # regrid
@@ -240,7 +266,7 @@ class ComputeTool():
         data = self.inverse_transform(data, scaler)
         # assume last dimension has variables, ordered as (u,v,ssh)
         ssh = data[..., 2]
-        
+
         return ssh
 
     def divergence(self, data, scaler, crop=True):

@@ -369,6 +369,8 @@ class AnalysisBase(keras.callbacks.Callback, ABC):
             reconstruction=self.reconstruction,
         )
 
+        raise Exception('doei')
+
         return None
 
     def on_epoch_end(self, epoch, logs=None):
@@ -533,20 +535,16 @@ class AnalysisBase(keras.callbacks.Callback, ABC):
 
             batch_results = []
             for k in range(batch_size):
+
                 # create kth model input
                 x_k = x_(batch_x, k, x_km1)
+
                 # perform time step and update x_k
-                # print(ops.norm(x_k['hidden'], ord=2).cpu().detach().numpy())
                 x_k['HR_data'][0, 0, ], add_out = self.call_model(x_k)
 
                 for k, v in add_out.items():
                     x_k[k] = v
-                # print(ops.norm(x_k['hidden'], ord=2).cpu().detach().numpy())
 
-                # print(ops.norm(x_k['hidden'], ord=2),
-                #       ops.norm(x_k['ls_mean']),
-                #       ops.norm(x_k['ls_pred']),
-                #       )
                 batch_results.append(x_k)
                 x_km1 = x_k
 
@@ -575,30 +573,43 @@ class AnalysisBase(keras.callbacks.Callback, ABC):
         # decrease batch size again
         self.dgen.batch_size = batch_size_org
 
+        mask = {
+            'rows': self.model.masking.rows.cpu(),
+            'cols': self.model.masking.cols.cpu(),
+        }
+
         self.plot_machine.plot_timestepping(
             results,
             truths,
             epoch,
-            {'rows': self.model.masking.rows.cpu(),
-             'cols': self.model.masking.cols.cpu(),
-             },
+            mask,
         )
 
-        x = np.concatenate([self.restrict_x(r) for r in results], 0)
-        y = np.concatenate([self.restrict_y(t) for t in truths], 0)
-        z = np.concatenate([self.restrict_y(r) for r in results], 0)
         results_dir_base = self.plot_machine.dirs['results']
         timestepping_file = \
-            f'{results_dir_base}/timeseries.dill'
+            f'{results_dir_base}/results.dill'
+
         with open(timestepping_file, 'wb') as file:
-            dill.dump({
-                'x': x,
-                'y': y,
-                'z': z,
-            }, file)
+            dill.dump(
+                {
+                    'results': results,
+                    'truths': truths,
+                    'logs': logs,
+                    'mask': mask,
+                }, file)
+
+        x_mat = np.concatenate([self.restrict_x(r) for r in results], 0)
+        y_mat = np.concatenate([self.restrict_y(t) for t in truths], 0)
+        z_mat = np.concatenate([self.restrict_y(r) for r in results], 0)
+        t_arr = np.array([np.datetime64(r['time']) for r in results])
 
         if spectra:
-            self.plot_machine.spectra_wrapper(x, y, z)
+            self.plot_machine.spectra_wrapper(
+                x_mat,
+                y_mat,
+                z_mat,
+                t_arr
+            )
 
         if reconstruction:
             t_range = np.linspace(0, x.shape[0] - 1, 4).astype(int)

@@ -143,7 +143,7 @@ data = {
 plt.switch_backend('qtagg')
 plot_machine.plot_spectrum(data,
                            transect_name='along_flow',
-                           spectrum_type='ssh',
+                           spectrum_type='energy',
                            direction='temporal',
                            add_powerlaws=False)
 plt.pause(1)

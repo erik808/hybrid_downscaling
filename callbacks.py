@@ -608,13 +608,13 @@ class AnalysisBase(keras.callbacks.Callback, ABC):
                 x_mat,
                 y_mat,
                 z_mat,
-                t_arr
+                t_arr,
             )
 
         if reconstruction:
-            t_range = np.linspace(0, x.shape[0] - 1, 4).astype(int)
+            t_range = np.linspace(0, x_mat.shape[0] - 1, 4).astype(int)
             for t in t_range:
-                self.plot_reconstruction(x, y, z, epoch, t)
+                self.plot_reconstruction(x_mat, y_mat, z_mat, epoch, t)
 
 
 class AnalysisResNet(AnalysisBase):

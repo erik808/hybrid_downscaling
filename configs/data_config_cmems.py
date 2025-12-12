@@ -3,8 +3,8 @@
 # --------------------------------------------------------------------
 compute_data = False
 split_factor = 9 / 10
-split_factor = 23 / 24
-time_range = slice('2023-01-01', '2024-12-31')
+split_factor = 4 / 5
+time_range = slice('2023-01-01', '2025-07-01')
 
 # short range for integration tests
 # time_range_testing = slice('2023-09-01', '2023-12-31')

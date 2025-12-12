@@ -120,7 +120,7 @@ class ComputeTool():
             spectrum_type=spectrum_type,
             direction=direction,
         )
-        
+
         return k, S, transect_data
 
     def taper_data(self, data):
@@ -146,25 +146,81 @@ class ComputeTool():
             direction='spatial',
             method='welch',
     ):
-        if spectrum_type == 'energy':
-            # take only u and v
-            data = data[..., :2]
-            data = (data.transpose(1, 0, 2) - np.mean(data, axis=1))\
-                .transpose(1, 0, 2)  # remove spatial average
 
-        elif (spectrum_type == 'enstrophy' or
-              spectrum_type == 'ssh'):
-            # remove spatial average
-            data = (data.T - np.mean(data, axis=1)).T
-
-        # remove time average
-        if data.shape[0] > 1:
-            data = data - np.mean(data, axis=0)
-
-        fftdim = 1 if direction == 'spatial' else 0
-        remdim = (fftdim + 1) % 2
-        reorder = (remdim, fftdim) + tuple(range(2, len(data.shape)))
+        # reorder such that the dimension along which we compute a
+        # spectrum is first always
+        specdim = 1 if direction == 'spatial' else 0
+        remdim = (specdim + 1) % 2
+        reorder = (specdim, remdim) + tuple(range(2, len(data.shape)))
         data = data.transpose(reorder)
+
+        plt.close('all')
+        plt.figure()
+
+        # data_tp = self.taper_data(data)
+
+        # data_detrend = data
+        data_detrend = scipy.signal.detrend(data, axis=0)
+        # data_detrend = scipy.signal.detrend(data_detrend, axis=1)
+
+        pfac = 5
+        N, M, C = data_detrend.shape
+        data_padded = np.pad(
+            data_detrend,
+            ((N // pfac, N // pfac), (0, 0), (0, 0))
+        )
+        plt.pcolormesh(data_padded[..., 0])
+
+        H = np.fft.fft(data_padded, axis=0)
+        energy = np.zeros((N // 2 + 1, M, C))
+        freqs = np.linspace(0.0, 0.5, N // 2 + 1)
+
+        for i in range(len(freqs)):
+            mult = 1 if i == 0 or i == N // 2 else 2
+            energy[i,] = mult * np.abs(H[i,])**2 / N
+
+        f, S = scipy.signal.welch(
+            data_padded,
+            axis=0,
+            scaling='density',
+        )
+
+        df = f[2] - f[1]
+
+        variance_orig = np.var(data_padded, axis=0)
+        variance_fft = np.sum(energy, axis=0) / N
+        variance_welch = np.sum(S, axis=0) * df
+
+        # plt.plot(variance_orig[:, 0])
+        # plt.plot(variance_fft[:, 0])
+        # plt.plot(variance_welch[:, 0])
+        # print(df)
+
+        # plt.loglog(freqs[1:], energy[1:])
+        # kinetic energy
+        plt.figure()
+        mKEfft = 1/2 * np.mean(np.sum(energy, axis=2), axis=1)
+        mKEwelch = 1/2 * np.mean(np.sum(S, axis=2), axis=1)
+        mKEfft = (energy[:, 20, 0])
+        mKEwelch = (S[:, 20, 0])
+
+        plt.loglog(freqs[1:,], mKEfft[1:,])
+        plt.loglog(f, mKEwelch)
+
+        plt.figure()
+        plt.plot(freqs)
+        plt.plot(f)
+        plt.pause(1)
+
+        x_ref = np.array([0.01, 1])
+        y_ref53 = 5e0 * (x_ref / x_ref[0])**(-5/3)
+        y_ref3 = 5e0 * (x_ref / x_ref[0])**(-3)
+        y_ref5 = 5e0 * (x_ref / x_ref[0])**(-5)
+        plt.loglog(x_ref, y_ref53, '--')
+        plt.loglog(x_ref, y_ref3,  '--')
+        plt.loglog(x_ref, y_ref5,  '--')
+
+        plt.pause(1)
 
         data_tp = self.taper_data(data)
 

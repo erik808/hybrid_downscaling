@@ -47,8 +47,8 @@ resnet.compile(resnet.compiler)
 
 analysis_callback = callbacks.AnalysisResNet(data_gen=dgen_test,
                                              plot=[
-                                                 'reconstruction',
-                                                 'spectra',
+                                                 # 'reconstruction',
+                                                 # 'spectra',
                                              ]
                                              )
 

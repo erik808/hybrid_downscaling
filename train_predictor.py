@@ -18,14 +18,15 @@ K.clear_session()
 keras.utils.set_random_seed(123)
 
 if len(sys.argv) < 2:
-    experiment_id = 'train_predictor'
+    experiment_id = 'predictor_ESNcN10e3R1A1T5_exception'
 else:
     experiment_id = sys.argv[1]
 
 dmgr_cmems = \
     data_manager_cmems.DataManagerCMEMS(experiment_id=experiment_id,
-                                        testing=True,
-                                        force_rebuild=True)
+                                        testing=False,
+                                        force_rebuild=False,
+                                        )
 
 dmgr_cmems.create_training_data()
 

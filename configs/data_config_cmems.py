@@ -2,14 +2,17 @@
 # Data configuration specific for the synthetic CMEMS NWS set
 # --------------------------------------------------------------------
 compute_data = False
-split_factor = 9 / 10
-split_factor = 4 / 5
-time_range = slice('2023-01-01', '2025-07-01')
+split_factor = 24 / 25
+time_range = slice('2023-01-01', '2025-02-01')
 
 # short range for integration tests
 # time_range_testing = slice('2023-09-01', '2023-12-31')
 time_range_testing = slice('2023-06-01', '2023-12-01')
 time_range_testing = slice('2023-09-01', '2023-09-05')
+
+# tmp
+split_factor = 23 / 24
+time_range = slice('2023-01-01', '2024-12-31')
 
 # overlap between training and testing dataset (in samples)
 overlap = 5

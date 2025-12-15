@@ -168,13 +168,7 @@ class DMD(keras.callbacks.Callback):
         plt.title(f'mean normalized err: {err_mn}')
         print(f'mean normalized err: {err_mn}')
 
-        # plt.plot(
-        #     np.linalg.norm((ZS - S), ord=2, axis=0),
-        #     '.-',
-        #     label='||ZS-S||',
-        # )
         plt.legend()
-
         plt.tight_layout()
         figname = (
             f"{self.dgen.dm.dirs['results']}/"
@@ -184,8 +178,6 @@ class DMD(keras.callbacks.Callback):
         print(figname)
 
         plt.pause(1)
-
-        # self.model.stop_training = True
 
     def train_esn_dmd(self, epoch, logs=None):
         np.random.seed(1)
@@ -283,18 +275,13 @@ class DMD(keras.callbacks.Callback):
 
     def on_epoch_begin(self, epoch, logs=None):
 
-        # self.dgen.mode = 'train'
-        # self.dgen.create_indices()
-        # self.train_esn_dmd(epoch, logs)
-
-        # self.dgen.mode = 'test'
-        # self.dgen.create_indices()
-        # self.test_esn_dmd(epoch, logs)
-
         if self.dgen.mode == 'train':
             self.train_esn_dmd(epoch, logs)
         elif self.dgen.mode == 'test':
             self.test_esn_dmd(epoch, logs)
+
+        # this should be made optional
+        self.model.stop_training = True
 
     def on_epoch_end(self, epoch, logs=None):
         return None
@@ -358,10 +345,11 @@ class AnalysisBase(keras.callbacks.Callback, ABC):
         if not self.cfg_printed:
             self.cfg_printed = \
                 tools.print_configuration(self.dgen, self.model)
+        self.construct_mask()
         self.plot_machine.create_postfix()
         self.plot_machine.create_results_dir(epoch)
-        self.construct_mask()
-        # self.model.stop_training = True
+        self.update_history(logs)
+        plt.close('all')
         self.timestepping(
             epoch,
             logs,
@@ -632,7 +620,7 @@ class AnalysisResNet(AnalysisBase):
         )
         # apply nan mask and detach
         z = (z * self.mask).cpu().detach().numpy()
-        return z, {}
+        return z, {'ls_mean': []}
 
     def restrict_x(self, x):
         # keep relevant keys, ignore lookback

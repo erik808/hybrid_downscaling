@@ -25,11 +25,14 @@ dmgr_cmems = \
 def load_timeseries(fname):
     with open(fname, 'rb') as file:
         timeseries = dill.load(file)
-        x = timeseries['x']
-        y = timeseries['y']
-        z = timeseries['z']
+        results = timeseries['results']
+        truths = timeseries['truths']
+        x = np.concatenate([re['LR_data'][:, 0,] for re in results], 0)
+        z = np.concatenate([re['HR_data'][:, 0,] for re in results], 0)
+        y = np.concatenate([tr['HR_data'][:, 0,] for tr in truths], 0)
+        t = np.array([np.datetime64(re['time']) for re in results])
 
-    return x, y, z
+    return x, y, z, t
 
 
 importlib.reload(plot_utils)
@@ -39,34 +42,24 @@ results_dir = results_dir_org + '/merge'
 plot_machine.set_results_dir(results_dir)
 
 # timeseries_hybrid = \
-#     ('experiment/train_predictor/results/'
-#      'timeseries.dill')
-
-# timeseries_hybrid = \
 #     ('experiment/predictor_ESNcNr10e3Tikh5_v2/results/'
 #      'timeseries.dill')
 
-timeseries_hybrid = \
-    ('experiment/predictor_ESNcTikh5_earlystop/results/'
-     'timeseries.dill')
-
-
-# predictor_ESNcNr10e3Tikh5_v2
-# ('experiment/hybrid_dmdcL1e-6cut0.1/results/epoch9_20251203_103824/'
-#  'timeseries.dill')
-# 'experiment/hybrid_dmdcL1e-7cut0.1/results/timeseries.dill'
-
 timeseries_resnet = \
-    ('experiment/resnetb6f64o0/results/epoch59_20251202_191553'
-     '/timeseries.dill')
+    ('experiment/resnet_b6f64_bilin/results'
+     '/results.dill')
 
-timeseries_dmd = \
-    ('experiment/predictor_DMDcTikh5/results'
-     '/timeseries.dill')
+timeseries_hybrid = \
+    ('experiment/predictor_ESNcN10e3R1A1T5_v2/results/'
+     'results.dill')
 
-x, y, z_resnet = load_timeseries(timeseries_resnet)
-_, _, z_hybrid = load_timeseries(timeseries_hybrid)
-_, _, z_dmd = load_timeseries(timeseries_dmd)
+# timeseries_dmd = \
+#     ('experiment/predictor_DMDcTikh5/results'
+#      '/timeseries.dill')
+
+x, y, z_resnet, t = load_timeseries(timeseries_resnet)
+_, _, z_hybrid, _ = load_timeseries(timeseries_hybrid)
+# _, _, z_dmd = load_timeseries(timeseries_dmd)
 
 scaler_list = ['LR', 'HR', 'HR', 'HR']
 x, y, z_resnet, z_hybrid = \
@@ -120,6 +113,7 @@ data = {
 
     'pred_hybrid': {
         'data': np.nan_to_num(z_hybrid),
+        'time': [],
         'plotkwargs': {
             'label': 'ESNc prediction',
             'linestyle': '-',
@@ -127,17 +121,17 @@ data = {
             'zorder': 4,
         },
     },
-    
-    'pred_dmd': {
-        'data': np.nan_to_num(z_dmd),
-        'time': [],
-        'plotkwargs': {
-            'label': 'DMDc prediction',
-            'linestyle': '-',
-            'color': cmap(3),
-            'zorder': 4,
-        },
-    },
+
+    # 'pred_dmd': {
+    #     'data': np.nan_to_num(z_dmd),
+    #     'time': [],
+    #     'plotkwargs': {
+    #         'label': 'DMDc prediction',
+    #         'linestyle': '-',
+    #         'color': cmap(3),
+    #         'zorder': 4,
+    #     },
+    # },
 }
 
 plt.switch_backend('qtagg')

@@ -262,7 +262,7 @@ class PlotMachine():
         plt.gca().set_xlabel('epoch')
         plt.legend()
 
-        print(fig_name)
+        print('\n', fig_name)
         plt.tight_layout()
         plt.savefig(fig_name)
 
@@ -330,8 +330,12 @@ class PlotMachine():
         print(fig_name)
         plt.savefig(fig_name)
 
-        # plot laten variables in time
-        ls = np.concatenate([r['ls_mean'] for r in results], 0)
+        # plot latent variables in time
+        if 'ls_mean' in results[0]:
+            ls = np.concatenate([r['ls_mean'] for r in results], 0)
+        else:
+            ls = []
+
         if len(ls) > 0:
             ls = np.reshape(ls, (ls.shape[0], -1))
             ls = ls.transpose()
@@ -353,8 +357,12 @@ class PlotMachine():
         else:
             print('no latent variables available for plotting')
 
-        # plot laten variables in time
-        ls = np.concatenate([r['ls_pred'] for r in results], 0)
+        # plot latent variables in time
+        if 'ls_pred' in results[0]:
+            ls = np.concatenate([r['ls_pred'] for r in results], 0)
+        else:
+            ls = []
+            
         if len(ls) > 0:
             ls = np.reshape(ls, (ls.shape[0], -1))
             ls = ls.transpose()
@@ -383,7 +391,6 @@ class PlotMachine():
                       direction='spatial',
                       add_powerlaws=False,
                       ):
-
         k = {}
         S = {}
         T = {}
@@ -397,7 +404,7 @@ class PlotMachine():
                     direction=direction)
 
         # compute mean
-        S_mn = {key: np.mean(value, axis=0) for key, value in S.items()}
+        S_mn = {key: np.mean(value, axis=-1) for key, value in S.items()}
 
         plt.figure()
         for key, value in S_mn.items():
@@ -408,16 +415,10 @@ class PlotMachine():
             )
 
         if add_powerlaws:
-            k_1 = np.linspace(1.7, np.ceil(len(S_mn[key]) / 2), 100)
-            k_2 = np.linspace(7, len(S_mn[key]), 100)
-
-            offset_1 = 1e1 * np.max(S_mn[key]) \
-                if transect_name == 'along_flow' else 1e0 * np.max(S_mn[key])
-            offset_2 = 2e2 * np.max(S_mn[key]) \
-                if transect_name == 'along_flow' else 1e1 * np.max(S_mn[key])
-
-            plt.loglog(k_1, offset_1 * k_1**(-5 / 3), '--', label='k^-5/3')
-            plt.loglog(k_2, offset_2 * k_2**(-3), ':', label='k^-3')
+            ks = k['truth']
+            plt.loglog(ks, 1e-4 * ks**(-3), ':', label='$k^{-3}$')
+            plt.loglog(ks, 1e-4 * ks**(-4), '--', label='$k^{-4}$')
+            plt.loglog(ks, 1e-4 * ks**(-5), '--', label='$k^{-5}$')
 
         if spectrum_type == 'energy':
             tstring = \
@@ -446,7 +447,7 @@ class PlotMachine():
                  f'ssh_spectrum_'
                  f'{transect_name}_{direction}.png')
 
-        # plt.gca().set_ylim([1e-7, 1])
+        # plt.gca().set_ylim([1e-8, 1e2])
         plt.gca().set_title(tstring)
         plt.legend()
         plt.grid()

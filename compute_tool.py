@@ -4,7 +4,6 @@ import tools
 import scipy
 import matplotlib.pyplot as plt
 import dill
-from scipy.stats import binned_statistic
 
 from transectpicker.transectpicker import TransectPicker
 
@@ -154,100 +153,43 @@ class ComputeTool():
         reorder = (specdim, remdim) + tuple(range(2, len(data.shape)))
         data = data.transpose(reorder)
 
-        plt.close('all')
-        plt.figure()
-
-        # data_tp = self.taper_data(data)
-
-        # data_detrend = data
+        # detrend along specdim
         data_detrend = scipy.signal.detrend(data, axis=0)
-        # data_detrend = scipy.signal.detrend(data_detrend, axis=1)
 
-        pfac = 5
-        N, M, C = data_detrend.shape
-        data_padded = np.pad(
-            data_detrend,
-            ((N // pfac, N // pfac), (0, 0), (0, 0))
-        )
-        plt.pcolormesh(data_padded[..., 0])
+        if method == 'fft':  # pad data for fft
+            dshape = data_detrend.shape
+            N = dshape[0]
+            pfac = 10
+            padding = ((N // pfac, N // pfac), (0, 0), (0, 0))
+            padding = padding[:len(dshape)]
 
-        H = np.fft.fft(data_padded, axis=0)
-        energy = np.zeros((N // 2 + 1, M, C))
-        freqs = np.linspace(0.0, 0.5, N // 2 + 1)
-
-        for i in range(len(freqs)):
-            mult = 1 if i == 0 or i == N // 2 else 2
-            energy[i,] = mult * np.abs(H[i,])**2 / N
-
-        f, S = scipy.signal.welch(
-            data_padded,
-            axis=0,
-            scaling='density',
-        )
-
-        df = f[2] - f[1]
-
-        variance_orig = np.var(data_padded, axis=0)
-        variance_fft = np.sum(energy, axis=0) / N
-        variance_welch = np.sum(S, axis=0) * df
-
-        # plt.plot(variance_orig[:, 0])
-        # plt.plot(variance_fft[:, 0])
-        # plt.plot(variance_welch[:, 0])
-        # print(df)
-
-        # plt.loglog(freqs[1:], energy[1:])
-        # kinetic energy
-        plt.figure()
-        mKEfft = 1/2 * np.mean(np.sum(energy, axis=2), axis=1)
-        mKEwelch = 1/2 * np.mean(np.sum(S, axis=2), axis=1)
-        mKEfft = (energy[:, 20, 0])
-        mKEwelch = (S[:, 20, 0])
-
-        plt.loglog(freqs[1:,], mKEfft[1:,])
-        plt.loglog(f, mKEwelch)
-
-        plt.figure()
-        plt.plot(freqs)
-        plt.plot(f)
-        plt.pause(1)
-
-        x_ref = np.array([0.01, 1])
-        y_ref53 = 5e0 * (x_ref / x_ref[0])**(-5/3)
-        y_ref3 = 5e0 * (x_ref / x_ref[0])**(-3)
-        y_ref5 = 5e0 * (x_ref / x_ref[0])**(-5)
-        plt.loglog(x_ref, y_ref53, '--')
-        plt.loglog(x_ref, y_ref3,  '--')
-        plt.loglog(x_ref, y_ref5,  '--')
-
-        plt.pause(1)
-
-        data_tp = self.taper_data(data)
-
-        if spectrum_type == 'energy':
-            data_tp = 0.5 * np.sum(np.square(np.abs(data_tp)), axis=2)
-        elif (
-                spectrum_type == 'enstrophy' or
-                spectrum_type == 'ssh'
-        ):
-            data_tp = 0.5 * np.square(np.abs(data_tp))
-
-        if method == 'fft':
-            S = (np.abs(np.fft.fft(data_tp, axis=1)))
-            S = (np.abs(np.fft.fft(data_tp, axis=1))**2) / data_tp.shape[1]
-            f = np.abs(np.fft.fftfreq(data_tp.shape[1]))
-        elif method == 'welch':
-            f, S = scipy.signal.welch(
-                data_tp,
-                axis=1,
-                nperseg=400,
-                # noverlap=64,
-                scaling='density',
-                average='median',
+            data_padded = np.pad(
+                data_detrend,
+                padding,
             )
 
-        breakpoint()
+            Npad = data_padded.shape[0]
+            H = np.fft.fft(data_padded, axis=0)
 
+            newshape = (Npad // 2 + 1, *dshape[1:])
+            S = np.zeros(newshape)
+            f = np.linspace(0.0, 0.5, newshape[0])
+
+            for i in range(1, len(f)):
+                mult = 1 if i == 0 or i == (Npad // 2) else 2
+                S[i,] = mult * np.abs(H[i,])**2 / Npad
+
+        elif method == 'welch':
+            nperseg = data_detrend.shape[0] / 8.
+            f, S = scipy.signal.welch(
+                data_detrend,
+                axis=0,
+                # nperseg=nperseg,
+                scaling='density',
+            )
+
+        if spectrum_type == 'energy':
+            S = np.sum(S, axis=-1)
         return f, S
 
     def do_regridding(self, field):

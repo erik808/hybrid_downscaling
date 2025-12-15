@@ -7,7 +7,7 @@ import tools
 import data_manager_cmems
 
 import matplotlib.pyplot as plt
-plt.switch_backend('Agg')
+# plt.switch_backend('Agg')
 
 importlib.reload(data_manager_cmems)
 importlib.reload(plot_utils)
@@ -50,7 +50,15 @@ timeseries_resnet = \
      '/results.dill')
 
 timeseries_hybrid = \
-    ('experiment/predictor_ESNcN10e3R1A1T5_v2/results/'
+    ('experiment/predictor_ESNcN10e3R1A1T0.5_6mpred/results/'
+     'results.dill')
+
+timeseries_hybrid2 = \
+    ('experiment/predictor_ESNcN10e3R1A1T1_6mpred/results/'
+     'results.dill')
+
+timeseries_hybrid3 = \
+    ('experiment/predictor_ESNcN10e3R1A1T0.1_6mpred/results/'
      'results.dill')
 
 # timeseries_dmd = \
@@ -59,6 +67,8 @@ timeseries_hybrid = \
 
 x, y, z_resnet, t = load_timeseries(timeseries_resnet)
 _, _, z_hybrid, _ = load_timeseries(timeseries_hybrid)
+_, _, z_hybrid2, _ = load_timeseries(timeseries_hybrid2)
+_, _, z_hybrid3, _ = load_timeseries(timeseries_hybrid3)
 # _, _, z_dmd = load_timeseries(timeseries_dmd)
 
 scaler_list = ['LR', 'HR', 'HR', 'HR']
@@ -115,10 +125,32 @@ data = {
         'data': np.nan_to_num(z_hybrid),
         'time': [],
         'plotkwargs': {
-            'label': 'ESNc prediction',
+            'label': 'ESNc prediction T0.5',
             'linestyle': '-',
             'color': cmap(2),
             'zorder': 4,
+        },
+    },
+
+    'pred_hybrid2': {
+        'data': np.nan_to_num(z_hybrid2),
+        'time': [],
+        'plotkwargs': {
+            'label': 'ESNc prediction T1',
+            'linestyle': '--',
+            'color': cmap(6),
+            'zorder': 0,
+        },
+    },
+
+    'pred_hybrid3': {
+        'data': np.nan_to_num(z_hybrid3),
+        'time': [],
+        'plotkwargs': {
+            'label': 'ESNc prediction T0.1',
+            'linestyle': ':',
+            'color': cmap(7),
+            'zorder': 0,
         },
     },
 

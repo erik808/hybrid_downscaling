@@ -18,7 +18,7 @@ K.clear_session()
 keras.utils.set_random_seed(123)
 
 if len(sys.argv) < 2:
-    experiment_id = 'predictor_ESNcN10e3R1A1T5_exception'
+    experiment_id = 'predictor_ESNcN10e3R1A1T1_6mpred'
 else:
     experiment_id = sys.argv[1]
 

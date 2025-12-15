@@ -28,11 +28,11 @@ predictor = 'ESNc'
 
 
 esn_dmd_pars = {
-    'Nr': 10000,
+    'Nr': 15000,
     'rhoMax': 1,
     'entriesPerRow': 3,
     'alpha': 1.0,
-    'tikhonov_lambda': 5,
+    'tikhonov_lambda': 0.5,
     'fCutoff': 0.0,
     'squaredStates': 'even',
 }

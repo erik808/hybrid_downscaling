@@ -180,11 +180,11 @@ class ComputeTool():
                 S[i,] = mult * np.abs(H[i,])**2 / Npad
 
         elif method == 'welch':
-            nperseg = data_detrend.shape[0] / 8.
+
             f, S = scipy.signal.welch(
                 data_detrend,
                 axis=0,
-                # nperseg=nperseg,
+                # nperseg=,
                 scaling='density',
             )
 

@@ -59,9 +59,10 @@ class DMD(keras.callbacks.Callback):
 
         # create data matrix
         pb_i = keras.utils.Progbar(num_batches, interval=0.5)
-        x_enc_mat = []
-        S_mat = []
-        x_enc_LR_mat = []
+        x_enc_lst = []
+        S_lst = []
+        Y_lst = []
+        x_enc_LR_lst = []
         print('create data for ESN/DMD using available encoder')
         for b in range(num_batches):
             pb_i.add(1)
@@ -76,10 +77,11 @@ class DMD(keras.callbacks.Callback):
                 training=False
             )[0].cpu().detach().numpy()  # take only the mean
 
-            x_enc_mat += [x_enc]
-            x_enc_LR_mat += [ops.squeeze(batch_x['LR_data'][:, 1, ...])
+            x_enc_lst += [x_enc]
+            x_enc_LR_lst += [ops.squeeze(batch_x['LR_data'][:, 1,])
                              .cpu().detach().numpy()]
-            S_mat += [batch_x['hidden']]
+            S_lst += [batch_x['hidden']]
+            Y_lst += [batch_x['HR_data'][:, 0, ]]
 
         # decrease batch size again
         self.dgen.batch_size = batch_size
@@ -88,19 +90,24 @@ class DMD(keras.callbacks.Callback):
         if self.dgen.shuffle:
             np.random.shuffle(self.dgen.indices)
 
-        X = np.concatenate(x_enc_mat, 0)
-        X_LR = np.concatenate(x_enc_LR_mat, 0)
-        S = np.concatenate(S_mat, 0)
+        X = np.concatenate(x_enc_lst, 0)
+        X_LR = np.concatenate(x_enc_LR_lst, 0)
+        S = np.concatenate(S_lst, 0)
+        Y = np.concatenate(Y_lst, 0)
 
-        return X, X_LR, S
+        return X, X_LR, S, Y
 
     def test_esn_dmd(self, epoch, logs=None):
-        X, X_LR, S = self.create_esn_dmd_data()
+        X, X_LR, S, Y = self.create_esn_dmd_data()
         sk = np.expand_dims(S[0,], 0)
         xk = np.expand_dims(X[0,], 0)
         Z = np.zeros_like(X)
         ZS = np.zeros_like(S)
+
+        # get predictor layer from model
         predictor_layer = self.get_predictor_layer()
+
+        # time stepping loop
         for i in range(self.dgen.n):
             xk_LR = np.expand_dims(X_LR[i,], 0)
             xk = np.expand_dims(xk, 0)
@@ -111,15 +118,46 @@ class DMD(keras.callbacks.Callback):
             Z[i, ] = xk
             ZS[i, ] = sk
 
+        breakpoint()
+        # decode to original grid
+        decoded, _ = self.model.decoder(Z)
+        plt.switch_backend('qtagg')
+        plt.close('all')
+        plt.figure(figsize=(10, 10))
+        plt.subplot(2, 2, 1)
+        tindex = 0
+        pred = decoded[tindex, :, :,
+                       0].cpu().detach().numpy()
+        truth = Y[tindex, :, :, 0]
+        err = np.abs(pred-truth)
+        print(np.nansum(err))
+        a = plt.pcolormesh(pred)
+        plt.colorbar(a)
+
+        plt.subplot(2, 2, 2)
+        a = plt.pcolormesh(truth)
+        plt.colorbar(a)
+
+        plt.subplot(2, 2, 3)
+        a = plt.pcolormesh(err)
+        plt.colorbar(a)
+
+        plt.subplot(2, 2, 4)
+        errLS = np.mean(np.abs(Z[tindex,:,:,:] - X[tindex+1,:,:,:]), -1)
+        print(np.sum(errLS))
+        a = plt.pcolormesh(errLS)
+        plt.colorbar(a)
+        plt.pause(1)
+
+
+        # analyse in latent space
         Z = (Z.reshape(Z.shape[0], -1)).T
         X = (X.reshape(X.shape[0], -1)).T
         ZS = (ZS.reshape(ZS.shape[0], -1)).T
         S = (S.reshape(S.shape[0], -1)).T
 
-        plt.switch_backend('qtagg')
 
         plt.figure(figsize=(10, 10))
-
         plt.subplot(3, 2, 1)
         a = plt.pcolormesh(Z)
         plt.colorbar(a)
@@ -134,6 +172,7 @@ class DMD(keras.callbacks.Callback):
         a = plt.pcolormesh(ZS)
         plt.colorbar(a)
         plt.title('ZS')
+        plt.pause(1)
 
         plt.subplot(3, 2, 4)
 
@@ -184,7 +223,7 @@ class DMD(keras.callbacks.Callback):
 
         predictor_layer = self.get_predictor_layer()
 
-        X, X_LR, _ = self.create_esn_dmd_data()
+        X, X_LR, _, _ = self.create_esn_dmd_data()
         X = (X.reshape(X.shape[0], -1)).T
         X_LR = (X_LR.reshape(X_LR.shape[0], -1)).T
 

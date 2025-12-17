@@ -24,7 +24,7 @@ else:
 
 dmgr_cmems = \
     data_manager_cmems.DataManagerCMEMS(experiment_id=experiment_id,
-                                        testing=False,
+                                        testing=True,
                                         force_rebuild=False,
                                         )
 
@@ -84,7 +84,7 @@ hist = predictor.fit(
     validation_data=dgen_test,
     callbacks=[
         dmd_train,
-        # dmd_test,
+        dmd_test,
         analysis_callback,
         # model_checkpoint_callback,
     ]

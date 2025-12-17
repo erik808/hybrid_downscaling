@@ -27,6 +27,8 @@ class DMD(keras.callbacks.Callback):
     ):
         super().__init__(**kwargs)
         self.dgen = data_gen
+        self.plot_machine = \
+            plot_utils.PlotMachine(dm=self.dgen.dm)
 
     def get_predictor_layer(self):
         predictor_layer = self.model\
@@ -108,7 +110,10 @@ class DMD(keras.callbacks.Callback):
         predictor_layer = self.get_predictor_layer()
 
         # time stepping loop
+        print('\ntimestepping')
+        pb_i = keras.utils.Progbar(self.dgen.n, interval=0.5)        
         for i in range(self.dgen.n):
+            pb_i.add(1)
             xk_LR = np.expand_dims(X_LR[i,], 0)
             xk = np.expand_dims(xk, 0)
             xk, sk = predictor_layer(xk, sk, xk_LR)
@@ -118,105 +123,20 @@ class DMD(keras.callbacks.Callback):
             Z[i, ] = xk
             ZS[i, ] = sk
 
-        breakpoint()
         # decode to original grid
         decoded, _ = self.model.decoder(Z)
-        plt.switch_backend('qtagg')
-        plt.close('all')
-        plt.figure(figsize=(10, 10))
-        plt.subplot(2, 2, 1)
-        tindex = 0
-        pred = decoded[tindex, :, :,
-                       0].cpu().detach().numpy()
-        truth = Y[tindex, :, :, 0]
-        err = np.abs(pred-truth)
-        print(np.nansum(err))
-        a = plt.pcolormesh(pred)
-        plt.colorbar(a)
 
-        plt.subplot(2, 2, 2)
-        a = plt.pcolormesh(truth)
-        plt.colorbar(a)
+        # save to results.dill
+        results_dir_base = self.plot_machine.dirs['results']
+        results_file = \
+            f'{results_dir_base}/results.dill'
 
-        plt.subplot(2, 2, 3)
-        a = plt.pcolormesh(err)
-        plt.colorbar(a)
-
-        plt.subplot(2, 2, 4)
-        errLS = np.mean(np.abs(Z[tindex,:,:,:] - X[tindex+1,:,:,:]), -1)
-        print(np.sum(errLS))
-        a = plt.pcolormesh(errLS)
-        plt.colorbar(a)
-        plt.pause(1)
-
-
-        # analyse in latent space
-        Z = (Z.reshape(Z.shape[0], -1)).T
-        X = (X.reshape(X.shape[0], -1)).T
-        ZS = (ZS.reshape(ZS.shape[0], -1)).T
-        S = (S.reshape(S.shape[0], -1)).T
-
-
-        plt.figure(figsize=(10, 10))
-        plt.subplot(3, 2, 1)
-        a = plt.pcolormesh(Z)
-        plt.colorbar(a)
-        plt.title('Z')
-
-        plt.subplot(3, 2, 2)
-        a = plt.pcolormesh(np.abs(Z - X))
-        plt.colorbar(a)
-        plt.title('|Z-X|')
-
-        plt.subplot(3, 2, 3)
-        a = plt.pcolormesh(ZS)
-        plt.colorbar(a)
-        plt.title('ZS')
-        plt.pause(1)
-
-        plt.subplot(3, 2, 4)
-
-        X_norms = np.linalg.norm(X, ord=2, axis=0)
-        plt.plot(
-            X_norms,
-            '.-',
-            label='||X||',
-        )
-        plt.plot(
-            np.linalg.norm(Z, ord=2, axis=0),
-            '.-',
-            label='||Z||',
-        )
-        plt.legend()
-
-        plt.subplot(3, 2, 5)
-        plt.plot(np.linalg.norm(ZS, ord=2, axis=0),
-                 'k.-',
-                 label='||ZS||',
-                 )
-        plt.legend()
-
-        plt.subplot(3, 2, 6)
-        err = np.linalg.norm((Z - X), ord=2, axis=0) / X_norms
-        err_mn = np.mean(err)
-        plt.plot(
-            err,
-            'k.-',
-            label='||Z-X||',
-        )
-        plt.title(f'mean normalized err: {err_mn}')
-        print(f'mean normalized err: {err_mn}')
-
-        plt.legend()
-        plt.tight_layout()
-        figname = (
-            f"{self.dgen.dm.dirs['results']}/"
-            f"ESN_DMD_testing_epoch_{epoch}.png"
-        )
-        plt.savefig(figname)
-        print(figname)
-
-        plt.pause(1)
+        print('writing to', results_file)
+        with open(results_file, 'wb') as file:
+            dill.dump(
+                {
+                    'results': decoded,
+                }, file)
 
     def train_esn_dmd(self, epoch, logs=None):
         np.random.seed(1)

@@ -23,8 +23,13 @@ dmgr_cmems = \
 
 
 def load_timeseries(fname):
+    x = []
+    y = []
+    z = []
+    t = []
     with open(fname, 'rb') as file:
         timeseries = dill.load(file)
+        breakpoint()
         results = timeseries['results']
         truths = timeseries['truths']
         x = np.concatenate([re['LR_data'][:, 0,] for re in results], 0)

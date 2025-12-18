@@ -23,19 +23,19 @@ dmgr_cmems = \
 
 
 def load_timeseries(fname):
-    x = []
-    y = []
-    z = []
-    t = []
+    x, y, z, t = [], [], [], []
     with open(fname, 'rb') as file:
         timeseries = dill.load(file)
-        breakpoint()
-        results = timeseries['results']
-        truths = timeseries['truths']
-        x = np.concatenate([re['LR_data'][:, 0,] for re in results], 0)
-        z = np.concatenate([re['HR_data'][:, 0,] for re in results], 0)
-        y = np.concatenate([tr['HR_data'][:, 0,] for tr in truths], 0)
-        t = np.array([np.datetime64(re['time']) for re in results])
+        results = timeseries['results'] if 'results' in timeseries else []
+        truths = timeseries['truths'] if 'truths' in timeseries else []
+
+        if len(truths) == 0 and not isinstance(results, list):
+            z = results.cpu().detach().numpy()
+        else:
+            x = np.concatenate([re['LR_data'][:, 0,] for re in results], 0)
+            z = np.concatenate([re['HR_data'][:, 0,] for re in results], 0)
+            y = np.concatenate([tr['HR_data'][:, 0,] for tr in truths], 0)
+            t = np.array([np.datetime64(re['time']) for re in results])
 
     return x, y, z, t
 
@@ -50,36 +50,28 @@ plot_machine.set_results_dir(results_dir)
 #     ('experiment/predictor_ESNcNr10e3Tikh5_v2/results/'
 #      'timeseries.dill')
 
-timeseries_resnet = \
+timeseries_reference = \
     ('experiment/resnet_b6f64_bilin/results'
      '/results.dill')
 
+hybrid_base = 'experiment/predictor_ESNcN10e3R1A1T5_6mpred_v2/results/'
 timeseries_hybrid = \
-    ('experiment/predictor_ESNcN10e3R1A1T0.5_6mpred/results/'
+    (f'{hybrid_base}'
      'results.dill')
 
 timeseries_hybrid2 = \
-    ('experiment/predictor_ESNcN10e3R1A1T1_6mpred/results/'
-     'results.dill')
+    (f'{hybrid_base}'
+     'results_pureLS.dill')
 
-timeseries_hybrid3 = \
-    ('experiment/predictor_ESNcN10e3R1A1T0.1_6mpred/results/'
-     'results.dill')
-
-# timeseries_dmd = \
-#     ('experiment/predictor_DMDcTikh5/results'
-#      '/timeseries.dill')
-
-x, y, z_resnet, t = load_timeseries(timeseries_resnet)
+x, y, z_resnet, t = load_timeseries(timeseries_reference)
 _, _, z_hybrid, _ = load_timeseries(timeseries_hybrid)
 _, _, z_hybrid2, _ = load_timeseries(timeseries_hybrid2)
-_, _, z_hybrid3, _ = load_timeseries(timeseries_hybrid3)
-# _, _, z_dmd = load_timeseries(timeseries_dmd)
 
-scaler_list = ['LR', 'HR', 'HR', 'HR']
-x, y, z_resnet, z_hybrid = \
+scaler_list = ['LR', 'HR', 'HR', 'HR', 'HR']
+
+x, y, z_resnet, z_hybrid, z_hybrid2 = \
     [tools.unscale_var(d, dmgr_cmems.scalers[res])
-     for d, res in zip([x, y, z_resnet, z_hybrid], scaler_list)]
+     for d, res in zip([x, y, z_resnet, z_hybrid, z_hybrid2], scaler_list)]
 
 
 if x.shape != y.shape:
@@ -130,51 +122,32 @@ data = {
         'data': np.nan_to_num(z_hybrid),
         'time': [],
         'plotkwargs': {
-            'label': 'ESNc prediction T0.5',
+            'label': 'ESNc prediction',
             'linestyle': '-',
             'color': cmap(2),
             'zorder': 4,
         },
     },
-
     'pred_hybrid2': {
         'data': np.nan_to_num(z_hybrid2),
         'time': [],
         'plotkwargs': {
-            'label': 'ESNc prediction T1',
-            'linestyle': '--',
+            'label': 'ESNc prediction pureLS',
+            'linestyle': '-',
             'color': cmap(6),
-            'zorder': 0,
+            'zorder': 4,
         },
     },
 
-    'pred_hybrid3': {
-        'data': np.nan_to_num(z_hybrid3),
-        'time': [],
-        'plotkwargs': {
-            'label': 'ESNc prediction T0.1',
-            'linestyle': ':',
-            'color': cmap(7),
-            'zorder': 0,
-        },
-    },
-
-    # 'pred_dmd': {
-    #     'data': np.nan_to_num(z_dmd),
-    #     'time': [],
-    #     'plotkwargs': {
-    #         'label': 'DMDc prediction',
-    #         'linestyle': '-',
-    #         'color': cmap(3),
-    #         'zorder': 4,
-    #     },
-    # },
 }
 
-plt.switch_backend('qtagg')
-plot_machine.plot_spectrum(data,
-                           transect_name='along_flow',
-                           spectrum_type='energy',
-                           direction='temporal',
-                           add_powerlaws=False)
+plt.switch_backend('agg')
+
+for direction in ['temporal', 'spatial']:
+    for spectrum_type in ['energy', 'enstrophy', 'ssh']:
+        plot_machine.plot_spectrum(data,
+                                   transect_name='along_flow',
+                                   spectrum_type=spectrum_type,
+                                   direction=direction,
+                                   add_powerlaws=False)
 plt.pause(1)

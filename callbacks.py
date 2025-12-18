@@ -104,14 +104,13 @@ class DMD(keras.callbacks.Callback):
         sk = np.expand_dims(S[0,], 0)
         xk = np.expand_dims(X[0,], 0)
         Z = np.zeros_like(X)
-        ZS = np.zeros_like(S)
 
         # get predictor layer from model
         predictor_layer = self.get_predictor_layer()
 
         # time stepping loop
         print('\ntimestepping')
-        pb_i = keras.utils.Progbar(self.dgen.n, interval=0.5)        
+        pb_i = keras.utils.Progbar(self.dgen.n, interval=0.5)
         for i in range(self.dgen.n):
             pb_i.add(1)
             xk_LR = np.expand_dims(X_LR[i,], 0)
@@ -119,23 +118,57 @@ class DMD(keras.callbacks.Callback):
             xk, sk = predictor_layer(xk, sk, xk_LR)
             xk = xk.cpu().detach().numpy()
             sk = sk.cpu().detach().numpy()
-
             Z[i, ] = xk
-            ZS[i, ] = sk
 
         # decode to original grid
-        decoded, _ = self.model.decoder(Z)
+        D, _ = self.model.decoder(Z)
+
+        # sk = np.expand_dims(S[0,], 0)
+        # xk = np.expand_dims(X[0,], 0)
+        # Z = np.zeros_like(X)
+        # # time stepping loop
+        # print('\ntimestepping')
+        # pb_i = keras.utils.Progbar(self.dgen.n, interval=0.5)
+        # for i in range(self.dgen.n):
+        #     pb_i.add(1)
+        #     xk_LR = np.expand_dims(X_LR[i,], 0)
+        #     xk = np.expand_dims(xk, 0)
+        #     xk, sk = predictor_layer(xk, sk, xk_LR)
+
+        #     xk_dec, _ = self.model.decoder(xk)
+        #     xk = self.model.encoder(xk_dec)[0]
+
+        #     xk = xk.cpu().detach().numpy()
+        #     sk = sk.cpu().detach().numpy()
+        #     Z[i, ] = xk
+
+        # D2, _ = self.model.decoder(Z)
+        # D = D.cpu().detach().numpy()
+        # D2 = D2.cpu().detach().numpy()
+        # Y = np.nan_to_num(Y)
+        # Dnorms = np.linalg.norm(D.reshape(D.shape[0], -1), ord=2, axis=-1)
+        # Dnorms2 = np.linalg.norm(D2.reshape(D2.shape[0], -1), ord=2, axis=-1)
+        # Ynorms = np.linalg.norm(Y.reshape(Y.shape[0], -1), ord=2, axis=-1)
+
+        # plt.switch_backend('qtagg')
+        # plt.figure()
+        # plt.plot(Ynorms[:1000], label='truth')
+        # plt.plot(Dnorms[:1000], label='D')
+        # plt.plot(Dnorms2[:1000], label='D2')
+        # plt.legend()
+        # plt.pause(1)
+        # breakpoint()
 
         # save to results.dill
         results_dir_base = self.plot_machine.dirs['results']
         results_file = \
-            f'{results_dir_base}/results.dill'
+            f'{results_dir_base}/results_pureLS.dill'
 
         print('writing to', results_file)
         with open(results_file, 'wb') as file:
             dill.dump(
                 {
-                    'results': decoded,
+                    'results': D,
                 }, file)
 
     def train_esn_dmd(self, epoch, logs=None):
@@ -238,9 +271,7 @@ class DMD(keras.callbacks.Callback):
             self.train_esn_dmd(epoch, logs)
         elif self.dgen.mode == 'test':
             self.test_esn_dmd(epoch, logs)
-
-        # this should be made optional
-        self.model.stop_training = True
+            self.model.stop_training = True
 
     def on_epoch_end(self, epoch, logs=None):
         return None
@@ -254,10 +285,12 @@ class AnalysisBase(keras.callbacks.Callback, ABC):
                 'reconstruction',
                 'spectra',
             ],
+            run_when='epoch_end',
             **kwargs,
     ):
         super().__init__(**kwargs)
         self.dgen = data_gen
+        self.run_when = run_when
 
         self.plot_instructions = plot
         self.reconstruction = 'reconstruction' in self.plot_instructions
@@ -305,22 +338,19 @@ class AnalysisBase(keras.callbacks.Callback, ABC):
             self.cfg_printed = \
                 tools.print_configuration(self.dgen, self.model)
         self.construct_mask()
-        self.plot_machine.create_postfix()
-        self.plot_machine.create_results_dir(epoch)
-        self.update_history(logs)
-        plt.close('all')
-        self.timestepping(
-            epoch,
-            logs,
-            spectra=self.spectra,
-            reconstruction=self.reconstruction,
-        )
 
-        raise Exception('doei')
+        if self.run_when == 'epoch_begin':
+            self.run_analysis(epoch, logs)
+            self.model.stop_training = True
 
         return None
 
     def on_epoch_end(self, epoch, logs=None):
+        if self.run_when == 'epoch_end':
+            self.run_analysis(epoch, logs)
+        return None
+
+    def run_analysis(self, epoch, logs):
         self.plot_machine.create_postfix()
         self.plot_machine.create_results_dir(epoch)
         self.update_history(logs)
@@ -331,7 +361,6 @@ class AnalysisBase(keras.callbacks.Callback, ABC):
             spectra=self.spectra,
             reconstruction=self.reconstruction,
         )
-        return None
 
     def update_history(self, logs):
         for key, value in logs.items():

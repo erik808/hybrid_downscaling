@@ -18,7 +18,7 @@ K.clear_session()
 keras.utils.set_random_seed(123)
 
 if len(sys.argv) < 2:
-    experiment_id = 'predictor_ESNcN10e3R0.95A1T0.5_6mpred'
+    experiment_id = 'predictor_ESNcN10e3R1A1T0.5_6mpred'
 else:
     experiment_id = sys.argv[1]
 
@@ -59,12 +59,14 @@ predictor.build_model("predictor")
 predictor.summary(line_length=80)
 predictor.compile(predictor.compiler)
 
-analysis_callback = callbacks.AnalysisPredictor(data_gen=dgen_test,
-                                                plot=[
-                                                    'reconstruction',
-                                                    'spectra',
-                                                ]
-                                                )
+analysis_callback = callbacks.AnalysisPredictor(
+    data_gen=dgen_test,
+    plot=[
+        'reconstruction',
+        'spectra',
+    ],
+    run_when='epoch_begin',
+)
 
 dmd_train = callbacks.DMD(data_gen=dgen_train)
 dmd_test = callbacks.DMD(data_gen=dgen_test)
@@ -85,7 +87,7 @@ hist = predictor.fit(
     callbacks=[
         dmd_train,
         dmd_test,
-        # analysis_callback,
+        analysis_callback,
         # model_checkpoint_callback,
     ]
 )

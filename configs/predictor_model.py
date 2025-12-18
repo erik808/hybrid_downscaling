@@ -32,7 +32,7 @@ esn_dmd_pars = {
     'rhoMax': 1.0,
     'entriesPerRow': 3,
     'alpha': 1.0,
-    'tikhonov_lambda': 0.5,
+    'tikhonov_lambda': 2,
     'fCutoff': 0.0,
     'squaredStates': 'even',
 }

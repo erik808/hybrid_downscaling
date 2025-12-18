@@ -7,8 +7,8 @@ time_range = slice('2023-01-01', '2025-07-01')
 
 # short range for integration tests
 # time_range_testing = slice('2023-09-01', '2023-12-31')
-time_range_testing = slice('2023-06-01', '2023-12-01')
 time_range_testing = slice('2023-09-01', '2023-09-05')
+time_range_testing = slice('2023-06-01', '2023-12-01')
 
 # tmp
 # split_factor = 24 / 25

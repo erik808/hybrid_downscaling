@@ -362,7 +362,7 @@ class PlotMachine():
             ls = np.concatenate([r['ls_pred'] for r in results], 0)
         else:
             ls = []
-            
+
         if len(ls) > 0:
             ls = np.reshape(ls, (ls.shape[0], -1))
             ls = ls.transpose()
@@ -390,6 +390,7 @@ class PlotMachine():
                       spectrum_type='energy',
                       direction='spatial',
                       add_powerlaws=False,
+                      detide=False,
                       ):
         k = {}
         S = {}
@@ -401,7 +402,8 @@ class PlotMachine():
                     value['time'],
                     transect_name=transect_name,
                     spectrum_type=spectrum_type,
-                    direction=direction)
+                    direction=direction,
+                    detide=detide)
 
         # compute mean
         S_mn = {key: np.mean(value, axis=-1) for key, value in S.items()}

@@ -54,25 +54,34 @@ timeseries_reference = \
     ('experiment/resnet_b6f64_bilin/results'
      '/results.dill')
 
-hybrid_base = 'experiment/predictor_ESNcN10e3R1A1T5_6mpred_v2/results/'
-timeseries_hybrid = \
-    (f'{hybrid_base}'
-     'results.dill')
+hybrid_bases = [
+    'experiment/predictor_ESNcT5e-3_6mpred_ks6000/results/',
+    # 'experiment/predictor_ESNcT1e-2_6mpred_ks5000/results/',
+    'experiment/predictor_ESNcT1e-2_6mpred_ks6000/results',
+    'experiment/predictor_ESNcT5e-2_6mpred_ks6000/results',
+    # 'experiment/predictor_ESNcT5e-3_6mpred_ks6000/results/'
+]
 
-timeseries_hybrid2 = \
-    (f'{hybrid_base}'
-     'results_pureLS.dill')
+timeseries_hybrid = \
+    [(f'{hybrid_base}/results.dill') for hybrid_base in hybrid_bases]
+
+plt.close('all')
 
 x, y, z_resnet, t = load_timeseries(timeseries_reference)
-_, _, z_hybrid, _ = load_timeseries(timeseries_hybrid)
-_, _, z_hybrid2, _ = load_timeseries(timeseries_hybrid2)
+z_hybrid = [load_timeseries(ts)[2] for ts in timeseries_hybrid]
 
-scaler_list = ['LR', 'HR', 'HR', 'HR', 'HR']
+scaler_list = ['LR', *('HR ' * (len(z_hybrid)+2)).split(' ')[:-1]]
 
-x, y, z_resnet, z_hybrid, z_hybrid2 = \
+# x, y, z_resnet, z_hybrid
+fields = [x, y, z_resnet, *z_hybrid]
+out = \
     [tools.unscale_var(d, dmgr_cmems.scalers[res])
-     for d, res in zip([x, y, z_resnet, z_hybrid, z_hybrid2], scaler_list)]
+     for d, res in zip(fields, scaler_list)]
 
+x = out[0]
+y = out[1]
+z_resnet = out[2]
+z_hybrid = out[3:]
 
 if x.shape != y.shape:
     # upsample unscaled x (bilinear interpolation)
@@ -81,13 +90,11 @@ if x.shape != y.shape:
         .bilin_upsampler(x)\
         .transpose((0, 2, 3, 1))
 
-plt.close('all')
-
 cmap = plt.get_cmap('tab10')
 data = {
     'truth': {
         'data': np.nan_to_num(y),
-        'time': [],
+        'time': t,
         'plotkwargs': {
             'label': 'high-resolution truth',
             'linestyle': '-',
@@ -109,7 +116,7 @@ data = {
 
     'pred_resnet': {
         'data': np.nan_to_num(z_resnet),
-        'time': [],
+        'time': t,
         'plotkwargs': {
             'label': 'SRResNet prediction',
             'linestyle': '-',
@@ -119,8 +126,8 @@ data = {
     },
 
     'pred_hybrid': {
-        'data': np.nan_to_num(z_hybrid),
-        'time': [],
+        'data': np.nan_to_num(z_hybrid[0]),
+        'time': t,
         'plotkwargs': {
             'label': 'ESNc prediction',
             'linestyle': '-',
@@ -129,19 +136,28 @@ data = {
         },
     },
     'pred_hybrid2': {
-        'data': np.nan_to_num(z_hybrid2),
-        'time': [],
+        'data': np.nan_to_num(z_hybrid[1]),
+        'time': t,
         'plotkwargs': {
-            'label': 'ESNc prediction pureLS',
+            'label': 'ESNc prediction',
             'linestyle': '-',
             'color': cmap(6),
             'zorder': 4,
         },
     },
-
+    'pred_hybrid3': {
+        'data': np.nan_to_num(z_hybrid[2]),
+        'time': t,
+        'plotkwargs': {
+            'label': 'ESNc prediction',
+            'linestyle': '-',
+            'color': cmap(8),
+            'zorder': 4,
+        },
+    },
 }
 
-plt.switch_backend('agg')
+plt.switch_backend('qtagg')
 
 for direction in ['temporal', 'spatial']:
     for spectrum_type in ['energy', 'enstrophy', 'ssh']:
@@ -149,5 +165,6 @@ for direction in ['temporal', 'spatial']:
                                    transect_name='along_flow',
                                    spectrum_type=spectrum_type,
                                    direction=direction,
-                                   add_powerlaws=False)
+                                   add_powerlaws=False,
+                                   detide=True)
 plt.pause(1)

@@ -4,6 +4,7 @@ import tools
 import scipy
 import matplotlib.pyplot as plt
 import dill
+import pytide
 
 from transectpicker.transectpicker import TransectPicker
 
@@ -61,23 +62,49 @@ class ComputeTool():
                                         **transect)
 
     def detide(self, data, time):
-        import pytide
+        # works well for ssh
+        # Doodson filter might be cheaper and more general
+        
         wt = pytide.WaveTable(["M2", "S2", "N2", "K1",
                                "O1", "Q1", "M4",
                                "K2", "P1", "Mf", "Mm"])
 
-        dates = time.values
-        f, vu = wt.compute_nodal_modulations(dates)
-        breakpoint()
+       breakpoint()
+        wt = pytide.WaveTable(["M2", "S2", "N2", "K1"])
+        
+        wt = pytide.WaveTable()
+
+
+        f, vu = wt.compute_nodal_modulations(time)
+        point_evol = data[:, 4, 0]
+
+        # test this, needs std input or csv
+        # import tstoolbox
+        # tdf = tstoolbox.filter(["tide_doodson"], "lowpass")
+        
+        point_evol = scipy.signal.detrend(point_evol, axis=0)
+        waves = wt.harmonic_analysis(point_evol, f, vu)
+        point_tide = wt.tide_from_tide_series(time, waves)
+        point_detide = point_evol - point_tide
+
+
+        
+        plt.figure()
+        plt.plot(point_evol[:100])
+        plt.plot(point_tide[:100])
+        plt.plot(point_detide[:100])
+        plt.pause(1)
+        
+
 
     def hovmöller_along_transect(
             self,
             data,
             time,
             scaler=None,
-            detide=False,
             transect_name='along_flow',
             spectrum_type='energy',
+            detide=False,
     ):
         self.get_regridder(transect_name)
 
@@ -104,6 +131,7 @@ class ComputeTool():
             transect_name='along_flow',
             spectrum_type='energy',
             direction='spatial',
+            detide=False
     ):
 
         transect_data = self.hovmöller_along_transect(
@@ -112,6 +140,7 @@ class ComputeTool():
             scaler=scaler,
             transect_name=transect_name,
             spectrum_type=spectrum_type,
+            detide=detide,
         )
 
         k, S = self.compute_spectrum(

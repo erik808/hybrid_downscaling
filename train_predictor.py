@@ -18,7 +18,7 @@ K.clear_session()
 keras.utils.set_random_seed(123)
 
 if len(sys.argv) < 2:
-    experiment_id = 'predictor_ESNcN10e3R1A1T0.5_6mpred'
+    experiment_id = 'predictor_ESNcN10e3R1A1T0.01_6mpred_ig0.7'
 else:
     experiment_id = sys.argv[1]
 
@@ -49,7 +49,9 @@ vae.summary(line_length=80)
 
 # load existing weights
 vae_checkpoint = \
-    'models/vae/l4k3f64-128spatial/checkpoint.vae.keras'
+    'models/vae/l4k3f64-128spatial_bilin_2y/checkpoint.vae.keras'
+# vae_checkpoint = \
+#     'models/vae/l4k3f64-128spatial/checkpoint.vae.keras'
 vae.load_weights(vae_checkpoint)
 
 predictor = predictor_model.Predictor(data_gen=dgen_train,
@@ -86,7 +88,7 @@ hist = predictor.fit(
     validation_data=dgen_test,
     callbacks=[
         dmd_train,
-        dmd_test,
+        # dmd_test,
         analysis_callback,
         # model_checkpoint_callback,
     ]

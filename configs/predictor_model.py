@@ -8,7 +8,7 @@ learning_rate = 1e-4
 
 # select losses to include: 'outer_pred', 'inner_pred',
 # 'reconstruction', 'KL', 'ls_size'
-loss_list = ['outer_pred'] # , 'inner_pred', 'ls_size', 'reconstruction']
+loss_list = ['outer_pred']  # , 'inner_pred', 'ls_size', 'reconstruction']
 
 alpha_outer = 1.0
 alpha_inner = 1.0
@@ -32,9 +32,10 @@ esn_dmd_pars = {
     'rhoMax': 1.0,
     'entriesPerRow': 3,
     'alpha': 1.0,
-    'tikhonov_lambda': 2,
+    'tikhonov_lambda': 5e-2,
     'fCutoff': 0.0,
     'squaredStates': 'even',
+    'keep_samples': 6000,
 }
 
 esn_dmd_bias = False,

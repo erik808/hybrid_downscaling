@@ -55,7 +55,7 @@ resnet = resnet_model.ResNet(data_gen=dgen_train)
 resnet.build_model("ResNet")
 resnet.summary(expand_nested=True)
 resnet_checkpoint = \
-    'models/resnet/b6f64o0/checkpoint.resnet.keras'
+    'models/resnet/b6f64_bilin_2y/checkpoint.resnet.keras'
 resnet.load_weights(resnet_checkpoint, skip_mismatch=True)
 
 vae = vae_model.VAE(data_gen=dgen_train)
@@ -63,7 +63,7 @@ vae.build_model("betaVAE")
 vae.summary(expand_nested=True)
 
 vae_checkpoint = \
-    'models/vae/l4k3f64-128spatial/checkpoint.vae.keras'
+    'models/vae/l4k3f64-128spatial_bilin_2y/checkpoint.vae.keras'
 vae.load_weights(vae_checkpoint)
 
 predictor = predictor_model.Predictor(data_gen=dgen_train,
@@ -80,7 +80,6 @@ hybrid.build_model("hybrid")
 hybrid.compile(hybrid.compiler)
 hybrid.summary(expand_nested=False)
 
-
 analysis_callback = callbacks.AnalysisHybrid(
     data_gen=dgen_test,
     plot=[
@@ -93,7 +92,7 @@ dmd_train = callbacks.DMD(data_gen=dgen_train)
 
 hist = hybrid.fit(
     x=dgen_train,
-    epochs=1,
+    epochs=10,
     shuffle=False,
     validation_data=dgen_test,
     callbacks=[

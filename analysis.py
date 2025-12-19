@@ -165,6 +165,6 @@ for direction in ['temporal', 'spatial']:
                                    transect_name='along_flow',
                                    spectrum_type=spectrum_type,
                                    direction=direction,
-                                   add_powerlaws=False,
-                                   detide=True)
+                                   add_powerlaws=False)
+                                   
 plt.pause(1)

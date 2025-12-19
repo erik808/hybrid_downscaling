@@ -4,7 +4,6 @@ import tools
 import scipy
 import matplotlib.pyplot as plt
 import dill
-import pytide
 
 from transectpicker.transectpicker import TransectPicker
 
@@ -61,41 +60,62 @@ class ComputeTool():
                                         resolution=resolution,
                                         **transect)
 
-    def detide(self, data, time):
-        # works well for ssh
+    def doodson_filter(self, data):
+        kernel = np.array([
+            1, 0, 1, 0,
+            0, 1, 0, 1,
+            1, 0, 2, 0,
+            1, 1, 0, 2,
+            1, 1, 2, 0,
+            2, 1, 1, 2,
+            0, 1, 1, 0,
+            2, 0, 1, 1,
+            0, 1, 0, 0,
+            1, 0, 1,
+        ])
+        kernel = kernel / 30
+
+        for i in range(data.ndim-1):
+            kernel = np.expand_dims(kernel, -1)
+
+        return scipy.signal.fftconvolve(data,
+                                        kernel,
+                                        mode='valid',
+                                        axes=0)
+
+    def lanczos_filter(self, data):
+
+        def lanczos_weights(window_len=121,
+                            cutoff_period=40.0,
+                            dt=1.0):
+            half_len = (window_len - 1) // 2
+            n = np.arange(-half_len, half_len + 1)
+
+            # Fundamental frequency calculation
+            f_c = (1.0 / cutoff_period) * dt
+
+            with np.errstate(divide='ignore', invalid='ignore'):
+                weights = np.sinc(2 * f_c * n) * np.sinc(n / half_len)
+                weights[half_len] = 2 * f_c  # Correct central weight
+
+            return weights / np.sum(weights)
+
+        kernel = lanczos_weights()
+
+        for i in range(data.ndim-1):
+            kernel = np.expand_dims(kernel, -1)
+
+        return scipy.signal.fftconvolve(data,
+                                        kernel,
+                                        mode='same',
+                                        axes=0)
+
+    def detide(self, data):
         # Doodson filter might be cheaper and more general
-        
-        wt = pytide.WaveTable(["M2", "S2", "N2", "K1",
-                               "O1", "Q1", "M4",
-                               "K2", "P1", "Mf", "Mm"])
+        data_detrend = scipy.signal.detrend(data, axis=0)
+        data_detide = self.doodson_filter(data_detrend)
 
-       breakpoint()
-        wt = pytide.WaveTable(["M2", "S2", "N2", "K1"])
-        
-        wt = pytide.WaveTable()
-
-
-        f, vu = wt.compute_nodal_modulations(time)
-        point_evol = data[:, 4, 0]
-
-        # test this, needs std input or csv
-        # import tstoolbox
-        # tdf = tstoolbox.filter(["tide_doodson"], "lowpass")
-        
-        point_evol = scipy.signal.detrend(point_evol, axis=0)
-        waves = wt.harmonic_analysis(point_evol, f, vu)
-        point_tide = wt.tide_from_tide_series(time, waves)
-        point_detide = point_evol - point_tide
-
-
-        
-        plt.figure()
-        plt.plot(point_evol[:100])
-        plt.plot(point_tide[:100])
-        plt.plot(point_detide[:100])
-        plt.pause(1)
-        
-
+        return data_detide
 
     def hovmöller_along_transect(
             self,
@@ -120,7 +140,8 @@ class ComputeTool():
             transect_data = self.do_regridding(ssh)
 
         if detide:
-            transect_data = self.detide(transect_data, time)
+            transect_data = self.detide(transect_data)
+
         return transect_data
 
     def compute_spectrum_along_transect(
@@ -184,6 +205,8 @@ class ComputeTool():
 
         # detrend along specdim
         data_detrend = scipy.signal.detrend(data, axis=0)
+        # detrend along the other dim as well
+        data_detrend = scipy.signal.detrend(data_detrend, axis=1)
 
         if method == 'fft':  # pad data for fft
             dshape = data_detrend.shape

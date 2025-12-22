@@ -139,10 +139,49 @@ class ComputeTool():
             ssh = self.get_ssh(data, scaler)
             transect_data = self.do_regridding(ssh)
 
+        elif spectrum_type == 'TKE':
+            transect_data = self.invert_and_regrid(data, scaler)
+
+            window = \
+                self.get_window_view(transect_data[..., :2],
+                                     self.dm.window_size)
+
+            # MKE = <u>**2 + <v>**2
+            MKE = np.sum(window[:, :, :2,].mean(axis=-1)**2, axis=-1)
+
+            # means of squared velocities: UV2 = <u**2> + <v**2>
+            UV2 = np.sum((window[:, :, :2,]**2).mean(axis=-1), axis=-1)
+
+            # TKE = <u**2> - <u>**2 + <v**2> - <v>**2
+            TKE = UV2 - MKE
+
+            transect_data = TKE
+
+        elif spectrum_type == 'MKE':
+            transect_data = self.invert_and_regrid(data, scaler)
+
+            window = \
+                self.get_window_view(transect_data[..., :2],
+                                     self.dm.window_size)
+
+            # MKE = <u>**2 + <v>**2
+            MKE = np.sum(window[:, :, :2,].mean(axis=-1)**2, axis=-1)
+            transect_data = MKE
+
         if detide:
             transect_data = self.detide(transect_data)
 
         return transect_data
+
+    def get_window_view(self, data, wsize):
+        window_view = \
+            np.lib.stride_tricks.sliding_window_view(
+                data,
+                wsize,
+                axis=0,
+            )
+
+        return window_view
 
     def compute_spectrum_along_transect(
             self,
@@ -166,7 +205,6 @@ class ComputeTool():
 
         k, S = self.compute_spectrum(
             transect_data,
-            spectrum_type=spectrum_type,
             direction=direction,
         )
 
@@ -191,7 +229,6 @@ class ComputeTool():
     def compute_spectrum(
             self,
             data,
-            spectrum_type,
             direction='spatial',
             method='welch',
     ):
@@ -207,7 +244,6 @@ class ComputeTool():
         data_detrend = scipy.signal.detrend(data, axis=0)
         # detrend along the other dim as well
         data_detrend = scipy.signal.detrend(data_detrend, axis=1)
-
         if method == 'fft':  # pad data for fft
             dshape = data_detrend.shape
             N = dshape[0]
@@ -221,12 +257,11 @@ class ComputeTool():
             )
 
             Npad = data_padded.shape[0]
+            newshape = (Npad // 2 + 1, *dshape[1:])
+            f = np.linspace(0.0, 0.5, newshape[0])
             H = np.fft.fft(data_padded, axis=0)
 
-            newshape = (Npad // 2 + 1, *dshape[1:])
             S = np.zeros(newshape)
-            f = np.linspace(0.0, 0.5, newshape[0])
-
             for i in range(1, len(f)):
                 mult = 1 if i == 0 or i == (Npad // 2) else 2
                 S[i,] = mult * np.abs(H[i,])**2 / Npad
@@ -236,12 +271,18 @@ class ComputeTool():
             f, S = scipy.signal.welch(
                 data_detrend,
                 axis=0,
-                # nperseg=,
                 scaling='density',
             )
 
-        if spectrum_type == 'energy':
+        if S.ndim == 3:
             S = np.sum(S, axis=-1)
+
+        dd = (np.sum(data_detrend**2, axis=-1))
+        fdd, Sdd = scipy.signal.welch(
+            dd,
+            axis=0,
+            scaling='density',
+        )
         return f, S
 
     def do_regridding(self, field):

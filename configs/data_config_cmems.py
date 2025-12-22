@@ -59,3 +59,7 @@ scaling_type = 'minmax'
 scalers_file =  \
     (f'{data_dir}/scalers_{time_range.start}_{time_range.stop}_'
      f'{coarse_data_prefix}_{scaling_type}.dill')
+
+
+# analysis parameters
+window_size = 10 * 24

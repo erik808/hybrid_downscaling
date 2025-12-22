@@ -129,7 +129,7 @@ data = {
         'data': np.nan_to_num(z_hybrid[0]),
         'time': t,
         'plotkwargs': {
-            'label': 'ESNc prediction',
+            'label': 'ESNc prediction $\lambda=0.005$',
             'linestyle': '-',
             'color': cmap(2),
             'zorder': 4,
@@ -139,32 +139,31 @@ data = {
         'data': np.nan_to_num(z_hybrid[1]),
         'time': t,
         'plotkwargs': {
-            'label': 'ESNc prediction',
+            'label': 'ESNc prediction $\lambda=0.01$',
             'linestyle': '-',
             'color': cmap(6),
             'zorder': 4,
         },
     },
-    'pred_hybrid3': {
-        'data': np.nan_to_num(z_hybrid[2]),
-        'time': t,
-        'plotkwargs': {
-            'label': 'ESNc prediction',
-            'linestyle': '-',
-            'color': cmap(8),
-            'zorder': 4,
-        },
-    },
+    # 'pred_hybrid3': {
+    #     'data': np.nan_to_num(z_hybrid[2]),
+    #     'time': t,
+    #     'plotkwargs': {
+    #         'label': 'ESNc prediction',
+    #         'linestyle': '-',
+    #         'color': cmap(8),
+    #         'zorder': 4,
+    #     },
+    # },
 }
 
 plt.switch_backend('qtagg')
 
-for direction in ['temporal', 'spatial']:
-    for spectrum_type in ['energy', 'enstrophy', 'ssh']:
-        plot_machine.plot_spectrum(data,
-                                   transect_name='along_flow',
-                                   spectrum_type=spectrum_type,
-                                   direction=direction,
-                                   add_powerlaws=False)
-                                   
-plt.pause(1)
+for spectrum_type in ['TKE', 'MKE', 'energy', 'enstrophy']:  # , 'energy', 'enstrophy', 'ssh']:
+    for direction in ['temporal']:
+        S, T = plot_machine.plot_spectrum(data,
+                                          transect_name='along_flow',
+                                          spectrum_type=spectrum_type,
+                                          direction=direction,
+                                          add_powerlaws=False)
+        plt.pause(.1)

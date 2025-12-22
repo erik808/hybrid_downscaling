@@ -72,26 +72,18 @@ class PlotMachine():
         plt.savefig(fig_name, bbox_inches='tight')
 
     def plot_hovmöller(self, T, plot_type, transect):
-        plt.close('all')
+        # plt.close('all')
         if plot_type == 'energy':
             for key, value in T.items():
                 # take only first 2 variables uo, vo
                 T[key] = 0.5 * np.sum(np.square(value[..., :2]), axis=2)
 
-        T['absdiff'] = np.abs(T['truth'] - T['pred'])
-
         plt.figure(figsize=(8, 10))
-        long_names = {'truth': 'truth',
-                      'pred': 'prediction',
-                      'absdiff': '|truth - prediction|',
-                      'lowres': 'bilinear'}
-
-        ordering = ['truth', 'pred', 'absdiff', 'lowres']
-        for i, key in enumerate(ordering):
+        for i, key in enumerate(T.keys()):
             plt.subplot(len(T.values()), 1, i + 1)
             a = plt.pcolormesh(T[key].transpose())
             plt.colorbar(a)
-            plt.gca().set_title(long_names[key])
+            plt.gca().set_title(key)
 
         plt.suptitle(f'Hovmöller diagrams: {plot_type}, {transect}')
         fig_name = (f'{self.results_dir}/Hovmöller_'
@@ -424,7 +416,7 @@ class PlotMachine():
 
         if spectrum_type == 'energy':
             tstring = \
-                (f'Mean eddy kinetic energy spectrum,'
+                (f'Mean kinetic energy spectrum,'
                  f' {transect_name}, {direction}')
             fig_name = \
                 (f'{self.results_dir}/'
@@ -433,7 +425,7 @@ class PlotMachine():
                  )
         elif spectrum_type == 'enstrophy':
             tstring = \
-                (f'Mean eddy enstrophy spectrum,'
+                (f'Mean enstrophy spectrum,'
                  f' {transect_name} {direction}')
             fig_name = \
                 (f'{self.results_dir}/'
@@ -448,6 +440,24 @@ class PlotMachine():
                 (f'{self.results_dir}/'
                  f'ssh_spectrum_'
                  f'{transect_name}_{direction}.png')
+        elif spectrum_type == 'TKE':
+            tstring = \
+                (f'TKE spectrum,'
+                 f' {transect_name} {direction}')
+            fig_name = \
+                (f'{self.results_dir}/'
+                 f'TKE_spectrum_'
+                 f'{transect_name}_{direction}.png')
+        elif spectrum_type == 'MKE':
+            tstring = \
+                (f'MKE spectrum,'
+                 f' {transect_name} {direction}')
+            fig_name = \
+                (f'{self.results_dir}/'
+                 f'MKE_spectrum_'
+                 f'{transect_name}_{direction}.png')
+        else:
+            raise Exception('unknown spectrum type')
 
         # plt.gca().set_ylim([1e-8, 1e2])
         plt.gca().set_title(tstring)

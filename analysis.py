@@ -159,11 +159,80 @@ data = {
 
 plt.switch_backend('qtagg')
 
-for spectrum_type in ['TKE', 'MKE', 'energy', 'enstrophy']:  # , 'energy', 'enstrophy', 'ssh']:
-    for direction in ['temporal']:
-        S, T = plot_machine.plot_spectrum(data,
-                                          transect_name='along_flow',
-                                          spectrum_type=spectrum_type,
-                                          direction=direction,
-                                          add_powerlaws=False)
-        plt.pause(.1)
+# for spectrum_type in ['energy', 'enstrophy']:
+#     for direction in ['temporal']:
+#         S, T = plot_machine.plot_spectrum(data,
+#                                           transect_name='along_flow',
+#                                           spectrum_type=spectrum_type,
+#                                           direction=direction,
+#                                           add_powerlaws=False)
+#         plt.pause(.1)
+
+
+TKE = {}
+MKE = {}
+Zens = {}
+for key, value in data.items():
+    TKE[key] = \
+        plot_machine.ct.hovmöller_along_transect(value['data'],
+                                                 spectrum_type='TKE')
+    MKE[key] = \
+        plot_machine.ct.hovmöller_along_transect(value['data'],
+                                                 spectrum_type='MKE')
+    Zens[key] = \
+        plot_machine.ct.hovmöller_along_transect(value['data'],
+                                                 spectrum_type='enstrophy')**2
+
+from sklearn.neighbors import KernelDensity
+
+
+def hist_plot(vec, color, label):
+    n, bins, _ = plt.hist(vec, bins=100, density=True, color=color, alpha=0.5)
+    plt.plot(bins[1:] - (bins[1]-bins[0])/2,
+             n,
+             color=color,
+             linewidth=3,
+             label=label)
+
+
+def plot_histograms(input_dict, hist_type='hist'):
+    plt.figure()
+    cmap = plt.get_cmap('tab10')
+    for idx, (key, value) in enumerate(input_dict.items()):
+        vec = np.sum(value, -1)
+        color = cmap(idx)
+
+        if hist_type == 'kde':
+            datavec = vec[:, np.newaxis]
+
+            kde = \
+                KernelDensity(kernel='gaussian',
+                              bandwidth='silverman').fit(datavec)
+
+            x_plot = np.linspace(np.min(datavec),
+                                 np.max(datavec),
+                                 1000)[:, np.newaxis]
+
+            y = kde.score_samples(x_plot)
+            plt.plot(x_plot, np.exp(y), label=key, color=color)
+        elif hist_type == 'hist':
+            hist_plot(vec, color, key)
+
+    plt.legend()
+
+
+plt.close('all')
+plot_histograms(TKE, 'kde')
+plt.gca().set_title('TKE KDestimates')
+plt.pause(1)
+
+plot_histograms(MKE)
+plt.gca().set_title('MKE KDestimates')
+plt.pause(1)
+plot_histograms(Zens)
+plt.gca().set_title('Z KDestimates')
+plt.pause(1)
+
+
+plt.close('all')
+plt.figure()

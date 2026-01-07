@@ -391,7 +391,6 @@ class PlotMachine():
             k[key], S[key], T[key] = \
                 self.ct.compute_spectrum_along_transect(
                     value['data'],
-                    value['time'],
                     transect_name=transect_name,
                     spectrum_type=spectrum_type,
                     direction=direction,

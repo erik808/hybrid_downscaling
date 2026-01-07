@@ -120,7 +120,6 @@ class ComputeTool():
     def hovmöller_along_transect(
             self,
             data,
-            time,
             scaler=None,
             transect_name='along_flow',
             spectrum_type='energy',
@@ -186,7 +185,6 @@ class ComputeTool():
     def compute_spectrum_along_transect(
             self,
             data,
-            time,
             scaler=None,
             transect_name='along_flow',
             spectrum_type='energy',
@@ -196,7 +194,6 @@ class ComputeTool():
 
         transect_data = self.hovmöller_along_transect(
             data,
-            time,
             scaler=scaler,
             transect_name=transect_name,
             spectrum_type=spectrum_type,

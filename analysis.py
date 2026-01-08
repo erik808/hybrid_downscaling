@@ -103,16 +103,16 @@ data = {
         },
     },
 
-    # 'lowres': {
-    #     'data': np.nan_to_num(x),
-    #     'time': [],
-    #     'plotkwargs': {
-    #         'label': 'bilinear interpolation',
-    #         'linestyle': '-',
-    #         'color': cmap(5),
-    #         'zorder': 0,
-    #     },
-    # },
+    'lowres': {
+        'data': np.nan_to_num(x),
+        'time': [],
+        'plotkwargs': {
+            'label': 'bilinear interpolation',
+            'linestyle': '-',
+            'color': cmap(5),
+            'zorder': 0,
+        },
+    },
 
     'pred_resnet': {
         'data': np.nan_to_num(z_resnet),
@@ -171,17 +171,22 @@ plt.switch_backend('qtagg')
 
 TKE = {}
 MKE = {}
+SSH = {}
 Zens = {}
 for key, value in data.items():
     TKE[key] = \
         plot_machine.ct.hovmöller_along_transect(value['data'],
                                                  spectrum_type='TKE')
+    SSH[key] = \
+        plot_machine.ct.hovmöller_along_transect(value['data'],
+                                                 spectrum_type='ssh')
     MKE[key] = \
         plot_machine.ct.hovmöller_along_transect(value['data'],
                                                  spectrum_type='MKE')
     Zens[key] = \
         plot_machine.ct.hovmöller_along_transect(value['data'],
                                                  spectrum_type='enstrophy')**2
+
 
 from sklearn.neighbors import KernelDensity
 
@@ -191,15 +196,37 @@ def hist_plot(vec, color, label):
     plt.plot(bins[1:] - (bins[1]-bins[0])/2,
              n,
              color=color,
-             linewidth=3,
+             linewidth=2,
              label=label)
 
 
-def plot_histograms(input_dict, hist_type='hist'):
+def plot_histograms(input_dict, hist_type='hist', operation='sum'):
     plt.figure()
     cmap = plt.get_cmap('tab10')
-    for idx, (key, value) in enumerate(input_dict.items()):
+
+    minval = 0
+    maxval = 0
+
+    for key, value in input_dict.items():
         vec = np.sum(value, -1)
+        minval = np.min([np.min(vec), minval])
+        maxval = np.max([np.max(vec), maxval])
+
+    for idx, (key, value) in enumerate(input_dict.items()):
+        # vec = (np.sum(value, -1) - minval) / (maxval - minval)
+        if operation == 'sum':
+            vec = np.sum(value, -1)
+        elif operation == 'mean':
+            vec = np.mean(value, -1)
+        elif operation == 'first':
+            vec = value[:, 0]
+        elif operation == 'middle':
+            vec = value[:, int(value.shape[1] / 2)]
+        elif operation == 'last':
+            vec = value[:, 0]
+        else:
+            raise Exception('invalid operation')
+
         color = cmap(idx)
 
         if hist_type == 'kde':
@@ -207,7 +234,7 @@ def plot_histograms(input_dict, hist_type='hist'):
 
             kde = \
                 KernelDensity(kernel='gaussian',
-                              bandwidth='silverman').fit(datavec)
+                              bandwidth=(maxval-minval)/100).fit(datavec)
 
             x_plot = np.linspace(np.min(datavec),
                                  np.max(datavec),
@@ -221,18 +248,57 @@ def plot_histograms(input_dict, hist_type='hist'):
     plt.legend()
 
 
-plt.close('all')
-plot_histograms(TKE, 'kde')
-plt.gca().set_title('TKE KDestimates')
-plt.pause(1)
-
-plot_histograms(MKE)
-plt.gca().set_title('MKE KDestimates')
-plt.pause(1)
-plot_histograms(Zens)
-plt.gca().set_title('Z KDestimates')
-plt.pause(1)
+input_dict = Zens
+operation = 'sum'
+ref_key = 'truth'
+bins = 1000
 
 
-plt.close('all')
-plt.figure()
+def reduce(mat, operation):
+    if operation == 'sum':
+        vec = np.sum(mat, -1)
+    else:
+        raise Exception('invalid operation')
+    return vec
+
+
+ref_vals = reduce(input_dict[ref_key], operation)
+
+# setup interval, 2*sigma outside of reference domain
+ref_mn = np.mean(ref_vals)
+ref_std = np.std(ref_vals)
+ref_x = np.linspace(np.min(ref_vals) - 2 * ref_std,
+                    np.max(ref_vals) + 2 * ref_std,
+                    bins + 1)
+
+
+def compute_discrete_pdf(vals, x):
+    pdf, _ = np.histogram(vals, x, density=True)
+    return pdf * np.diff(x)
+
+
+ref_pdf = compute_discrete_pdf(ref_vals, ref_x)
+
+
+def compute_dkl(P, Q):
+    eps = 1e-16
+
+    # add eps
+    P += eps
+    Q += eps
+
+    # do some checks
+    assert P.shape == Q.shape, "incompatible shapes"
+    assert (np.sum(P) - 1.0) < 1e-11, "input not a pdf"
+    assert (np.sum(Q) - 1.0) < 1e-11, "input not a pdf"
+
+    out = np.sum(P * np.log(P / Q))
+    return out
+
+
+for key, value in input_dict.items():
+
+    vals = reduce(value, operation)
+    pdf = compute_discrete_pdf(vals, ref_x)
+    dkl = compute_dkl(ref_pdf, pdf)
+    print(key, dkl)

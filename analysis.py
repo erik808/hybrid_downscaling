@@ -171,6 +171,7 @@ plt.switch_backend('qtagg')
 
 TKE = {}
 MKE = {}
+KE = {}
 SSH = {}
 Zens = {}
 for key, value in data.items():
@@ -180,6 +181,9 @@ for key, value in data.items():
     SSH[key] = \
         plot_machine.ct.hovmöller_along_transect(value['data'],
                                                  spectrum_type='ssh')
+    KE[key] = \
+        plot_machine.ct.hovmöller_along_transect(value['data'],
+                                                 spectrum_type='energy')
     MKE[key] = \
         plot_machine.ct.hovmöller_along_transect(value['data'],
                                                  spectrum_type='MKE')
@@ -200,6 +204,24 @@ def hist_plot(vec, color, label):
              label=label)
 
 
+def reduce(mat, operation):
+
+    if operation == 'sum':
+        vec = np.sum(mat, -1)
+    elif operation == 'mean':
+        vec = np.mean(mat, -1)
+    elif operation == 'first':
+        vec = mat[:, 0]
+    elif operation == 'middle':
+        vec = mat[:, int(mat.shape[1] / 2)]
+    elif operation == 'last':
+        vec = mat[:, -1]
+    else:
+        raise Exception('invalid operation')
+
+    return vec
+
+
 def plot_histograms(input_dict, hist_type='hist', operation='sum'):
     plt.figure()
     cmap = plt.get_cmap('tab10')
@@ -214,18 +236,6 @@ def plot_histograms(input_dict, hist_type='hist', operation='sum'):
 
     for idx, (key, value) in enumerate(input_dict.items()):
         # vec = (np.sum(value, -1) - minval) / (maxval - minval)
-        if operation == 'sum':
-            vec = np.sum(value, -1)
-        elif operation == 'mean':
-            vec = np.mean(value, -1)
-        elif operation == 'first':
-            vec = value[:, 0]
-        elif operation == 'middle':
-            vec = value[:, int(value.shape[1] / 2)]
-        elif operation == 'last':
-            vec = value[:, 0]
-        else:
-            raise Exception('invalid operation')
 
         color = cmap(idx)
 
@@ -248,18 +258,11 @@ def plot_histograms(input_dict, hist_type='hist', operation='sum'):
     plt.legend()
 
 
-input_dict = Zens
+input_dict = MKE
 operation = 'sum'
 ref_key = 'truth'
 bins = 1000
 
-
-def reduce(mat, operation):
-    if operation == 'sum':
-        vec = np.sum(mat, -1)
-    else:
-        raise Exception('invalid operation')
-    return vec
 
 
 ref_vals = reduce(input_dict[ref_key], operation)

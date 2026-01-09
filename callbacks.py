@@ -172,7 +172,6 @@ class DMD(keras.callbacks.Callback):
                 }, file)
 
     def train_esn_dmd(self, epoch, logs=None):
-        np.random.seed(1)
 
         predictor_layer = self.get_predictor_layer()
 

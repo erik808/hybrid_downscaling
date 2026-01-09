@@ -1,8 +1,9 @@
 # import keras
 import importlib
 import keras
-import data_manager_cmems
 from keras import backend as K
+import numpy as np
+import data_manager_cmems
 import data_generator_cmems
 import base_model
 import resnet_model
@@ -21,13 +22,17 @@ importlib.reload(base_model)
 importlib.reload(hybrid_model)
 importlib.reload(callbacks)
 
-K.clear_session()
-keras.utils.set_random_seed(123)
+experiment_id = 'train_hybrid'
+seed = 123
 
-if len(sys.argv) < 2:
-    experiment_id = 'train_hybrid'
-else:
+if len(sys.argv) > 1:
     experiment_id = sys.argv[1]
+if len(sys.argv) > 2:
+    seed = sys.argv[2]
+
+K.clear_session()
+keras.utils.set_random_seed(seed)
+np.random.seed(seed)
 
 dmgr_cmems = \
     data_manager_cmems.DataManagerCMEMS(

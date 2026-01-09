@@ -1,4 +1,6 @@
 import keras
+from keras import backend as K
+import numpy as np
 import importlib
 import data_manager_cmems
 import data_generator_cmems
@@ -6,7 +8,6 @@ import vae_model
 import predictor_model
 import callbacks
 import sys
-from keras import backend as K
 
 importlib.reload(data_manager_cmems)
 importlib.reload(data_generator_cmems)
@@ -14,13 +15,17 @@ importlib.reload(vae_model)
 importlib.reload(predictor_model)
 importlib.reload(callbacks)
 
-K.clear_session()
-keras.utils.set_random_seed(123)
+experiment_id = 'train_predictor'
+seed = 123
 
-if len(sys.argv) < 2:
-    experiment_id = 'predictor_ESNcN10e3R1A1T0.01_6mpred_ig0.7'
-else:
+if len(sys.argv) > 1:
     experiment_id = sys.argv[1]
+if len(sys.argv) > 2:
+    seed = sys.argv[2]
+
+K.clear_session()
+keras.utils.set_random_seed(seed)
+np.random.seed(seed)
 
 dmgr_cmems = \
     data_manager_cmems.DataManagerCMEMS(experiment_id=experiment_id,
@@ -50,8 +55,6 @@ vae.summary(line_length=80)
 # load existing weights
 vae_checkpoint = \
     'models/vae/l4k3f64-128spatial_bilin_2y/checkpoint.vae.keras'
-# vae_checkpoint = \
-#     'models/vae/l4k3f64-128spatial/checkpoint.vae.keras'
 vae.load_weights(vae_checkpoint)
 
 predictor = predictor_model.Predictor(data_gen=dgen_train,

@@ -280,16 +280,17 @@ class AnalysisBase(keras.callbacks.Callback, ABC):
     def __init__(
             self,
             data_gen,
-            plot=[
-                'reconstruction',
-                'spectra',
-            ],
+            plot=[],
             run_when='epoch_end',
+            dump_results=True,
+            dump_truth=True,
             **kwargs,
     ):
         super().__init__(**kwargs)
         self.dgen = data_gen
         self.run_when = run_when
+        self.dump_results = dump_results
+        self.dump_truth = dump_truth
 
         self.plot_instructions = plot
         self.reconstruction = 'reconstruction' in self.plot_instructions
@@ -561,17 +562,34 @@ class AnalysisBase(keras.callbacks.Callback, ABC):
         )
 
         results_dir_base = self.plot_machine.dirs['results']
-        timestepping_file = \
-            f'{results_dir_base}/results.dill'
+        predictions_file = \
+            f'{results_dir_base}/predictions.dill'
+        truths_file = \
+            f'{results_dir_base}/truths.dill'
 
-        with open(timestepping_file, 'wb') as file:
-            dill.dump(
-                {
-                    'results': results,
-                    'truths': truths,
-                    'logs': logs,
-                    'mask': mask,
-                }, file)
+        if self.dump_results:
+            with open(predictions_file, 'wb') as file:
+                dill.dump(
+                    {
+                        # dict comprehension inside list
+                        # comprehension... sorry
+                        'results':
+                        [{key: r[key] for key in ['LR_data',
+                                                  'HR_data',
+                                                  'time']}
+                         for r in results],
+                        'logs': logs,
+                    }, file)
+
+        if self.dump_truth:
+            with open(truths_file, 'wb') as file:
+                dill.dump(
+                    {
+                        'truths':
+                        [{key: t[key] for key in ['HR_data']}
+                         for t in truths],
+                        'mask': mask,
+                    }, file)
 
         x_mat = np.concatenate([self.restrict_x(r) for r in results], 0)
         y_mat = np.concatenate([self.restrict_y(t) for t in truths], 0)

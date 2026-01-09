@@ -5,7 +5,7 @@ import dill
 import numpy as np
 import tools
 import data_manager_cmems
-
+from sklearn.neighbors import KernelDensity
 import matplotlib.pyplot as plt
 # plt.switch_backend('Agg')
 
@@ -22,7 +22,7 @@ dmgr_cmems = \
     )
 
 
-def load_timeseries(fname):
+def load_timeseries(fname):  # TODO this needs a better implementation
     x, y, z, t = [], [], [], []
     with open(fname, 'rb') as file:
         timeseries = dill.load(file)
@@ -58,7 +58,7 @@ hybrid_bases = [
     'experiment/predictor_ESNcT5e-3_6mpred_ks6000/results/',
     # 'experiment/predictor_ESNcT1e-2_6mpred_ks5000/results/',
     'experiment/predictor_ESNcT1e-2_6mpred_ks6000/results',
-    'experiment/predictor_ESNcT5e-2_6mpred_ks6000/results',
+    # 'experiment/predictor_ESNcT5e-2_6mpred_ks6000/results',
     # 'experiment/predictor_ESNcT5e-3_6mpred_ks6000/results/'
 ]
 
@@ -192,9 +192,6 @@ for key, value in data.items():
                                                  spectrum_type='enstrophy')**2
 
 
-from sklearn.neighbors import KernelDensity
-
-
 def hist_plot(vec, color, label):
     n, bins, _ = plt.hist(vec, bins=100, density=True, color=color, alpha=0.5)
     plt.plot(bins[1:] - (bins[1]-bins[0])/2,
@@ -262,8 +259,6 @@ input_dict = MKE
 operation = 'sum'
 ref_key = 'truth'
 bins = 1000
-
-
 
 ref_vals = reduce(input_dict[ref_key], operation)
 

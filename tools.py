@@ -361,3 +361,17 @@ def create_lookback(inds, data, lookback, axis=1):
         batch.append(np.stack(lb_fields, axis=axis))
 
     return batch
+
+
+def input_handling(argv, default_id='test', default_seed=123):
+    experiment_id = default_id
+    seed = default_seed
+
+    if len(sys.argv) > 1:
+        experiment_id = sys.argv[1]
+        print(f'received experiment id: {experiment_id}')
+    if len(sys.argv) > 2:
+        seed = sys.argv[2]
+        print(f'received seed: {seed}')
+
+    return experiment_id, seed

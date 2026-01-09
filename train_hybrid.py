@@ -12,6 +12,7 @@ import predictor_model
 import hybrid_model
 import callbacks
 import sys
+import tools
 
 importlib.reload(data_manager_cmems)
 importlib.reload(data_generator_cmems)
@@ -21,14 +22,9 @@ importlib.reload(predictor_model)
 importlib.reload(base_model)
 importlib.reload(hybrid_model)
 importlib.reload(callbacks)
+importlib.reload(tools)
 
-experiment_id = 'train_hybrid'
-seed = 123
-
-if len(sys.argv) > 1:
-    experiment_id = sys.argv[1]
-if len(sys.argv) > 2:
-    seed = sys.argv[2]
+experiment_id, seed = tools.input_handling(sys.argv)
 
 K.clear_session()
 keras.utils.set_random_seed(seed)

@@ -1,7 +1,7 @@
 #/bin/bash
 
-# list of 10 seeds, generate this with np.random.randint and check
-# with np.unique for duplicates
+# list of seeds, generate this with np.random.randint and check with
+# np.unique for duplicates
 ensemble_mode=true
 
 if [ "$ensemble_mode" = true ]; then
@@ -10,13 +10,10 @@ if [ "$ensemble_mode" = true ]; then
 else
     seeds=(978362)
 fi
-echo ${seeds[@]}
-
-exit
 
 
 function run_sbatch {
-    sbcommand=`sbatch $1 $2 $3`
+    sbcommand=`sbatch $@`
     if [[ "$sbcommand" =~ Submitted\ batch\ job\ ([0-9]+) ]]; then
         jobid=${BASH_REMATCH[1]}
         echo "$jobid"
@@ -34,20 +31,22 @@ else
     echo "running $runscript $exp_id"
 fi
 
+
 if [ "$ensemble_mode" = true ]; then
+    echo "ensemble mode --------------- "
 
-ctr=0
-for i in "${seeds[@]}"; do
-    echo "ensemble member" $ctr", seed" $i
-    ctr=$((ctr + 1))
-    exp_id=${exp_id}"/member_"$ctr
-    echo $exp_id
-done
+    ctr=0
+    for i in "${seeds[@]}"; do
+        echo "ensemble member" $ctr", seed" $i
+        exp_id_ctr=${exp_id}"/member_"$ctr
+        jobid=`run_sbatch submit.sh $runscript $exp_id_ctr $i`
+        ctr=$((ctr + 1))
+    done
+else
+    echo "normal mode --------------- "
+    jobid=`run_sbatch submit.sh $runscript $exp_id ${seeds[0]}`
+fi
 
-
-exit
-
-jobid=`run_sbatch submit.sh $runscript $exp_id`
 slurmfile=slurm-$jobid.out
 
 while true; do

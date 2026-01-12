@@ -12,7 +12,7 @@ activation_out = 'tanh_scaled'
 residual_blocks = 6
 
 # standard number of filters
-num_filters = 128
+num_filters = 64
 
 # number of filters for hybridization layer
 num_filters_hybrid = 64

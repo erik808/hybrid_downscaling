@@ -371,7 +371,7 @@ def input_handling(argv, default_id='test', default_seed=123):
         experiment_id = sys.argv[1]
         print(f'received experiment id: {experiment_id}')
     if len(sys.argv) > 2:
-        seed = sys.argv[2]
+        seed = int(sys.argv[2])
         print(f'received seed: {seed}')
 
     return experiment_id, seed

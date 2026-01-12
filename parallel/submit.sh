@@ -1,6 +1,6 @@
 #!/bin/bash
 
-#SBATCH -t 06:00:00
+#SBATCH -t 08:00:00
 #SBATCH -J HybDown
 #SBATCH -N 1
 #SBATCH -n 4
@@ -24,8 +24,9 @@ cd ../
 
 runscript=$1
 arg1=$2
-echo "running" $runscript $arg1
-time python $runscript $arg1
+arg2=$3
+echo "running" $@
+time python $@
 cd $origdir
 
 echo "done"

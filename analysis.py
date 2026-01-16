@@ -108,7 +108,7 @@ data = {
         'time': [],
         'plotkwargs': {
             'label': 'bilinear interpolation',
-            'linestyle': '-',
+            'linestyle': '--',
             'color': cmap(5),
             'zorder': 0,
         },
@@ -118,7 +118,7 @@ data = {
         'data': np.nan_to_num(z_resnet),
         'time': t,
         'plotkwargs': {
-            'label': 'SRResNet prediction',
+            'label': 'SRResNet',
             'linestyle': '-',
             'color': cmap(1),
             'zorder': 5,
@@ -129,7 +129,7 @@ data = {
         'data': np.nan_to_num(z_hybrid[0]),
         'time': t,
         'plotkwargs': {
-            'label': 'ESNc prediction $\lambda=0.005$',
+            'label': 'CAE+ESNc, $\lambda=0.005$',
             'linestyle': '-',
             'color': cmap(2),
             'zorder': 4,
@@ -139,7 +139,7 @@ data = {
         'data': np.nan_to_num(z_hybrid[1]),
         'time': t,
         'plotkwargs': {
-            'label': 'ESNc prediction $\lambda=0.01$',
+            'label': 'CAE+ESNc, $\lambda=0.01$',
             'linestyle': '-',
             'color': cmap(6),
             'zorder': 4,
@@ -159,15 +159,16 @@ data = {
 
 plt.switch_backend('qtagg')
 
-# for spectrum_type in ['energy', 'enstrophy']:
-#     for direction in ['temporal']:
-#         S, T = plot_machine.plot_spectrum(data,
-#                                           transect_name='along_flow',
-#                                           spectrum_type=spectrum_type,
-#                                           direction=direction,
-#                                           add_powerlaws=False)
-#         plt.pause(.1)
+for spectrum_type in ['energy', 'enstrophy', 'ssh']:
+    for direction in ['temporal']:
+        S, T = plot_machine.plot_spectrum(data,
+                                          transect_name='along_flow',
+                                          spectrum_type=spectrum_type,
+                                          direction=direction,
+                                          add_powerlaws=False)
+        plt.pause(.1)
 
+breakpoint()
 
 TKE = {}
 MKE = {}

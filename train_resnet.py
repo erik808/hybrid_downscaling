@@ -50,7 +50,7 @@ resnet.compile(resnet.compiler)
 
 analysis_callback = callbacks.AnalysisResNet(data_gen=dgen_test,
                                              dump_results=True,
-                                             dump_truth=True,
+                                             dump_truth=False,
                                              )
 
 checkpoint_filepath = \

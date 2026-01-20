@@ -26,6 +26,10 @@ class Analysis():
                 force_rebuild=False,
                 base_dir=".",
             )
+        self.plot_machine = plot_utils.PlotMachine(dm=self.dmgr_cmems)
+        results_dir_org = self.plot_machine.results_dir
+        results_dir = results_dir_org + '/merge'
+        self.plot_machine.set_results_dir(results_dir)
 
         self.HR_scaler = self.dmgr_cmems.scalers['HR']
 
@@ -37,91 +41,71 @@ class Analysis():
             np.concatenate([tr['HR_data'][:, 0,] for tr in truths], 0)
 
         HR_truth = tools.unscale_var(HR_truth, self.HR_scaler)
+        return HR_truth
 
-    def load_prediction(self, fname):
+    def load_prediction(self, fname, load_input=True):
         with open(fname, 'rb') as file:
             results = dill.load(file)['results']
 
-        LR_input = np.concatenate([re['LR_data'][:, 0,] for re in results], 0)
         HR_pred = np.concatenate([re['HR_data'][:, 0,] for re in results], 0)
         time = np.array([np.datetime64(re['time']) for re in results])
 
-        cf = HR_pred.shape[1] / LR_input.shape[1]
-        assert cf == HR_pred.shape[2] / LR_input.shape[2], \
-            'nonsquare coarsening, not implemented'
+        HR_pred = tools.unscale_var(HR_pred, self.HR_scaler)
 
-        # create temporary datamanager to get scalers and upsamling
-        dmgr_cmems_tmp = \
-            data_manager_cmems.DataManagerCMEMS(
-                force_coarsening_factor=int(cf)
-            )
-        LR_scaler = dmgr_cmems_tmp.scalers['LR']
+        if load_input:
+            LR_input = \
+                np.concatenate([re['LR_data'][:, 0,] for re in results], 0)
+            cf = HR_pred.shape[1] / LR_input.shape[1]
+            assert cf == HR_pred.shape[2] / LR_input.shape[2], \
+                'nonsquare coarsening, not implemented'
 
-        LR_input = tools.unscale_var(LR_input, LR_scaler)
-        LR_input = np.ascontiguousarray(LR_input.transpose((0, 3, 1, 2)))
-        LR_input = dmgr_cmems_tmp\
-            .bilin_upsampler(LR_input)\
-            .transpose((0, 2, 3, 1))
+            # create temporary datamanager to get scalers and upsamling
+            dmgr_cmems_tmp = \
+                data_manager_cmems.DataManagerCMEMS(
+                    force_coarsening_factor=int(cf)
+                )
+            LR_scaler = dmgr_cmems_tmp.scalers['LR']
 
-        breakpoint()
+            LR_input = tools.unscale_var(LR_input, LR_scaler)
+            LR_input = np.ascontiguousarray(LR_input.transpose((0, 3, 1, 2)))
+            LR_input = dmgr_cmems_tmp\
+                .bilin_upsampler(LR_input)\
+                .transpose((0, 2, 3, 1))
+        else:
+            LR_input = None
 
         return HR_pred, LR_input, time
 
 
 analyzer = Analysis()
 y = analyzer.load_reference()
-z, x, t = analyzer.load_prediction('experiment/resnet_bilinear_b6f64o0_cf16/member_4/results/predictions.dill')
 
+members = [0, 1, 2]
+cf_vals = [16, 32]
 
-raise Exception('que')
+z_resnet_cf16m0, x_cf16, t = analyzer.load_prediction(
+    ('experiment/'
+     'resnet_bilinear_b6f64o0_cf16/member_0/'
+     'results/predictions.dill'),
+    load_input=True)
 
+z_resnet_cf32m0, x_cf32, _ = analyzer.load_prediction(
+    ('experiment/'
+     'resnet_bilinear_b6f64o0_cf32/member_0/'
+     'results/predictions.dill'),
+    load_input=True)
 
+z_resnet_cf32m1, _, _ = analyzer.load_prediction(
+    ('experiment/'
+     'resnet_bilinear_b6f64o0_cf32/member_1/'
+     'results/predictions.dill'),
+    load_input=False)
 
-
-
-
-
-# create datamanager
-
-
-plot_machine = plot_utils.PlotMachine(dm=dmgr_cmems)
-results_dir_org = plot_machine.results_dir
-results_dir = results_dir_org + '/merge'
-plot_machine.set_results_dir(results_dir)
-
-timeseries_reference = \
-    ('experiment/resnet_b6f64_bilin/results'
-     '/results.dill')
-
-hybrid_bases = [
-    'experiment/predictor_ESNcT5e-3_6mpred_ks6000/results/',
-    'experiment/predictor_ESNcT1e-2_6mpred_ks6000/results',
-]
-
-timeseries_hybrid = \
-    [(f'{hybrid_base}/results.dill') for hybrid_base in hybrid_bases]
-
-plt.close('all')
-
-scaler_list = ['LR', *('HR ' * (len(z_hybrid)+2)).split(' ')[:-1]]
-
-# x, y, z_resnet, z_hybrid
-fields = [x, y, z_resnet, *z_hybrid]
-out = \
-    [tools.unscale_var(d, dmgr_cmems.scalers[res])
-     for d, res in zip(fields, scaler_list)]
-
-x = out[0]
-y = out[1]
-z_resnet = out[2]
-z_hybrid = out[3:]
-
-if x.shape != y.shape:
-    # upsample unscaled x (bilinear interpolation)
-    x = np.ascontiguousarray(x.transpose((0, 3, 1, 2)))
-    x = dmgr_cmems\
-        .bilin_upsampler(x)\
-        .transpose((0, 2, 3, 1))
+z_resnet_cf32m2, _, _ = analyzer.load_prediction(
+    ('experiment/'
+     'resnet_bilinear_b6f64o0_cf32/member_2/'
+     'results/predictions.dill'),
+    load_input=False)
 
 cmap = plt.get_cmap('tab10')
 data = {
@@ -136,72 +120,89 @@ data = {
         },
     },
 
-    'lowres': {
-        'data': np.nan_to_num(x),
+    'lowres_cf32': {
+        'data': np.nan_to_num(x_cf32),
         'time': [],
         'plotkwargs': {
-            'label': 'bilinear interpolation',
+            'label': 'bilinear interpolation cf=32',
             'linestyle': '--',
             'color': cmap(5),
             'zorder': 0,
         },
     },
 
-    'pred_resnet': {
-        'data': np.nan_to_num(z_resnet),
+    'lowres_cf16': {
+        'data': np.nan_to_num(x_cf16),
+        'time': [],
+        'plotkwargs': {
+            'label': 'bilinear interpolation cf=16',
+            'linestyle': '--',
+            'color': cmap(6),
+            'zorder': 0,
+        },
+    },
+
+    'pred_resnet_cf32m0': {
+        'data': np.nan_to_num(z_resnet_cf32m0),
         'time': t,
         'plotkwargs': {
-            'label': 'SRResNet',
+            'label': 'SRResNet cf32m0',
             'linestyle': '-',
             'color': cmap(1),
             'zorder': 5,
         },
     },
 
-    'pred_hybrid': {
-        'data': np.nan_to_num(z_hybrid[0]),
+    'pred_resnet_cf32m1': {
+        'data': np.nan_to_num(z_resnet_cf32m1),
         'time': t,
         'plotkwargs': {
-            'label': 'CAE+ESNc, $\lambda=0.005$',
+            'label': 'SRResNet cf32m1',
             'linestyle': '-',
             'color': cmap(2),
-            'zorder': 4,
+            'zorder': 5,
         },
     },
-    'pred_hybrid2': {
-        'data': np.nan_to_num(z_hybrid[1]),
+
+    'pred_resnet_cf32m2': {
+        'data': np.nan_to_num(z_resnet_cf32m2),
         'time': t,
         'plotkwargs': {
-            'label': 'CAE+ESNc, $\lambda=0.01$',
+            'label': 'SRResNet cf32m2',
             'linestyle': '-',
-            'color': cmap(6),
-            'zorder': 4,
+            'color': cmap(3),
+            'zorder': 5,
         },
     },
-    # 'pred_hybrid3': {
-    #     'data': np.nan_to_num(z_hybrid[2]),
-    #     'time': t,
-    #     'plotkwargs': {
-    #         'label': 'ESNc prediction',
-    #         'linestyle': '-',
-    #         'color': cmap(8),
-    #         'zorder': 4,
-    #     },
-    # },
+
+    'pred_resnet_cf16m0': {
+        'data': np.nan_to_num(z_resnet_cf16m0),
+        'time': t,
+        'plotkwargs': {
+            'label': 'SRResNet cf16m0',
+            'linestyle': '-',
+            'color': cmap(4),
+            'zorder': 5,
+        },
+    },
+
 }
 
 plt.switch_backend('qtagg')
 
-for spectrum_type in ['energy', 'enstrophy', 'ssh']:
+# breakpoint()
+plt.close('all')
+for spectrum_type in ['energy']:  # , 'enstrophy', 'ssh']:
     for direction in ['temporal']:
-        S, T = plot_machine.plot_spectrum(data,
-                                          transect_name='along_flow',
-                                          spectrum_type=spectrum_type,
-                                          direction=direction,
-                                          add_powerlaws=False)
+        S, T = analyzer.plot_machine.plot_spectrum(data,
+                                                   transect_name='along_flow',
+                                                   spectrum_type=spectrum_type,
+                                                   direction=direction,
+                                                   add_powerlaws=False)
         plt.pause(.1)
 
-breakpoint()
+
+raise Exception('que')
 
 TKE = {}
 MKE = {}

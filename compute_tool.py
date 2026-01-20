@@ -191,7 +191,6 @@ class ComputeTool():
             direction='spatial',
             detide=False
     ):
-
         transect_data = self.hovmöller_along_transect(
             data,
             scaler=scaler,

@@ -51,10 +51,8 @@ vae.compile(vae.compiler)
 # vae.load_weights(vae_checkpoint)
 
 analysis_callback = callbacks.AnalysisVAE(data_gen=dgen_test,
-                                          plot=[
-                                              # 'reconstruction',
-                                              # 'spectra',
-                                          ]
+                                          dump_results=False,
+                                          dump_truth=False,
                                           )
 
 checkpoint_filepath = \
@@ -64,7 +62,9 @@ model_checkpoint_callback = keras.callbacks.ModelCheckpoint(
     monitor='val_loss',
     mode='min',
     save_best_only=True)
+
 # raise Exception('que?')
+
 hist = vae.fit(
     x=dgen_train,
     epochs=50,

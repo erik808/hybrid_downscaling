@@ -29,7 +29,6 @@ filters = [64, 64, 128, 128, 256, 512]
 # filters in the coupling with resnet
 num_filters_hybrid = 64
 
-
 # deterministic mode bypasses the sampling layer and uses the mean
 # only
 deterministic_mode = True

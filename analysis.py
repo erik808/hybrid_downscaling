@@ -43,150 +43,97 @@ class Analysis():
         HR_truth = tools.unscale_var(HR_truth, self.HR_scaler)
         return HR_truth
 
-    def load_prediction(self, fname, load_input=True):
+    def load_prediction(self, fname):
         with open(fname, 'rb') as file:
             results = dill.load(file)['results']
 
         HR_pred = np.concatenate([re['HR_data'][:, 0,] for re in results], 0)
-        time = np.array([np.datetime64(re['time']) for re in results])
-
         HR_pred = tools.unscale_var(HR_pred, self.HR_scaler)
+        return HR_pred
 
-        if load_input:
-            LR_input = \
-                np.concatenate([re['LR_data'][:, 0,] for re in results], 0)
-            cf = HR_pred.shape[1] / LR_input.shape[1]
-            assert cf == HR_pred.shape[2] / LR_input.shape[2], \
-                'nonsquare coarsening, not implemented'
+    def load_input(self, fname):
 
-            # create temporary datamanager to get scalers and upsamling
-            dmgr_cmems_tmp = \
-                data_manager_cmems.DataManagerCMEMS(
-                    force_coarsening_factor=int(cf)
-                )
-            LR_scaler = dmgr_cmems_tmp.scalers['LR']
+        with open(fname, 'rb') as file:
+            results = dill.load(file)['results']
 
-            LR_input = tools.unscale_var(LR_input, LR_scaler)
-            LR_input = np.ascontiguousarray(LR_input.transpose((0, 3, 1, 2)))
-            LR_input = dmgr_cmems_tmp\
-                .bilin_upsampler(LR_input)\
-                .transpose((0, 2, 3, 1))
-        else:
-            LR_input = None
+        LR_input = \
+            np.concatenate([re['LR_data'][:, 0,] for re in results], 0)
 
-        return HR_pred, LR_input, time
+        HR_pred = results[0]['HR_data'][:, 0,]
+        cf = HR_pred.shape[1] / LR_input.shape[1]
+        assert cf == HR_pred.shape[2] / LR_input.shape[2], \
+            'nonsquare coarsening, not implemented'
+
+        # create temporary datamanager to get scalers and upsamling
+        dmgr_cmems_tmp = \
+            data_manager_cmems.DataManagerCMEMS(
+                force_coarsening_factor=int(cf)
+            )
+        LR_scaler = dmgr_cmems_tmp.scalers['LR']
+
+        LR_input = tools.unscale_var(LR_input, LR_scaler)
+        LR_input = np.ascontiguousarray(LR_input.transpose((0, 3, 1, 2)))
+        LR_input = dmgr_cmems_tmp\
+            .bilin_upsampler(LR_input)\
+            .transpose((0, 2, 3, 1))
+        return LR_input
+
+    def load_time(self, fname):
+        with open(fname, 'rb') as file:
+            results = dill.load(file)['results']
+        time = np.array([np.datetime64(re['time']) for re in results])
+        return time
 
 
 analyzer = Analysis()
+
 y = analyzer.load_reference()
 
-members = [0, 1, 2]
-cf_vals = [16, 32]
+members = [0, 2]
+cf_vals = [4, 8, 16, 32]
 
-z_resnet_cf16m0, x_cf16, t = analyzer.load_prediction(
-    ('experiment/'
-     'resnet_bilinear_b6f64o0_cf16/member_0/'
-     'results/predictions.dill'),
-    load_input=True)
-
-z_resnet_cf32m0, x_cf32, _ = analyzer.load_prediction(
-    ('experiment/'
-     'resnet_bilinear_b6f64o0_cf32/member_0/'
-     'results/predictions.dill'),
-    load_input=True)
-
-z_resnet_cf32m1, _, _ = analyzer.load_prediction(
-    ('experiment/'
-     'resnet_bilinear_b6f64o0_cf32/member_1/'
-     'results/predictions.dill'),
-    load_input=False)
-
-z_resnet_cf32m2, _, _ = analyzer.load_prediction(
-    ('experiment/'
-     'resnet_bilinear_b6f64o0_cf32/member_2/'
-     'results/predictions.dill'),
-    load_input=False)
+z_resnet = {}
+for cf in cf_vals:
+    z_resnet[cf] = {}
+    for member in members:
+        z_resnet[cf][member] = analyzer.load_prediction(
+            ('experiment/'
+             f'resnet_bilinear_b6f64o0_cf{cf}/member_{member}/'
+             'results/predictions.dill'),
+        )
 
 cmap = plt.get_cmap('tab10')
 data = {
     'truth': {
         'data': np.nan_to_num(y),
-        'time': t,
+        'time': [],
         'plotkwargs': {
             'label': 'high-resolution truth',
             'linestyle': '-',
+            'linewidth': 2,
             'color': cmap(0),
             'zorder': 10,
         },
     },
-
-    'lowres_cf32': {
-        'data': np.nan_to_num(x_cf32),
-        'time': [],
-        'plotkwargs': {
-            'label': 'bilinear interpolation cf=32',
-            'linestyle': '--',
-            'color': cmap(5),
-            'zorder': 0,
-        },
-    },
-
-    'lowres_cf16': {
-        'data': np.nan_to_num(x_cf16),
-        'time': [],
-        'plotkwargs': {
-            'label': 'bilinear interpolation cf=16',
-            'linestyle': '--',
-            'color': cmap(6),
-            'zorder': 0,
-        },
-    },
-
-    'pred_resnet_cf32m0': {
-        'data': np.nan_to_num(z_resnet_cf32m0),
-        'time': t,
-        'plotkwargs': {
-            'label': 'SRResNet cf32m0',
-            'linestyle': '-',
-            'color': cmap(1),
-            'zorder': 5,
-        },
-    },
-
-    'pred_resnet_cf32m1': {
-        'data': np.nan_to_num(z_resnet_cf32m1),
-        'time': t,
-        'plotkwargs': {
-            'label': 'SRResNet cf32m1',
-            'linestyle': '-',
-            'color': cmap(2),
-            'zorder': 5,
-        },
-    },
-
-    'pred_resnet_cf32m2': {
-        'data': np.nan_to_num(z_resnet_cf32m2),
-        'time': t,
-        'plotkwargs': {
-            'label': 'SRResNet cf32m2',
-            'linestyle': '-',
-            'color': cmap(3),
-            'zorder': 5,
-        },
-    },
-
-    'pred_resnet_cf16m0': {
-        'data': np.nan_to_num(z_resnet_cf16m0),
-        'time': t,
-        'plotkwargs': {
-            'label': 'SRResNet cf16m0',
-            'linestyle': '-',
-            'color': cmap(4),
-            'zorder': 5,
-        },
-    },
-
 }
+
+col_ctr = 0
+for cf in cf_vals:
+    for member in members:
+        col_ctr += 1
+        data.update(
+            {
+                f'pred_resnet_cf{cf}m{member}': {
+                    'data': np.nan_to_num(z_resnet[cf][member]),
+                    'time': [],
+                    'plotkwargs': {
+                        'label': f'SRResNet cf{cf}m{member}',
+                        'linestyle': '-',
+                        'color': cmap(col_ctr),
+                        'zorder': 5,
+                    },
+                },
+            })
 
 plt.switch_backend('qtagg')
 

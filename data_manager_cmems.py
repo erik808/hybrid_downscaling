@@ -22,9 +22,17 @@ class DataManagerCMEMS(data_manager_base.DataManagerBase):
             force_rebuild=False,
             config_name='data_config_cmems',
             base_dir='experiment',
+            force_coarsening_factor=None,
     ):
         super().__init__()
         tools.load_config(self, config_name=config_name)
+
+        # overwrite coarsening factor
+        if force_coarsening_factor is not None:
+            self.coarsening_factor = force_coarsening_factor
+
+        self.setup_filenames()
+
         self.config_name = config_name
         self.force_rebuild = force_rebuild
         self.dirs, self.files = self.setup_directories(
@@ -37,10 +45,23 @@ class DataManagerCMEMS(data_manager_base.DataManagerBase):
             self.time_range = self.time_range_testing
 
         self.load_grid()
-        self.load_scalers()
+        self.scalers = self.load_scalers(self.scalers_file)
 
         # create_training_data needs to be called
         self.ready = False
+
+    def setup_filenames(self):
+        # setup a few param dependent file prefixes
+        self.coarse_data_prefix = \
+            (f"data_LR_r{self.coarsening_factor}_sigm"
+             f"{str(self.sigma).replace(', ','_')}_")
+        self.coarse_data_file = \
+            (f'{self.coarse_data_folder}/'
+             f'{self.coarse_data_prefix}data.zarr')
+        self.scalers_file =  \
+            (f'{self.data_dir}/scalers_{self.time_range.start}_'
+             f'{self.time_range.stop}_'
+             f'{self.coarse_data_prefix}_{self.scaling_type}.dill')
 
     def create_training_data(self):
         print('load HR data')
@@ -158,15 +179,15 @@ class DataManagerCMEMS(data_manager_base.DataManagerBase):
 
         return scalers
 
-    def load_scalers(self):
+    def load_scalers(self, scalers_file):
         self.scalers = None
-        if not os.path.exists(self.scalers_file) or self.force_rebuild:
+        if not os.path.exists(scalers_file) or self.force_rebuild:
             print('Creating scalers')
             self.create_scalers(export=True)
 
-        with open(self.scalers_file, 'rb') as file:
-            self.scalers = dill.load(file)
-        return self.scalers
+        with open(scalers_file, 'rb') as file:
+            scalers = dill.load(file)
+        return scalers
 
     def process_ds(self, ds):
         """ select datavars and cropping """

@@ -12,43 +12,82 @@ import matplotlib.pyplot as plt
 importlib.reload(data_manager_cmems)
 importlib.reload(plot_utils)
 
+
+class Analysis():
+
+    def __init__(self):
+        self.reference_path = \
+            'experiment/reference/truths.dill'
+
+        self.dmgr_cmems = \
+            data_manager_cmems.DataManagerCMEMS(
+                experiment_id='analysis',
+                testing=False,
+                force_rebuild=False,
+                base_dir=".",
+            )
+
+        self.HR_scaler = self.dmgr_cmems.scalers['HR']
+
+    def load_reference(self):
+        with open(self.reference_path, 'rb') as file:
+            truths = dill.load(file)['truths']
+
+        HR_truth = \
+            np.concatenate([tr['HR_data'][:, 0,] for tr in truths], 0)
+
+        HR_truth = tools.unscale_var(HR_truth, self.HR_scaler)
+
+    def load_prediction(self, fname):
+        with open(fname, 'rb') as file:
+            results = dill.load(file)['results']
+
+        LR_input = np.concatenate([re['LR_data'][:, 0,] for re in results], 0)
+        HR_pred = np.concatenate([re['HR_data'][:, 0,] for re in results], 0)
+        time = np.array([np.datetime64(re['time']) for re in results])
+
+        cf = HR_pred.shape[1] / LR_input.shape[1]
+        assert cf == HR_pred.shape[2] / LR_input.shape[2], \
+            'nonsquare coarsening, not implemented'
+
+        # create temporary datamanager to get scalers and upsamling
+        dmgr_cmems_tmp = \
+            data_manager_cmems.DataManagerCMEMS(
+                force_coarsening_factor=int(cf)
+            )
+        LR_scaler = dmgr_cmems_tmp.scalers['LR']
+
+        LR_input = tools.unscale_var(LR_input, LR_scaler)
+        LR_input = np.ascontiguousarray(LR_input.transpose((0, 3, 1, 2)))
+        LR_input = dmgr_cmems_tmp\
+            .bilin_upsampler(LR_input)\
+            .transpose((0, 2, 3, 1))
+
+        breakpoint()
+
+        return HR_pred, LR_input, time
+
+
+analyzer = Analysis()
+y = analyzer.load_reference()
+z, x, t = analyzer.load_prediction('experiment/resnet_bilinear_b6f64o0_cf16/member_4/results/predictions.dill')
+
+
+raise Exception('que')
+
+
+
+
+
+
+
 # create datamanager
-dmgr_cmems = \
-    data_manager_cmems.DataManagerCMEMS(
-        experiment_id='analysis',
-        testing=False,
-        force_rebuild=False,
-        base_dir=".",
-    )
 
 
-def load_timeseries(fname):  # TODO this needs a better implementation
-    x, y, z, t = [], [], [], []
-    with open(fname, 'rb') as file:
-        timeseries = dill.load(file)
-        results = timeseries['results'] if 'results' in timeseries else []
-        truths = timeseries['truths'] if 'truths' in timeseries else []
-
-        if len(truths) == 0 and not isinstance(results, list):
-            z = results.cpu().detach().numpy()
-        else:
-            x = np.concatenate([re['LR_data'][:, 0,] for re in results], 0)
-            z = np.concatenate([re['HR_data'][:, 0,] for re in results], 0)
-            y = np.concatenate([tr['HR_data'][:, 0,] for tr in truths], 0)
-            t = np.array([np.datetime64(re['time']) for re in results])
-
-    return x, y, z, t
-
-
-importlib.reload(plot_utils)
 plot_machine = plot_utils.PlotMachine(dm=dmgr_cmems)
 results_dir_org = plot_machine.results_dir
 results_dir = results_dir_org + '/merge'
 plot_machine.set_results_dir(results_dir)
-
-# timeseries_hybrid = \
-#     ('experiment/predictor_ESNcNr10e3Tikh5_v2/results/'
-#      'timeseries.dill')
 
 timeseries_reference = \
     ('experiment/resnet_b6f64_bilin/results'
@@ -56,19 +95,13 @@ timeseries_reference = \
 
 hybrid_bases = [
     'experiment/predictor_ESNcT5e-3_6mpred_ks6000/results/',
-    # 'experiment/predictor_ESNcT1e-2_6mpred_ks5000/results/',
     'experiment/predictor_ESNcT1e-2_6mpred_ks6000/results',
-    # 'experiment/predictor_ESNcT5e-2_6mpred_ks6000/results',
-    # 'experiment/predictor_ESNcT5e-3_6mpred_ks6000/results/'
 ]
 
 timeseries_hybrid = \
     [(f'{hybrid_base}/results.dill') for hybrid_base in hybrid_bases]
 
 plt.close('all')
-
-x, y, z_resnet, t = load_timeseries(timeseries_reference)
-z_hybrid = [load_timeseries(ts)[2] for ts in timeseries_hybrid]
 
 scaler_list = ['LR', *('HR ' * (len(z_hybrid)+2)).split(' ')[:-1]]
 

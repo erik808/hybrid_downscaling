@@ -44,7 +44,7 @@ lon_crop = slice(0, -1)
 # parameters for Gaussian filter
 sigma = [2, 2, 2]
 # coarsening factor for latitude and longitude
-coarsening_factor = 4
+coarsening_factor = 32
 # scalers for both coarse and HR data
 scaling_range = (0, 1)
 scaling_type = 'minmax'

@@ -89,7 +89,7 @@ analyzer = Analysis()
 
 y = analyzer.load_reference()
 
-members = [0, 2]
+members = [4]
 cf_vals = [4, 8, 16, 32]
 
 z_resnet = {}
@@ -139,15 +139,14 @@ plt.switch_backend('qtagg')
 
 # breakpoint()
 plt.close('all')
-for spectrum_type in ['energy']:  # , 'enstrophy', 'ssh']:
-    for direction in ['temporal']:
+for spectrum_type in ['energy', 'enstrophy', 'ssh']:  # , 'enstrophy', 'ssh']:
+    for direction in ['temporal', 'spatial']:
         S, T = analyzer.plot_machine.plot_spectrum(data,
                                                    transect_name='along_flow',
                                                    spectrum_type=spectrum_type,
                                                    direction=direction,
                                                    add_powerlaws=False)
         plt.pause(.1)
-
 
 raise Exception('que')
 

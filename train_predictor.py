@@ -66,7 +66,7 @@ analysis_callback = callbacks.AnalysisPredictor(
         'reconstruction',
         'spectra',
     ],
-    run_when='epoch_begin',
+    run_when='epoch_begin',  # this also stops training
 )
 
 dmd_train = callbacks.DMD(data_gen=dgen_train)

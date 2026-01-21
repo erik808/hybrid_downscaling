@@ -23,7 +23,7 @@ gamma = 1e1
 # model that does the actual prediction in the latent space
 # options: 'identity', 'simpleRNN',
 #          'dense', 'lstm', 'conv3d',
-#          'convlstm', 'DMD', 'DMDc'
+#          'convlstm', 'DMD', 'DMDc', 'ESN', 'ESNc'
 predictor = 'ESNc'
 
 
@@ -32,7 +32,7 @@ esn_dmd_pars = {
     'rhoMax': 1.0,
     'entriesPerRow': 3,
     'alpha': 1.0,
-    'tikhonov_lambda': 5e-2,
+    'tikhonov_lambda': 1e-2,
     'fCutoff': 0.0,
     'squaredStates': 'even',
     'keep_samples': 6000,

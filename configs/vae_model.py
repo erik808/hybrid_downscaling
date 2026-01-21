@@ -25,7 +25,7 @@ kernel_size = 3
 # number of filters in input
 input_filters = 64
 # filters in downsampling (and reversed in upsampling)
-filters = [64, 64, 128, 128, 256, 512]
+filters = [64, 64, 64, 64, 256, 512]
 # filters in the coupling with resnet
 num_filters_hybrid = 64
 

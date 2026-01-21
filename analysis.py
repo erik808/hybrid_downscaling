@@ -89,16 +89,23 @@ analyzer = Analysis()
 
 y = analyzer.load_reference()
 
-members = [4]
+members = [4, 9]
 cf_vals = [4, 8, 16, 32]
 
 z_resnet = {}
+z_esnc = {}
 for cf in cf_vals:
     z_resnet[cf] = {}
+    z_esnc[cf] = {}
     for member in members:
         z_resnet[cf][member] = analyzer.load_prediction(
             ('experiment/'
              f'resnet_bilinear_b6f64o0_cf{cf}/member_{member}/'
+             'results/predictions.dill'),
+        )
+        z_esnc[cf][member] = analyzer.load_prediction(
+            ('experiment/'
+             f'predESNc_lam1e-2_hist6000_vaef64-128_cf{cf}/member_{member}/'
              'results/predictions.dill'),
         )
 
@@ -121,19 +128,35 @@ col_ctr = 0
 for cf in cf_vals:
     for member in members:
         col_ctr += 1
+        # data.update(
+        #     {
+        #         f'pred_resnet_cf{cf}m{member}': {
+        #             'data': np.nan_to_num(z_resnet[cf][member]),
+        #             'time': [],
+        #             'plotkwargs': {
+        #                 'label': f'SRResNet cf{cf}m{member}',
+        #                 'linestyle': '-',
+        #                 'color': cmap(col_ctr),
+        #                 'zorder': 5,
+        #             },
+        #         },
+        #     }
+        # )
+        # col_ctr += 1
         data.update(
             {
-                f'pred_resnet_cf{cf}m{member}': {
-                    'data': np.nan_to_num(z_resnet[cf][member]),
+                f'pred_esnc_cf{cf}m{member}': {
+                    'data': np.nan_to_num(z_esnc[cf][member]),
                     'time': [],
                     'plotkwargs': {
-                        'label': f'SRResNet cf{cf}m{member}',
+                        'label': f'CAE+ESNc cf{cf}m{member}',
                         'linestyle': '-',
                         'color': cmap(col_ctr),
                         'zorder': 5,
                     },
                 },
-            })
+            }
+        )
 
 plt.switch_backend('qtagg')
 

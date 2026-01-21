@@ -363,7 +363,7 @@ def create_lookback(inds, data, lookback, axis=1):
     return batch
 
 
-def input_handling(argv, default_id='test', default_seed=123):
+def input_handling(argv, default_id='test/member_0', default_seed=123):
     experiment_id = default_id
     seed = default_seed
 

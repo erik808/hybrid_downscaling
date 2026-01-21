@@ -48,9 +48,17 @@ vae = vae_model.VAE(data_gen=dgen_train)
 vae.build_model("betaVAE")
 vae.summary(line_length=80)
 
-# load existing weights
+path_lst = experiment_id.split('/')
+if len(path_lst) > 1:
+    member = path_lst[-1]
+else:
+    member = 'member_0'
+
+# load saved weights
 vae_checkpoint = \
-    'models/vae/l4k3f64-128spatial_bilin_2y/checkpoint.vae.keras'
+    (f'experiment/vae_l4f64-64_spatial_bilinear/{member}'
+     '/checkpoints/checkpoint.vae.keras')
+print(f'loading weights from {vae_checkpoint}')
 vae.load_weights(vae_checkpoint)
 
 predictor = predictor_model.Predictor(data_gen=dgen_train,
@@ -60,14 +68,12 @@ predictor.build_model("predictor")
 predictor.summary(line_length=80)
 predictor.compile(predictor.compiler)
 
-analysis_callback = callbacks.AnalysisPredictor(
-    data_gen=dgen_test,
-    plot=[
-        'reconstruction',
-        'spectra',
-    ],
-    run_when='epoch_begin',  # this also stops training
-)
+analysis_callback = callbacks.AnalysisPredictor(data_gen=dgen_test,
+                                                dump_results=True,
+                                                dump_truth=False,
+                                                run_when='epoch_begin',
+                                                )
+
 
 dmd_train = callbacks.DMD(data_gen=dgen_train)
 dmd_test = callbacks.DMD(data_gen=dgen_test)

@@ -82,12 +82,7 @@ def test_resnet():
     resnet.summary()
     resnet.compile(resnet.compiler)
 
-    analysis_callback = callbacks.AnalysisResNet(data_gen=dgen_test,
-                                                 plot=[
-                                                     # 'reconstruction',
-                                                     # 'spectra',
-                                                 ]
-                                                 )
+    analysis_callback = callbacks.AnalysisResNet(data_gen=dgen_test)
 
     checkpoint_filepath = \
         f'{dmgr_cmems.dirs["checkpoints"]}/checkpoint.resnet.keras'

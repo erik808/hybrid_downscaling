@@ -24,7 +24,7 @@ gamma = 1e1
 # options: 'identity', 'simpleRNN',
 #          'dense', 'lstm', 'conv3d',
 #          'convlstm', 'DMD', 'DMDc', 'ESN', 'ESNc'
-predictor = 'ESNc'
+predictor = 'DMDc'
 
 
 esn_dmd_pars = {

@@ -1,16 +1,17 @@
 # compare runs
 import plot_utils
 import importlib
+import keras
 import dill
 import numpy as np
 import tools
 import data_manager_cmems
 from sklearn.neighbors import KernelDensity
 import matplotlib.pyplot as plt
-# plt.switch_backend('Agg')
-
 importlib.reload(data_manager_cmems)
 importlib.reload(plot_utils)
+
+plt.switch_backend('qtagg')
 
 
 class Analysis():
@@ -34,6 +35,7 @@ class Analysis():
         self.HR_scaler = self.dmgr_cmems.scalers['HR']
 
     def load_reference(self):
+        print('loading reference')
         with open(self.reference_path, 'rb') as file:
             truths = dill.load(file)['truths']
 
@@ -84,93 +86,146 @@ class Analysis():
         time = np.array([np.datetime64(re['time']) for re in results])
         return time
 
+    def load_bilin(self, cf_vals):
+        out = {}
+        print('loading bilinear interpolation results')
+        pb_i = keras.utils.Progbar(len(cf_vals), interval=0.5)
+        for cf in cf_vals:
+            pb_i.add(1)
+            out[cf] = self.load_input(
+                ('experiment/'
+                 f'resnet_bilinear_b6f64o0_cf{cf}/member_0/'
+                 'results/predictions.dill'),
+            )
+        return out
+
+    def load_resnet(self, cf_vals, members):
+        print('loading resnet results')
+        pb_i = keras.utils.Progbar(
+            len(cf_vals) * len(members), interval=0.5)
+
+        out = {}
+        for cf in cf_vals:
+            out[cf] = {}
+            for member in members:
+                pb_i.add(1)
+                out[cf][member] = analyzer.load_prediction(
+                    ('experiment/'
+                     f'resnet_bilinear_b6f64o0_cf{cf}/member_{member}/'
+                     'results/predictions.dill'),
+                )
+        return out
+
+    def load_esnc(self, cf_vals, members):
+        print('loading esnc results')
+        pb_i = keras.utils.Progbar(
+            len(cf_vals) * len(members), interval=0.5)
+
+        out = {}
+        for cf in cf_vals:
+            out[cf] = {}
+            for member in members:
+                fname = \
+                    ('experiment/predESNc_lam1e-2_hist6000_'
+                     f'vaef64-64_cf{cf}/member_{member}/'
+                     'results/predictions.dill')
+                pb_i.add(1)
+                out[cf][member] = \
+                    analyzer.load_prediction(fname)
+
+        return out
+
+    def create_data_dict(self, cf_vals, members):
+        cmap = plt.get_cmap('tab10')
+        data = {
+            'truth': {
+                'data': np.nan_to_num(y_truth),
+                'time': [],
+                'plotkwargs': {
+                    'label': 'high-resolution truth',
+                    'linestyle': '-',
+                    'linewidth': 3,
+                    'color': 'k',
+                    'zorder': 0,
+                },
+            },
+        }
+
+        for cf in cf_vals:
+            data.update(
+                {
+                    f'bilin_cf{cf}': {
+                        'data': np.nan_to_num(z_bilin[cf]),
+                        'time': [],
+                        'plotkwargs': {
+                            'label': f'bilinear interpolation cf{cf}',
+                            'linestyle': '-.',
+                            'zorder': 2,
+                            'linewidth': 2,
+                            'color': cmap(0),
+                        },
+                    },
+                }
+            )
+
+            for member in members:
+
+                data.update(
+                    {
+                        f'pred_resnet_cf{cf}/m{member}': {
+                            'data': np.nan_to_num(z_resnet[cf][member]),
+                            'time': [],
+                            'plotkwargs': {
+                                'label': f'SRResNet cf{cf}/m{member}',
+                                'linestyle': '-',
+                                'zorder': 7,
+                                'color': cmap(1),
+                            },
+                        },
+                    }
+                )
+                data.update(
+                    {
+                        f'pred_esnc_cf{cf}/m{member}': {
+                            'data': np.nan_to_num(z_esnc[cf][member]),
+                            'time': [],
+                            'plotkwargs': {
+                                'label': f'CAE+ESNc cf{cf}/m{member}',
+                                'linestyle': '--',
+                                'zorder': 8,
+                                'color': cmap(2),
+                            },
+                        },
+                    }
+                )
+        return data
+
 
 analyzer = Analysis()
+members = range(10)
 
-y = analyzer.load_reference()
-
-members = [4, 9]
-cf_vals = [4, 8, 16, 32]
-
-z_resnet = {}
-z_esnc = {}
-for cf in cf_vals:
-    z_resnet[cf] = {}
-    z_esnc[cf] = {}
-    for member in members:
-        z_resnet[cf][member] = analyzer.load_prediction(
-            ('experiment/'
-             f'resnet_bilinear_b6f64o0_cf{cf}/member_{member}/'
-             'results/predictions.dill'),
-        )
-        z_esnc[cf][member] = analyzer.load_prediction(
-            ('experiment/'
-             f'predESNc_lam1e-2_hist6000_vaef64-128_cf{cf}/member_{member}/'
-             'results/predictions.dill'),
-        )
-
-cmap = plt.get_cmap('tab10')
-data = {
-    'truth': {
-        'data': np.nan_to_num(y),
-        'time': [],
-        'plotkwargs': {
-            'label': 'high-resolution truth',
-            'linestyle': '-',
-            'linewidth': 2,
-            'color': cmap(0),
-            'zorder': 10,
-        },
-    },
-}
-
-col_ctr = 0
-for cf in cf_vals:
-    for member in members:
-        col_ctr += 1
-        # data.update(
-        #     {
-        #         f'pred_resnet_cf{cf}m{member}': {
-        #             'data': np.nan_to_num(z_resnet[cf][member]),
-        #             'time': [],
-        #             'plotkwargs': {
-        #                 'label': f'SRResNet cf{cf}m{member}',
-        #                 'linestyle': '-',
-        #                 'color': cmap(col_ctr),
-        #                 'zorder': 5,
-        #             },
-        #         },
-        #     }
-        # )
-        # col_ctr += 1
-        data.update(
-            {
-                f'pred_esnc_cf{cf}m{member}': {
-                    'data': np.nan_to_num(z_esnc[cf][member]),
-                    'time': [],
-                    'plotkwargs': {
-                        'label': f'CAE+ESNc cf{cf}m{member}',
-                        'linestyle': '-',
-                        'color': cmap(col_ctr),
-                        'zorder': 5,
-                    },
-                },
-            }
-        )
-
-plt.switch_backend('qtagg')
-
-# breakpoint()
 plt.close('all')
-for spectrum_type in ['energy', 'enstrophy', 'ssh']:  # , 'enstrophy', 'ssh']:
-    for direction in ['temporal', 'spatial']:
-        S, T = analyzer.plot_machine.plot_spectrum(data,
-                                                   transect_name='along_flow',
-                                                   spectrum_type=spectrum_type,
-                                                   direction=direction,
-                                                   add_powerlaws=False)
-        plt.pause(.1)
+for cf in [4, 8, 16, 32]:
+    y_truth = analyzer.load_reference()
+    z_bilin = analyzer.load_bilin([cf])
+    z_resnet = analyzer.load_resnet([cf], members)
+    z_esnc = analyzer.load_esnc([cf], members)
+    data_dict = analyzer.create_data_dict([cf], members)
 
+    for spectrum_type in ['energy']:  # , 'enstrophy', 'ssh']:
+        for direction in ['temporal']:  # , 'spatial']:
+            S, T = analyzer.plot_machine.plot_spectrum(
+                data_dict,
+                transect_name='along_flow',
+                spectrum_type=spectrum_type,
+                direction=direction,
+                add_powerlaws=False)
+            plt.pause(.1)
+
+    # cleanup
+    del y_truth, z_bilin, z_resnet, z_esnc, data_dict
+
+            
 raise Exception('que')
 
 TKE = {}

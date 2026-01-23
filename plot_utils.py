@@ -383,6 +383,7 @@ class PlotMachine():
                       direction='spatial',
                       add_powerlaws=False,
                       detide=False,
+                      combine_members='mean_std',
                       ):
         k = {}
         S = {}
@@ -399,6 +400,15 @@ class PlotMachine():
         # compute mean
         S_mn = {key: np.mean(value, axis=-1) for key, value in S.items()}
 
+        S_mean, S_std = self.combine_ensemble_members(
+            S_mn,
+            k,
+            data,
+            combine_members,
+        )
+
+        S_mn.update(S_mean)
+
         plt.figure()
         for key, value in S_mn.items():
             plt.loglog(
@@ -406,6 +416,26 @@ class PlotMachine():
                 value,
                 **data[key]['plotkwargs'],
             )
+
+        for key, value in S_std.items():
+            # plot 95% confidence interval
+            data[key]['plotkwargs'].pop('label')
+            data[key]['plotkwargs'].pop('zorder')
+            plt.fill_between(
+                k[key],
+                S_mn[key]-2*value,
+                S_mn[key]+2*value,
+                alpha=0.5,
+                zorder=0,
+                **data[key]['plotkwargs'],
+            )
+
+        if 'truth' in S_mn.keys():
+            ymax = np.ceil(np.log10(np.max(S_mn['truth'])))
+            ymin = np.floor(np.log10(np.min(S_mn['truth'])))
+            plt.gca().set_ylim([10**ymin, 10**ymax])
+
+        plt.pause(1)
 
         if add_powerlaws:
             ks = k['truth']
@@ -466,7 +496,42 @@ class PlotMachine():
         print(fig_name)
         plt.tight_layout()
         plt.savefig(fig_name)
+
         return S, T
+
+    def combine_ensemble_members(self, S, k, data, combine_members):
+        # combine ensemble members
+        if combine_members == 'disabled':
+            return {}, {}
+
+        ensembles = {}
+        for key in S.keys():
+            ksplit = key.split('/')
+            kbase = ksplit[0]
+
+            if len(ksplit) > 1:
+                ensembles[kbase] = [key] if kbase not in ensembles else \
+                    ensembles[kbase] + [key]
+
+        S_tmp = {}
+        S_std = {}
+        S_mean = {}
+        for key, members in ensembles.items():
+            # stack ensemble members in new 0th dimension
+            S_tmp.update({key: np.stack([S[mem] for mem in members])})
+
+            # perform some operation on the data
+            if combine_members == 'mean_std':
+                S_mean[key] = np.mean(S_tmp[key], 0)
+                S_std[key] = np.std(S_tmp[key], 0)
+
+            # replace metadata
+            k.update({key: k[members[0]]})
+            data.update({key: data[members[0]]})
+            # get rid of individual members
+            [(S.pop(mem), k.pop(mem), data.pop(mem)) for mem in members]
+
+        return S_mean, S_std
 
     def unscale2D(self, field, scaler):
         x, y = field.shape

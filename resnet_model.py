@@ -278,7 +278,7 @@ class ResidualBlock(layers.Layer):
         x = self.actv_1(x)
         x = self.conv2d_2(x)
         x = self.BN_2(x)
-        x = self.actv_2(x)
+        # x = self.actv_2(x)
         return self.add([x, skip])
 
 

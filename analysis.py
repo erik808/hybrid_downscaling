@@ -205,6 +205,7 @@ analyzer = Analysis()
 members = range(10)
 
 plt.close('all')
+plot_legend=True
 for cf in [4, 8, 16, 32]:
     y_truth = analyzer.load_reference()
     z_bilin = analyzer.load_bilin([cf])
@@ -219,7 +220,10 @@ for cf in [4, 8, 16, 32]:
                 transect_name='along_flow',
                 spectrum_type=spectrum_type,
                 direction=direction,
-                add_powerlaws=False)
+                add_powerlaws=False,
+                make_title=False,
+                plot_legend=plot_legend)
+            plot_legend=False
             plt.pause(.1)
 
     # cleanup

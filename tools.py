@@ -374,4 +374,10 @@ def input_handling(argv, default_id='test/member_0', default_seed=123):
         seed = int(sys.argv[2])
         print(f'received seed: {seed}')
 
-    return experiment_id, seed
+    path_lst = experiment_id.split('/')
+    if len(path_lst) > 1:
+        member = path_lst[-1]
+    else:
+        member = 'member_0'
+
+    return experiment_id, seed, member

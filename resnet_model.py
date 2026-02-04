@@ -104,7 +104,7 @@ class ResNet(base_model.BaseModel):
         y = layers.BatchNormalization()(y)
         y = layers.Add()([y, skip])
 
-        # subpixel convolutions
+        # upsampling blocks
         for ups_block in range(self.upsampling_blocks):
             if self.upsampling_method == 'subpixel':
                 y = SubPixelConv(
@@ -124,19 +124,20 @@ class ResNet(base_model.BaseModel):
             else:
                 raise Exception('invalid upsampling method')
 
-        # layers to couple to other models
-        y = layers.Conv2D(filters=self.num_filters_hybrid,
-                          kernel_size=3,
-                          padding='same',
-                          name='hybrid_coupling',
-                          activation=None,
-                          )(y)
+        if self.enable_coupling_layer:
+            # layers to couple to other models
+            y = layers.Conv2D(filters=self.num_filters_coupling,
+                              kernel_size=3,
+                              padding='same',
+                              name='hybrid_coupling',
+                              activation=None,
+                              )(y)
 
-        y = base_model.Activation(self.activation,
-                                  name='hybrid_coupling_actv')(y)
+            y = base_model.Activation(self.activation,
+                                      name='hybrid_coupling_actv')(y)
 
         outputs = OutputBlock(
-            num_filters=self.num_filters_hybrid,
+            num_filters=self.num_filters_coupling,
             num_filters_out=self.num_vars,
             kernel_size=3,
             kernel_size_out=9,
@@ -278,7 +279,6 @@ class ResidualBlock(layers.Layer):
         x = self.actv_1(x)
         x = self.conv2d_2(x)
         x = self.BN_2(x)
-        # x = self.actv_2(x)
         return self.add([x, skip])
 
 

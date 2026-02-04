@@ -10,7 +10,6 @@ from sklearn.neighbors import KernelDensity
 import matplotlib.pyplot as plt
 importlib.reload(data_manager_cmems)
 importlib.reload(plot_utils)
-
 plt.switch_backend('qtagg')
 
 
@@ -19,6 +18,16 @@ class Analysis():
     def __init__(self):
         self.reference_path = \
             'experiment/reference/truths.dill'
+
+        self.resnet_path = lambda cf, mem: \
+            ('experiment/'
+             f'resnet_subpixel_prelu_b6f64o0_cf{cf}_backup/member_{mem}/'
+             'results/predictions.dill')
+
+        self.esnc_path = lambda cf, mem: \
+            ('experiment/predESNc_lam1e-2_hist6000_'
+             f'vaef64-64_cf{cf}/member_{mem}/'
+             'results/predictions.dill')
 
         self.dmgr_cmems = \
             data_manager_cmems.DataManagerCMEMS(
@@ -92,11 +101,7 @@ class Analysis():
         pb_i = keras.utils.Progbar(len(cf_vals), interval=0.5)
         for cf in cf_vals:
             pb_i.add(1)
-            out[cf] = self.load_input(
-                ('experiment/'
-                 f'resnet_bilinear_b6f64o0_cf{cf}/member_0/'
-                 'results/predictions.dill'),
-            )
+            out[cf] = self.load_input(self.resnet_path(cf, 0))
         return out
 
     def load_resnet(self, cf_vals, members):
@@ -110,10 +115,7 @@ class Analysis():
             for member in members:
                 pb_i.add(1)
                 out[cf][member] = analyzer.load_prediction(
-                    ('experiment/'
-                     f'resnet_bilinear_b6f64o0_cf{cf}/member_{member}/'
-                     'results/predictions.dill'),
-                )
+                    self.resnet_path(cf, member))
         return out
 
     def load_esnc(self, cf_vals, members):
@@ -125,17 +127,22 @@ class Analysis():
         for cf in cf_vals:
             out[cf] = {}
             for member in members:
-                fname = \
-                    ('experiment/predESNc_lam1e-2_hist6000_'
-                     f'vaef64-64_cf{cf}/member_{member}/'
-                     'results/predictions.dill')
+                fname = self.esnc_path(cf, member)
                 pb_i.add(1)
                 out[cf][member] = \
                     analyzer.load_prediction(fname)
 
         return out
 
-    def create_data_dict(self, cf_vals, members):
+    def create_data_dict(
+            self,
+            cf_vals,
+            members,
+            y_truth,
+            z_bilin,
+            z_resnet,
+            z_esnc,
+    ):
         cmap = plt.get_cmap('tab10')
         data = {
             'truth': {
@@ -204,16 +211,23 @@ class Analysis():
 analyzer = Analysis()
 members = range(10)
 
-plt.close('all')
-plot_legend=True
-for cf in [4, 8, 16, 32]:
+plot_legend = True
+# for cf in [4, 8, 16, 32]:
+for cf in [32]:
+    plt.close('all')
     y_truth = analyzer.load_reference()
     z_bilin = analyzer.load_bilin([cf])
     z_resnet = analyzer.load_resnet([cf], members)
     z_esnc = analyzer.load_esnc([cf], members)
-    data_dict = analyzer.create_data_dict([cf], members)
+    data_dict = analyzer.create_data_dict(
+        [cf],
+        members,
+        y_truth,
+        z_bilin,
+        z_resnet,
+        z_esnc)
 
-    for spectrum_type in ['energy']:  # , 'enstrophy', 'ssh']:
+    for spectrum_type in ['energy', 'enstrophy']:  # , 'enstrophy', 'ssh']:
         for direction in ['temporal']:  # , 'spatial']:
             S, T = analyzer.plot_machine.plot_spectrum(
                 data_dict,
@@ -223,13 +237,13 @@ for cf in [4, 8, 16, 32]:
                 add_powerlaws=False,
                 make_title=False,
                 plot_legend=plot_legend)
-            plot_legend=False
-            plt.pause(.1)
-
+            plot_legend = False
+    plt.pause(1)
     # cleanup
+    breakpoint()
     del y_truth, z_bilin, z_resnet, z_esnc, data_dict
 
-            
+
 raise Exception('que')
 
 TKE = {}

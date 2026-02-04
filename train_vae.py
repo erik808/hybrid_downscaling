@@ -15,7 +15,7 @@ importlib.reload(vae_model)
 importlib.reload(callbacks)
 importlib.reload(tools)
 
-experiment_id, seed = tools.input_handling(sys.argv)
+experiment_id, seed, member = tools.input_handling(sys.argv)
 
 K.clear_session()
 keras.utils.set_random_seed(seed)

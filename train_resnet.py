@@ -15,11 +15,13 @@ importlib.reload(resnet_model)
 importlib.reload(callbacks)
 importlib.reload(tools)
 
-experiment_id, seed = tools.input_handling(sys.argv)
+experiment_id, seed, member = tools.input_handling(sys.argv)
 
 K.clear_session()
 keras.utils.set_random_seed(seed)
 np.random.seed(seed)
+
+inference_only = False
 
 dmgr_cmems = \
     data_manager_cmems.DataManagerCMEMS(
@@ -31,7 +33,7 @@ dmgr_cmems.create_training_data()
 
 dgen_args = {
     'dm': dmgr_cmems,
-    'batch_size': 4,
+    'batch_size': 12,
     'lookback': 1,
     'shuffle': True,
     'use_multiprocessing': True,
@@ -44,17 +46,25 @@ dgen_train, dgen_test = \
 
 resnet = resnet_model.ResNet(data_gen=dgen_train)
 
+checkpoint_filepath = \
+    f'{dmgr_cmems.dirs["checkpoints"]}/checkpoint.resnet.keras'
+
 resnet.build_model("ResNet")
+if inference_only:
+    print('loading weights')
+    resnet.load_weights(checkpoint_filepath)
+
 resnet.summary(expand_nested=True)
 resnet.compile(resnet.compiler)
+
+run_when = 'epoch_begin' if inference_only else 'epoch_end'
 
 analysis_callback = callbacks.AnalysisResNet(data_gen=dgen_test,
                                              dump_results=True,
                                              dump_truth=False,
+                                             run_when=run_when,
                                              )
 
-checkpoint_filepath = \
-    f'{dmgr_cmems.dirs["checkpoints"]}/checkpoint.resnet.keras'
 model_checkpoint_callback = keras.callbacks.ModelCheckpoint(
     filepath=checkpoint_filepath,
     monitor='val_loss',

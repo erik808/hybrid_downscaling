@@ -384,6 +384,8 @@ class PlotMachine():
                       add_powerlaws=False,
                       detide=False,
                       combine_members='mean_std',
+                      make_title=True,
+                      plot_legend=True,
                       ):
         k = {}
         S = {}
@@ -434,8 +436,6 @@ class PlotMachine():
             ymax = np.ceil(np.log10(np.max(S_mn['truth'])))
             ymin = np.floor(np.log10(np.min(S_mn['truth'])))
             plt.gca().set_ylim([10**ymin, 10**ymax])
-
-        plt.pause(1)
 
         if add_powerlaws:
             ks = k['truth']
@@ -489,8 +489,11 @@ class PlotMachine():
             raise Exception('unknown spectrum type')
 
         # plt.gca().set_ylim([1e-8, 1e2])
-        plt.gca().set_title(tstring)
-        plt.legend()
+        if make_title:
+            plt.gca().set_title(tstring)
+        if plot_legend:
+            plt.legend()
+
         plt.grid()
 
         print(fig_name)

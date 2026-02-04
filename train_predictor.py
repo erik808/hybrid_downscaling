@@ -17,7 +17,7 @@ importlib.reload(predictor_model)
 importlib.reload(callbacks)
 importlib.reload(tools)
 
-experiment_id, seed = tools.input_handling(sys.argv)
+experiment_id, seed, member = tools.input_handling(sys.argv)
 
 K.clear_session()
 keras.utils.set_random_seed(seed)
@@ -47,12 +47,6 @@ dgen_train, dgen_test = \
 vae = vae_model.VAE(data_gen=dgen_train)
 vae.build_model("betaVAE")
 vae.summary(line_length=80)
-
-path_lst = experiment_id.split('/')
-if len(path_lst) > 1:
-    member = path_lst[-1]
-else:
-    member = 'member_0'
 
 # load saved weights
 vae_checkpoint = \

@@ -568,8 +568,8 @@ class AnalysisBase(keras.callbacks.Callback, ABC):
         truths_file = \
             f'{results_dir_base}/truths.dill'
 
-        if self.dump_results and logs['time_stepper'] < self.min_loss:
-            self.min_loss = logs['time_stepper']
+        if self.dump_results and logs['timestepper'] < self.min_loss:
+            self.min_loss = logs['timestepper']
             with open(predictions_file, 'wb') as file:
                 dill.dump(
                     {

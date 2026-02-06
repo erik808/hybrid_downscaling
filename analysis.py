@@ -21,7 +21,7 @@ class Analysis():
 
         self.resnet_path = lambda cf, mem: \
             ('experiment/'
-             f'resnet_subpixel_prelu_b6f64o0_cf{cf}_backup/member_{mem}/'
+             f'resnet_subpixel_prelu_b6f64o0_cf{cf}_bs36/member_{mem}/'
              'results/predictions.dill')
 
         self.esnc_path = lambda cf, mem: \
@@ -227,7 +227,7 @@ for cf in [32]:
         z_resnet,
         z_esnc)
 
-    for spectrum_type in ['energy', 'enstrophy']:  # , 'enstrophy', 'ssh']:
+    for spectrum_type in ['enstrophy']:  # , 'enstrophy', 'ssh']:
         for direction in ['temporal']:  # , 'spatial']:
             S, T = analyzer.plot_machine.plot_spectrum(
                 data_dict,

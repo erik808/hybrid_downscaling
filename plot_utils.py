@@ -383,7 +383,7 @@ class PlotMachine():
                       direction='spatial',
                       add_powerlaws=False,
                       detide=False,
-                      combine_members='mean_std',
+                      combine_members='quantiles',
                       make_title=True,
                       plot_legend=True,
                       ):
@@ -399,19 +399,15 @@ class PlotMachine():
                     direction=direction,
                     detide=detide)
 
-        # compute mean
+        # compute mean over space or time
         S_mn = {key: np.mean(value, axis=-1) for key, value in S.items()}
-
-        S_mean, S_std = self.combine_ensemble_members(
+        S_stacked, S_combined = self.combine_ensemble_members(
             S_mn,
             k,
             data,
             combine_members,
         )
 
-        S_mn.update(S_mean)
-
-        plt.figure()
         for key, value in S_mn.items():
             plt.loglog(
                 k[key],
@@ -419,14 +415,17 @@ class PlotMachine():
                 **data[key]['plotkwargs'],
             )
 
-        for key, value in S_std.items():
-            # plot 95% confidence interval
+        for key, value in S_combined.items():
+            # plot q1,q2,q3
+            plt.loglog(k[key],
+                       value['q2'],
+                       **data[key]['plotkwargs'])
             data[key]['plotkwargs'].pop('label')
             data[key]['plotkwargs'].pop('zorder')
             plt.fill_between(
                 k[key],
-                S_mn[key]-2*value,
-                S_mn[key]+2*value,
+                value['q1'],
+                value['q3'],
                 alpha=0.5,
                 zorder=0,
                 **data[key]['plotkwargs'],
@@ -516,17 +515,27 @@ class PlotMachine():
                 ensembles[kbase] = [key] if kbase not in ensembles else \
                     ensembles[kbase] + [key]
 
-        S_tmp = {}
-        S_std = {}
-        S_mean = {}
+        S_stacked = {}
+        S_combined = {}
+
         for key, members in ensembles.items():
             # stack ensemble members in new 0th dimension
-            S_tmp.update({key: np.stack([S[mem] for mem in members])})
+            S_stacked.update({key: np.stack([S[mem] for mem in members])})
+
+            S_combined[key] = {}
 
             # perform some operation on the data
             if combine_members == 'mean_std':
-                S_mean[key] = np.mean(S_tmp[key], 0)
-                S_std[key] = np.std(S_tmp[key], 0)
+                S_combined[key]['mean'] = np.mean(S_stacked[key], 0)
+                S_combined[key]['std'] = np.std(S_stacked[key], 0)
+
+            elif combine_members == 'quantiles':
+                S_combined[key]['q1'] = \
+                    np.quantile(S_stacked[key], 0.25, axis=0)
+                S_combined[key]['q2'] = \
+                    np.quantile(S_stacked[key], 0.50, axis=0)
+                S_combined[key]['q3'] = \
+                    np.quantile(S_stacked[key], 0.75, axis=0)
 
             # replace metadata
             k.update({key: k[members[0]]})
@@ -534,7 +543,7 @@ class PlotMachine():
             # get rid of individual members
             [(S.pop(mem), k.pop(mem), data.pop(mem)) for mem in members]
 
-        return S_mean, S_std
+        return S_stacked, S_combined
 
     def unscale2D(self, field, scaler):
         x, y = field.shape

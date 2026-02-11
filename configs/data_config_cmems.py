@@ -43,7 +43,7 @@ lon_crop = slice(0, -1)
 sigma = [2, 2, 2]
 
 # 2D coarsening factor, equal for latitude and longitude
-coarsening_factor = 32
+coarsening_factor = 4
 
 # scalers for both coarse and HR data
 scaling_range = (0, 1)

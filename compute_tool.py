@@ -273,12 +273,6 @@ class ComputeTool():
         if S.ndim == 3:
             S = np.sum(S, axis=-1)
 
-        dd = (np.sum(data_detrend**2, axis=-1))
-        fdd, Sdd = scipy.signal.welch(
-            dd,
-            axis=0,
-            scaling='density',
-        )
         return f, S
 
     def do_regridding(self, field):

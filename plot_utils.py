@@ -71,6 +71,29 @@ class PlotMachine():
         print(fig_name)
         plt.savefig(fig_name, bbox_inches='tight')
 
+    def plot_vorticity_fields(self, data_dict):
+
+        ensembles, normal_runs = self.split_ensembles(data_dict.keys())
+
+        for run in normal_runs:
+            fields = data_dict[run]['data']
+            zeta = self.ct.vorticity(fields, None)
+            plt.close('all')
+            plt.figure()
+            a = plt.pcolormesh(zeta[3*24*31, :, :],
+                               cmap='RdBu',
+                               vmin=-12,
+                               vmax=12)
+            plt.colorbar(a, label='cycles/day')
+            plt.pause(1)
+
+            # todo: - lat/lon
+            #       - transect in truth plot
+            #       - zoomed-out version showing Norway and UK
+            #       - export -> proper fig name
+            breakpoint()
+
+
     def plot_hovmöller(self, T, plot_type, transect):
         # plt.close('all')
         if plot_type == 'energy':
@@ -401,34 +424,40 @@ class PlotMachine():
 
         # compute mean over space or time
         S_mn = {key: np.mean(value, axis=-1) for key, value in S.items()}
-        S_stacked, S_combined = self.combine_ensemble_members(
+        S_stacked, S_combined, normal_runs = self.combine_ensemble_members(
             S_mn,
             k,
             data,
             combine_members,
         )
 
-        for key, value in S_mn.items():
+        # first do the normal runs (not ensembles)
+        for key in normal_runs:
             plt.loglog(
                 k[key],
-                value,
+                S_mn[key],
                 **data[key]['plotkwargs'],
             )
 
+        cf = data[key]['cf']
+
+        # plot ensemble runs (quantiles)
         for key, value in S_combined.items():
             # plot q1,q2,q3
             plt.loglog(k[key],
                        value['q2'],
                        **data[key]['plotkwargs'])
-            data[key]['plotkwargs'].pop('label')
-            data[key]['plotkwargs'].pop('zorder')
+            plotkwargs = data[key]['plotkwargs'].copy()
+            data.pop(key)
+            plotkwargs.pop('label')
+            plotkwargs.pop('zorder')
             plt.fill_between(
                 k[key],
                 value['q1'],
                 value['q3'],
                 alpha=0.5,
                 zorder=0,
-                **data[key]['plotkwargs'],
+                **plotkwargs,
             )
 
         if 'truth' in S_mn.keys():
@@ -442,15 +471,17 @@ class PlotMachine():
             plt.loglog(ks, 1e-4 * ks**(-4), '--', label='$k^{-4}$')
             plt.loglog(ks, 1e-4 * ks**(-5), '--', label='$k^{-5}$')
 
+        postfix = f'{transect_name}_{direction}_cf{cf}.png'
+
         if spectrum_type == 'energy':
             tstring = \
                 (f'Mean kinetic energy spectrum,'
                  f' {transect_name}, {direction}')
             fig_name = \
-                (f'{self.results_dir}/'
-                 f'energy_spectrum_{transect_name}_{direction}'
-                 f'.png'
-                 )
+                (
+                    f'{self.results_dir}/'
+                    f'energy_spectrum_{postfix}'
+                )
         elif spectrum_type == 'enstrophy':
             tstring = \
                 (f'Mean enstrophy spectrum,'
@@ -458,7 +489,7 @@ class PlotMachine():
             fig_name = \
                 (f'{self.results_dir}/'
                  f'enstrophy_spectrum_'
-                 f'{transect_name}_{direction}.png')
+                 f'{postfix}')
 
         elif spectrum_type == 'ssh':
             tstring = \
@@ -467,7 +498,7 @@ class PlotMachine():
             fig_name = \
                 (f'{self.results_dir}/'
                  f'ssh_spectrum_'
-                 f'{transect_name}_{direction}.png')
+                 f'{postfix}')
         elif spectrum_type == 'TKE':
             tstring = \
                 (f'TKE spectrum,'
@@ -475,7 +506,7 @@ class PlotMachine():
             fig_name = \
                 (f'{self.results_dir}/'
                  f'TKE_spectrum_'
-                 f'{transect_name}_{direction}.png')
+                 f'{postfix}')
         elif spectrum_type == 'MKE':
             tstring = \
                 (f'MKE spectrum,'
@@ -483,7 +514,7 @@ class PlotMachine():
             fig_name = \
                 (f'{self.results_dir}/'
                  f'MKE_spectrum_'
-                 f'{transect_name}_{direction}.png')
+                 f'{postfix}')
         else:
             raise Exception('unknown spectrum type')
 
@@ -491,30 +522,37 @@ class PlotMachine():
         if make_title:
             plt.gca().set_title(tstring)
         if plot_legend:
-            plt.legend()
+            plt.legend(loc='lower left', fontsize='large')
 
         plt.grid()
 
         print(fig_name)
         plt.tight_layout()
-        plt.savefig(fig_name)
+        plt.savefig(fig_name, dpi=200)
 
         return S, T
 
-    def combine_ensemble_members(self, S, k, data, combine_members):
-        # combine ensemble members
-        if combine_members == 'disabled':
-            return {}, {}
-
+    def split_ensembles(self, keys):
+        # check whether key is member of an ensemble, store member names
         ensembles = {}
-        for key in S.keys():
+        normal_runs = []
+        for key in keys:
             ksplit = key.split('/')
             kbase = ksplit[0]
 
             if len(ksplit) > 1:
                 ensembles[kbase] = [key] if kbase not in ensembles else \
                     ensembles[kbase] + [key]
+            else:
+                normal_runs += [kbase]
+        return ensembles, normal_runs
 
+    def combine_ensemble_members(self, S, k, data, combine_members):
+        # combine ensemble members
+        if combine_members == 'disabled':
+            return {}, {}
+
+        ensembles, normal_runs = self.split_ensembles(S.keys())
         S_stacked = {}
         S_combined = {}
 
@@ -540,10 +578,8 @@ class PlotMachine():
             # replace metadata
             k.update({key: k[members[0]]})
             data.update({key: data[members[0]]})
-            # get rid of individual members
-            [(S.pop(mem), k.pop(mem), data.pop(mem)) for mem in members]
 
-        return S_stacked, S_combined
+        return S_stacked, S_combined, normal_runs
 
     def unscale2D(self, field, scaler):
         x, y = field.shape

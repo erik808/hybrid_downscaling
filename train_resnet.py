@@ -21,7 +21,7 @@ K.clear_session()
 keras.utils.set_random_seed(seed)
 np.random.seed(seed)
 
-inference_only = False
+inference_only = True
 
 dmgr_cmems = \
     data_manager_cmems.DataManagerCMEMS(
@@ -33,7 +33,7 @@ dmgr_cmems.create_training_data()
 
 dgen_args = {
     'dm': dmgr_cmems,
-    'batch_size': 64,
+    'batch_size': 4,
     'lookback': 1,
     'shuffle': True,
     'use_multiprocessing': True,

@@ -21,7 +21,7 @@ class Analysis():
 
         self.resnet_path = lambda cf, mem: \
             ('experiment/'
-             f'resnet_subpixel_prelu_b6f64o0_cf{cf}_bs36/member_{mem}/'
+             f'resnet_subpixel_prelu_b6f64o0_cf{cf}/member_{mem}/'
              'results/predictions.dill')
 
         self.esnc_path = lambda cf, mem: \
@@ -149,7 +149,7 @@ class Analysis():
                 'data': np.nan_to_num(y_truth),
                 'time': [],
                 'plotkwargs': {
-                    'label': 'high-resolution truth',
+                    'label': 'reference',
                     'linestyle': '-',
                     'linewidth': 3,
                     'color': 'k',
@@ -164,9 +164,10 @@ class Analysis():
                     f'bilin_cf{cf}': {
                         'data': np.nan_to_num(z_bilin[cf]),
                         'time': [],
+                        'cf': cf,
                         'plotkwargs': {
-                            'label': f'bilinear interpolation cf{cf}',
-                            'linestyle': '-.',
+                            'label': 'bilinear interpolation',
+                            'linestyle': ':',
                             'zorder': 2,
                             'linewidth': 2,
                             'color': cmap(0),
@@ -182,10 +183,12 @@ class Analysis():
                         f'pred_resnet_cf{cf}/m{member}': {
                             'data': np.nan_to_num(z_resnet[cf][member]),
                             'time': [],
+                            'cf': cf,
                             'plotkwargs': {
-                                'label': f'SRResNet cf{cf}/m{member}',
+                                'label': 'SRResNet',
                                 'linestyle': '-',
                                 'zorder': 7,
+                                'linewidth': 2,
                                 'color': cmap(1),
                             },
                         },
@@ -196,10 +199,12 @@ class Analysis():
                         f'pred_esnc_cf{cf}/m{member}': {
                             'data': np.nan_to_num(z_esnc[cf][member]),
                             'time': [],
+                            'cf': cf,
                             'plotkwargs': {
-                                'label': f'CAE+ESNc cf{cf}/m{member}',
+                                'label': 'CAE-ESNc',
                                 'linestyle': '--',
                                 'zorder': 8,
+                                'linewidth': 2,
                                 'color': cmap(2),
                             },
                         },
@@ -210,10 +215,12 @@ class Analysis():
 
 analyzer = Analysis()
 members = range(10)
+# members = [0, 1, 2]
+#cfrange = [4, 8, 16, 32]
+cfrange = [8, 16, 32]
 
 plot_legend = True
-# for cf in [4, 8, 16, 32]:
-for cf in [32]:
+for cf in cfrange:
     plt.close('all')
     y_truth = analyzer.load_reference()
     z_bilin = analyzer.load_bilin([cf])
@@ -227,8 +234,12 @@ for cf in [32]:
         z_resnet,
         z_esnc)
 
-    for spectrum_type in ['enstrophy']:  # , 'enstrophy', 'ssh']:
-        for direction in ['temporal']:  # , 'spatial']:
+    # plot vorticity snapshots + transects (in truth plot)
+    analyzer.plot_machine.plot_vorticity_fields(data_dict)
+
+    for direction in ['temporal', 'spatial']:
+        for spectrum_type in ['energy', 'enstrophy', 'ssh']:
+            plt.figure(figsize=(5, 3.5))
             S, T = analyzer.plot_machine.plot_spectrum(
                 data_dict,
                 transect_name='along_flow',
@@ -237,10 +248,10 @@ for cf in [32]:
                 add_powerlaws=False,
                 make_title=False,
                 plot_legend=plot_legend)
-            plot_legend = False
-    plt.pause(1)
+            plt.close('all')
+
+    plot_legend = False
     # cleanup
-    breakpoint()
     del y_truth, z_bilin, z_resnet, z_esnc, data_dict
 
 

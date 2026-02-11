@@ -6,33 +6,28 @@ import numpy as np
 # default hyper parameters
 hyper_params = {
     'history' : 'all',
-    'epochs' : 5,
-    'batch_size' : 4,
-    'lookback' : 2,
-    'unroll_dim' : 0,
-    'num_conv_blocks' : 1,
-    'conv_layers_per_block' : 1,
-    'num_feedthrough_layers' : 2,
-    'num_feedthrough_filters' : 112,
-    'num_output_layers' : 2,
     'future' : 400,
+    'epochs' : 10,
+    'batch_size' : 4,
+    'unroll_dim' : 0,
+    'lookback' : 3,
     'noise_stddev' : 0.0,
     'dropout_rate' : 0.0,
+    'num_conv_blocks' : 1,
+    'conv_layers_per_block' : 1,
+    'num_feedthrough_filters' : 112,
+    'num_feedthrough_layers' : 2,
+    'num_output_layers' : 2,
     'optimizer' : 'adam',
     'L2_lambda' : 0.0,
-    'kernel_size' : (3,3),
-    'RNN_model' : 'RNN',
-    'latent_space_dim' : 8,
+    'kernel_size' : (3, 3),
+    'latent_space_model' : 'VAE',
+    'latent_space_dim' : 4,
     'learning_rate' : 0.002,
     'num_filters' : 32,
     'num_filters_last' : 112,
     'downsample_stride' : (2,2),
 }
-
-
-
-# dict for use with optuna
-tuning_config_dict = {}
 
 __lookback_study__ = {
     'lookback' : {
@@ -46,10 +41,7 @@ __lookback_study__ = {
     },
 }
 
-tuning_config_dict['lookback_study'] = __lookback_study__
-
-
-__default__ = {
+__everything__ = {
     'epochs' : {
         'type' : 'int',
         'args' : {
@@ -159,37 +151,116 @@ __default__ = {
         },
         'search_space' : [0],
     },
+}
 
-    'batch_size' : {
-        'type' : 'int',
-        'args' : {
-            'name' : 'batch_size',
-            'low'  : 1,
-            'high' : 100,
-        },
-        'search_space' : [4],
-    },
 
-    'RNN_model' : {
-        'type'  : 'categorical',
-        'args'  : {
-            'name':'RNN_model',
-            'choices' : ['RNN', 'RNN_res', 'LSTM', 'GRU', 'ConvLSTM' ],
-        },
-        'search_space' : ['RNN'],
-    },
-
+__latent_space_dim__ = {
     'latent_space_dim' : {
         'type' : 'int',
         'args' : {
             'name' : 'latent_space_dim',
             'low'  : 1,
             'high' : 10000,
-            },
+        },
         'search_space' : [8],
     },
-}
 
+    'lookback' : {
+        'type' : 'int',
+        'args' : {
+            'name' : 'lookback',
+            'low'  : 0,
+            'high' : 9,
+        },
+        'search_space' : [0],
+    },
+
+    'latent_space_model' : {
+        'type'  : 'categorical',
+        'args'  : {
+            'name':'latent_space_model',
+            'choices' : [
+                'RNN',
+                'RNN_res',
+                'LSTM',
+                'GRU',
+                'ConvLSTM',
+                'VAE',
+                'VAE+RNN'
+            ],
+        },
+        'search_space' : ['RNN'],
+    },
+    
+    'num_output_layers' : {
+        'type' : 'int',
+        'args' : {
+            'name' : 'num_output_layers',
+            'low'  : 1,
+            'high' : 5,
+        },
+        'search_space' : [2],
+    },
+    'num_feedthrough_layers' : {
+        'type' : 'int',
+        'args' : {
+            'name' : 'num_feedthrough_layers',
+            'low'  : 1,
+            'high' : 100,
+        },
+        'search_space' : [2],
+    },
+
+    'num_filters' : {
+        'type' : 'int',
+        'args' : {
+            'name' : 'num_filters',
+            'low'  : 1,
+            'high' : 200,
+        },
+        'search_space' : [64],
+    },
+    
+    'num_filters_last' : {
+        'type' : 'int',
+        'args' : {
+            'name' : 'num_filters_last',
+            'low'  : 1,
+            'high' : 100,
+        },
+        'search_space' : [128],
+    },
+
+    'num_feedthrough_filters' : {
+        'type' : 'int',
+        'args' : {
+            'name' : 'num_feedthrough_filters',
+            'low'  : 1,
+            'high' : 1000,
+        },
+        'search_space' : [128],
+    },
+    'num_conv_blocks' : {
+        'type' : 'int',
+        'args' : {
+            'name' : 'num_conv_blocks',
+            'low'  : 1,
+            'high' : 6,
+        },
+        'search_space' : [1],
+    },
+    'conv_layers_per_block' : {
+        'type' : 'int',
+        'args' : {
+            'name' : 'conv_layers_per_block',
+            'low'  : 1,
+            'high' : 6,
+        },
+        'search_space' : [1],
+    },
+
+    
+}
 
 __regularization__ = {
     'L2_lambda' : {
@@ -203,7 +274,10 @@ __regularization__ = {
     },
 },
 
-
-# combine into big dict
-tuning_config_dict['default'] = __default__
+# dict for use with optuna. keys represent different grid search or
+# other parameter tuning experiments
+tuning_config_dict = {}
+tuning_config_dict['lookback_study'] = __lookback_study__
+tuning_config_dict['everything'] = __everything__
+tuning_config_dict['latent_space_dim'] = __latent_space_dim__
 tuning_config_dict['regularization'] = __regularization__

@@ -1,0 +1,78 @@
+import keras
+from keras import backend as K
+import numpy as np
+import importlib
+import data_manager_cmems
+import data_generator_cmems
+import vae_model
+import callbacks
+import sys
+import tools
+
+importlib.reload(data_manager_cmems)
+importlib.reload(data_generator_cmems)
+importlib.reload(vae_model)
+importlib.reload(callbacks)
+importlib.reload(tools)
+
+experiment_id, seed, member = tools.input_handling(sys.argv)
+
+K.clear_session()
+keras.utils.set_random_seed(seed)
+np.random.seed(seed)
+
+dmgr_cmems = \
+    data_manager_cmems.DataManagerCMEMS(
+        experiment_id=experiment_id,
+        testing=False,
+        force_rebuild=False,
+    )
+dmgr_cmems.create_training_data()
+
+dgen_args = {
+    'dm': dmgr_cmems,
+    'batch_size': 4,
+    'lookback': 1,
+    'shuffle': True,
+    'use_multiprocessing': True,
+    'workers': 4,
+    'max_queue_size': 10,
+}
+
+dgen_train, dgen_test = \
+    data_generator_cmems.getter(**dgen_args)
+
+vae = vae_model.VAE(data_gen=dgen_train)
+
+vae.build_model("betaVAE")
+vae.summary(line_length=80, expand_nested=True)
+vae.compile(vae.compiler)
+# vae_checkpoint = 'models/vae/checkpoint.vae.keras'
+# vae.load_weights(vae_checkpoint)
+
+analysis_callback = callbacks.AnalysisVAE(data_gen=dgen_test,
+                                          dump_results=False,
+                                          dump_truth=False,
+                                          )
+
+checkpoint_filepath = \
+    f'{dmgr_cmems.dirs["checkpoints"]}/checkpoint.vae.keras'
+model_checkpoint_callback = keras.callbacks.ModelCheckpoint(
+    filepath=checkpoint_filepath,
+    monitor='val_loss',
+    mode='min',
+    save_best_only=True)
+
+# raise Exception('que?')
+
+hist = vae.fit(
+    x=dgen_train,
+    epochs=50,
+    validation_data=dgen_test,
+    callbacks=[
+        analysis_callback,
+        model_checkpoint_callback,
+    ]
+)
+
+analysis_callback.plot_history(hist)

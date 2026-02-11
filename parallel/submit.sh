@@ -1,12 +1,12 @@
 #!/bin/bash
 
-#SBATCH -t 04:00:00
-#SBATCH -J tuning
+#SBATCH -t 08:00:00
+#SBATCH -J HybDown
 #SBATCH -N 1
 #SBATCH -n 4
 #SBATCH --cpus-per-task 4
-#SBATCH --mem 36G
-#SBATCH --qos low
+#SBATCH --mem 64G
+#SBATCH --account havklim
 
 export OMP_NUM_THREADS=8
 export MKL_NUM_THREADS=8
@@ -23,8 +23,10 @@ origdir=$PWD
 cd ../
 
 runscript=$1
-echo "running" $runscript
-time python $runscript
+arg1=$2
+arg2=$3
+echo "running" $@
+time python $@
 cd $origdir
 
 echo "done"

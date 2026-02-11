@@ -93,7 +93,6 @@ class PlotMachine():
             #       - export -> proper fig name
             breakpoint()
 
-
     def plot_hovmöller(self, T, plot_type, transect):
         # plt.close('all')
         if plot_type == 'energy':

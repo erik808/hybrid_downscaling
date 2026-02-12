@@ -27,24 +27,22 @@ class ComputeTool():
     def get_regridder(self, transect_name):
 
         if transect_name not in self.transect_regridders:
-            key = transect_name
-            dill_file = f'{self.dm.transect_dir}/{transect_name}.dill'
-            print(f'Loading transect from {dill_file}')
-            with open(dill_file, 'rb') as file:
-                tpicker = dill.load(file)['tpicker']
-
-                transect_res = len(tpicker.x_trans)
-                regridder = \
-                    self.regrid_to_transect(tpicker,
-                                            resolution=transect_res)
-
-            self.transect_regridders.update({key: regridder})
+            tpicker, transect = self.get_transect(transect_name)
+            transect_res = len(tpicker.x_trans)
+            regridder = \
+                self.regrid_to_transect(tpicker,
+                                        transect,
+                                        resolution=transect_res)
+            self.transect_regridders.update({transect_name: regridder})
 
         self.regridder = self.transect_regridders[transect_name]
 
-    def regrid_to_transect(self, tpicker, resolution=1e2):
+    def get_transect(self, transect_name):
+        dill_file = f'{self.dm.transect_dir}/{transect_name}.dill'
+        print(f'Loading transect from {dill_file}')
+        with open(dill_file, 'rb') as file:
+            tpicker = dill.load(file)['tpicker']
 
-        print('Create transect regridder')
         grid_HR = self.dm.grid_HR
 
         lons = grid_HR['lon'][0, :]
@@ -56,6 +54,14 @@ class ComputeTool():
             'lat_start': lats[tpicker.y_trans[0]],
             'lat_end': lats[tpicker.y_trans[-1]]
         }
+
+        return tpicker, transect
+
+    def regrid_to_transect(self,
+                           tpicker,
+                           transect,
+                           resolution=1e2):
+        grid_HR = self.dm.grid_HR
         return tools.regrid_to_transect(grid_HR,
                                         resolution=resolution,
                                         **transect)

@@ -1,6 +1,6 @@
 #!/bin/bash
 
-#SBATCH -t 08:00:00
+#SBATCH -t 00:10:00
 #SBATCH -J HybDown
 #SBATCH -N 1
 #SBATCH -n 4

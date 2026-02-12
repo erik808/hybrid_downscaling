@@ -1,6 +1,8 @@
 from datetime import datetime
 import matplotlib.pyplot as plt
+import matplotlib.patches as mpatches
 import numpy as np
+import cartopy.crs as ccrs
 import os
 import tools
 from multiprocess import Pool
@@ -71,27 +73,160 @@ class PlotMachine():
         print(fig_name)
         plt.savefig(fig_name, bbox_inches='tight')
 
-    def plot_vorticity_fields(self, data_dict):
-
+    def plot_2d_fields(
+            self,
+            data_dict,
+            target_date='2025-05-01',
+            field_type='vorticity',
+            overview=False,
+            add_contours=False
+    ):
+        plt.close('all')
         ensembles, normal_runs = self.split_ensembles(data_dict.keys())
+        # field_type = 'vorticity'
+        # get time index
+        # target_date = '2025-06-01'
+        time = data_dict[normal_runs[0]]['time']
+        t_idx = np.where(time > np.datetime64(target_date))[0][0]
 
-        for run in normal_runs:
-            fields = data_dict[run]['data']
-            zeta = self.ct.vorticity(fields, None)
-            plt.close('all')
+        if field_type == 'vorticity':
+            lons = self.dm.grid_HR['lon'][1:, 1:]
+            lats = self.dm.grid_HR['lat'][1:, 1:]
+        else:
+            lons = self.dm.grid_HR['lon']
+            lats = self.dm.grid_HR['lat']
+
+        lon_min = np.min(lons[0, 0])
+        lon_max = np.min(lons[-1, -1])
+        lat_min = np.min(lats[0, 0])
+        lat_max = np.min(lats[-1, -1])
+
+        if overview:
+            normal_runs = ['truth']
+            ensembles = {}
+            add_contours = False
+
+        all_runs = normal_runs + [value[-1]
+                                  for value in ensembles.values()]
+        for run in all_runs:
+            values = data_dict[run]['data'][t_idx, ]
+
+            if field_type == 'vorticity':
+                values = self.ct.vorticity(np.expand_dims(values, 0), None)
+                label = 'vorticity (cycles/day)'
+                cmap = 'RdBu'
+                vmin = -12
+                vmax = 12
+
+            elif field_type == 'ssh':
+                values = values[..., -1]
+                label = 'ssh (m)'
+                cmap = 'RdBu'
+                vmin = None
+                vmax = None
+
+            elif field_type == 'energy':
+                values = np.sum(np.square(values[..., :2]), axis=-1)
+                label = 'kinetic energy ($m^2/s^2$)'
+                cmap = 'coolwarm'
+                vmin = 0
+                vmax = 0.6
+
+            elif field_type == 'uo':
+                values = values[..., 0]
+                label = 'zonal velocity ($m/s$)'
+                cmap = 'RdBu'
+                vmin = -0.6
+                vmax = 0.6
+
+            elif field_type == 'vo':
+                values = values[..., 1]
+                label = 'meridional velocity ($m/s$)'
+                cmap = 'RdBu'
+                vmin = -0.6
+                vmax = 0.6
+
+            mask = self.dm.mask.values[0,]
+
+            # masking
+            if mask.shape == values.shape:
+                values = np.where(self.dm.mask.values[0,] == 0, np.nan, values)
+            else:
+                values = np.where(values == 0.0, np.nan, values)
+
             plt.figure()
-            a = plt.pcolormesh(zeta[3*24*31, :, :],
-                               cmap='RdBu',
-                               vmin=-12,
-                               vmax=12)
-            plt.colorbar(a, label='cycles/day')
-            plt.pause(1)
+            ax = plt.axes(projection=ccrs.PlateCarree())
+            mesh = ax.pcolormesh(lons, lats,
+                                 values,
+                                 transform=ccrs.PlateCarree(),
+                                 cmap=cmap,
+                                 vmin=vmin,
+                                 vmax=vmax)
 
-            # todo: - lat/lon
-            #       - transect in truth plot
-            #       - zoomed-out version showing Norway and UK
-            #       - export -> proper fig name
-            breakpoint()
+            if add_contours:
+                ax.contour(lons, lats,
+                           values,
+                           colors='k',
+                           linewidth=1,
+                           corner_mask=False,
+                           antialiased=True,
+                           transform=ccrs.PlateCarree(),
+                           levels=12, alpha=0.3)
+
+            ax.coastlines(resolution='10m', color='black',
+                          linewidth=1)
+
+            if overview:
+                ax.set_xlim([-8, 12])
+                ax.set_ylim([51, 66])
+                ax.plot([lon_min, lon_max, lon_max, lon_min, lon_min],
+                        [lat_min, lat_min, lat_max, lat_max, lat_min],
+                        'k--',
+                        transform=ccrs.PlateCarree())
+            else:
+                plt.colorbar(mesh, orientation='horizontal',
+                             label=label,
+                             pad=0.05)
+
+            if run == 'truth' and not overview:
+                _, tr_along = self.ct.get_transect('along_flow')
+                _, tr_across = self.ct.get_transect('across_flow')
+                ax.plot([tr_along['lon_start'], tr_along['lon_end']],
+                        [tr_along['lat_start'], tr_along['lat_end']],
+                        'k-',
+                        linewidth=2.6,
+                        transform=ccrs.PlateCarree(),
+                        label='along flow transect',
+                        )
+                ax.plot([tr_across['lon_start'], tr_across['lon_end']],
+                        [tr_across['lat_start'], tr_across['lat_end']],
+                        'k--',
+                        linewidth=2.6,
+                        transform=ccrs.PlateCarree(),
+                        label='across flow transect',
+                        )
+                ax.legend(loc='lower left', fontsize='large')
+                fig_name = (f'{self.results_dir}/'
+                            f'reference_{field_type}_'
+                            f'transects_{target_date}.png')
+                plt.savefig(fig_name, bbox_inches='tight', dpi=200)
+
+            elif not overview:
+                runid = run.split('/')[0]
+                fig_name = (f'{self.results_dir}/'
+                            f'{runid}_{field_type}_{target_date}.png')
+                print(fig_name)
+                plt.savefig(fig_name, bbox_inches='tight', dpi=200)
+
+        # export overview
+        if overview:
+            fig_name = (f'{self.results_dir}/overview_'
+                        f'{field_type}_{target_date}.png'
+                        )
+            print(fig_name)
+            plt.savefig(fig_name, bbox_inches='tight', dpi=200)
+
+
 
     def plot_hovmöller(self, T, plot_type, transect):
         # plt.close('all')

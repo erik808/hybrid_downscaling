@@ -24,7 +24,7 @@ gamma = 1e1
 # options: 'identity', 'simpleRNN',
 #          'dense', 'lstm', 'conv3d',
 #          'convlstm', 'DMD', 'DMDc', 'ESN', 'ESNc'
-predictor = 'DMDc'
+predictor = 'ESNc'
 
 
 esn_dmd_pars = {
@@ -35,7 +35,7 @@ esn_dmd_pars = {
     'tikhonov_lambda': 1e-2,
     'fCutoff': 0.0,
     'squaredStates': 'even',
-    'keep_samples': 6000,
+    'keep_samples': 5000,
 }
 
 esn_dmd_bias = False,

@@ -25,7 +25,7 @@ class Analysis():
              'results/predictions.dill')
 
         self.esnc_path = lambda cf, mem: \
-            ('experiment/predESNc_lam1e-2_hist6000_'
+            ('experiment/predESNc_rho1_lam1e-2_hist5000_'
              f'vaef64-64_cf{cf}/member_{mem}/'
              'results/predictions.dill')
 
@@ -89,8 +89,8 @@ class Analysis():
             .transpose((0, 2, 3, 1))
         return LR_input
 
-    def load_time(self, fname):
-        with open(fname, 'rb') as file:
+    def load_time(self):
+        with open(self.resnet_path(32, 0), 'rb') as file:
             results = dill.load(file)['results']
         time = np.array([np.datetime64(re['time']) for re in results])
         return time
@@ -143,11 +143,12 @@ class Analysis():
             z_resnet,
             z_esnc,
     ):
+        time = self.load_time()
         cmap = plt.get_cmap('tab10')
         data = {
             'truth': {
                 'data': np.nan_to_num(y_truth),
-                'time': [],
+                'time': time,
                 'plotkwargs': {
                     'label': 'reference',
                     'linestyle': '-',
@@ -163,7 +164,7 @@ class Analysis():
                 {
                     f'bilin_cf{cf}': {
                         'data': np.nan_to_num(z_bilin[cf]),
-                        'time': [],
+                        'time': time,
                         'cf': cf,
                         'plotkwargs': {
                             'label': 'bilinear interpolation',
@@ -182,7 +183,7 @@ class Analysis():
                     {
                         f'pred_resnet_cf{cf}/m{member}': {
                             'data': np.nan_to_num(z_resnet[cf][member]),
-                            'time': [],
+                            'time': time,
                             'cf': cf,
                             'plotkwargs': {
                                 'label': 'SRResNet',
@@ -198,7 +199,7 @@ class Analysis():
                     {
                         f'pred_esnc_cf{cf}/m{member}': {
                             'data': np.nan_to_num(z_esnc[cf][member]),
-                            'time': [],
+                            'time': time,
                             'cf': cf,
                             'plotkwargs': {
                                 'label': 'CAE-ESNc',
@@ -218,6 +219,7 @@ members = range(10)
 # members = [0, 1, 2]
 #cfrange = [4, 8, 16, 32]
 cfrange = [8, 16, 32]
+cfrange = [32]
 
 plot_legend = True
 for cf in cfrange:
@@ -235,7 +237,19 @@ for cf in cfrange:
         z_esnc)
 
     # plot vorticity snapshots + transects (in truth plot)
-    analyzer.plot_machine.plot_vorticity_fields(data_dict)
+    analyzer.plot_machine.plot_2d_fields(
+        data_dict, field_type='energy', overview=True)
+    analyzer.plot_machine.plot_2d_fields(
+        data_dict, field_type='vorticity', overview=True)
+    analyzer.plot_machine.plot_2d_fields(
+        data_dict, field_type='uo', overview=True)
+    analyzer.plot_machine.plot_2d_fields(
+        data_dict, field_type='energy', overview=False)
+    analyzer.plot_machine.plot_2d_fields(
+        data_dict, field_type='vorticity', overview=False)
+    analyzer.plot_machine.plot_2d_fields(
+        data_dict, field_type='uo', overview=False)
+    breakpoint()
 
     for direction in ['temporal', 'spatial']:
         for spectrum_type in ['energy', 'enstrophy', 'ssh']:

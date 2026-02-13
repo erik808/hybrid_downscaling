@@ -1,6 +1,5 @@
 from datetime import datetime
 import matplotlib.pyplot as plt
-import matplotlib.patches as mpatches
 import numpy as np
 import cartopy.crs as ccrs
 import os
@@ -73,6 +72,88 @@ class PlotMachine():
         print(fig_name)
         plt.savefig(fig_name, bbox_inches='tight')
 
+    def plot_coarse_input(
+            self,
+            data_dict,
+            target_date='2025-05-01',
+            field_type='uo'
+    ):
+        plt.close('all')
+        ensembles, normal_runs = self.split_ensembles(data_dict.keys())
+        time = data_dict[normal_runs[0]]['time']
+        t_idx = np.where(time > np.datetime64(target_date))[0][0]
+
+        for run in normal_runs:
+            if 'bilin' not in run:
+                continue
+
+            values = data_dict[run]['input']['LR_input_orig'][t_idx, ]
+            grid_LR = data_dict[run]['input']['LR_grid']
+            lons = grid_LR['lon']
+            lats = grid_LR['lat']
+
+            if field_type == 'uo':
+                values = values[..., 0]
+                # label = 'zonal velocity ($m/s$)'
+                cmap = 'RdBu'
+                vmin = -0.6
+                vmax = 0.6
+
+            if field_type == 'vo':
+                values = values[..., 1]
+                # label = 'zonal velocity ($m/s$)'
+                cmap = 'RdBu'
+                vmin = -0.6
+                vmax = 0.6
+
+            elif field_type == 'energy':
+                values = np.sum(np.square(values[..., :2]), axis=-1)
+                # label = 'kinetic energy ($m^2/s^2$)'
+                cmap = 'coolwarm'
+                vmin = None
+                vmax = None
+
+            plt.figure()
+            ax = plt.axes(projection=ccrs.PlateCarree())
+            ax.pcolormesh(lons, lats,
+                          values,
+                          transform=ccrs.PlateCarree(),
+                          shading='auto',
+                          cmap=cmap,
+                          vmin=vmin,
+                          vmax=vmax)
+            ax.coastlines(resolution='10m', color='black',
+                          linewidth=1)
+
+            ax.pcolormesh(lons, lats, np.zeros_like(lons[:-1, :-1]),
+                          transform=ccrs.PlateCarree(),
+                          shading='flat',
+                          facecolor='none',
+                          edgecolor='black',
+                          alpha=0.6,
+                          linewidth=0.5)
+
+            cf = data_dict[run]['cf']
+
+            ax.set_extent([lons[0, 0], lons[-1, -1],
+                           lats[0, 0], lats[-1, -1]],
+                          crs=ccrs.PlateCarree())
+
+            sizes = {8: 10, 16: 30, 32: 45}
+            ax.scatter(lons, lats, c='k',
+                       s=sizes[cf],
+                       zorder=10, alpha=1,
+                       clip_on=False)
+
+            runid = run.split('/')[0]
+            fig_name = (f'{self.results_dir}/'
+                        f'{runid}_LRinput_{field_type}_'
+                        f'{target_date}.png')
+            print(fig_name)
+            plt.savefig(fig_name, bbox_inches='tight', dpi=200)
+            # plt.pause(1)
+            # breakpoint()
+
     def plot_2d_fields(
             self,
             data_dict,
@@ -81,6 +162,7 @@ class PlotMachine():
             overview=False,
             add_contours=False
     ):
+
         plt.close('all')
         ensembles, normal_runs = self.split_ensembles(data_dict.keys())
         # field_type = 'vorticity'
@@ -120,7 +202,7 @@ class PlotMachine():
 
             elif field_type == 'ssh':
                 values = values[..., -1]
-                label = 'ssh (m)'
+                label = 'ssh ($m$)'
                 cmap = 'RdBu'
                 vmin = None
                 vmax = None
@@ -177,12 +259,15 @@ class PlotMachine():
                           linewidth=1)
 
             if overview:
-                ax.set_xlim([-8, 12])
-                ax.set_ylim([51, 66])
+                ax.set_xlim([-4, 11])
+                ax.set_ylim([52, 62])
                 ax.plot([lon_min, lon_max, lon_max, lon_min, lon_min],
                         [lat_min, lat_min, lat_max, lat_max, lat_min],
                         'k--',
                         transform=ccrs.PlateCarree())
+                ax.gridlines(draw_labels=True,
+                             linestyle='--', color='gray', alpha=0.3)
+
             else:
                 plt.colorbar(mesh, orientation='horizontal',
                              label=label,
@@ -225,8 +310,6 @@ class PlotMachine():
                         )
             print(fig_name)
             plt.savefig(fig_name, bbox_inches='tight', dpi=200)
-
-
 
     def plot_hovmöller(self, T, plot_type, transect):
         # plt.close('all')

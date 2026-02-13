@@ -5,11 +5,13 @@ import keras
 import dill
 import numpy as np
 import tools
+import stats_tool
 import data_manager_cmems
 from sklearn.neighbors import KernelDensity
 import matplotlib.pyplot as plt
 importlib.reload(data_manager_cmems)
 importlib.reload(plot_utils)
+importlib.reload(stats_tool)
 plt.switch_backend('qtagg')
 
 
@@ -37,6 +39,7 @@ class Analysis():
                 base_dir=".",
             )
         self.plot_machine = plot_utils.PlotMachine(dm=self.dmgr_cmems)
+        self.metrics = stats_tool.Metrics()
         results_dir_org = self.plot_machine.results_dir
         results_dir = results_dir_org + '/merge'
         self.plot_machine.set_results_dir(results_dir)
@@ -82,12 +85,13 @@ class Analysis():
             )
         LR_scaler = dmgr_cmems_tmp.scalers['LR']
 
-        LR_input = tools.unscale_var(LR_input, LR_scaler)
-        LR_input = np.ascontiguousarray(LR_input.transpose((0, 3, 1, 2)))
+        LR_input_orig = tools.unscale_var(LR_input, LR_scaler)
+        LR_input = np.ascontiguousarray(LR_input_orig.transpose((0, 3, 1, 2)))
         LR_input = dmgr_cmems_tmp\
             .bilin_upsampler(LR_input)\
             .transpose((0, 2, 3, 1))
-        return LR_input
+        return LR_input, {'LR_input_orig': LR_input_orig,
+                          'LR_grid': dmgr_cmems_tmp.grid_LR}
 
     def load_time(self):
         with open(self.resnet_path(32, 0), 'rb') as file:
@@ -96,13 +100,15 @@ class Analysis():
         return time
 
     def load_bilin(self, cf_vals):
-        out = {}
+        out_bilin = {}
+        out_orig = {}
         print('loading bilinear interpolation results')
         pb_i = keras.utils.Progbar(len(cf_vals), interval=0.5)
         for cf in cf_vals:
             pb_i.add(1)
-            out[cf] = self.load_input(self.resnet_path(cf, 0))
-        return out
+            out_bilin[cf], out_orig[cf] = \
+                self.load_input(self.resnet_path(cf, 0))
+        return out_bilin, out_orig
 
     def load_resnet(self, cf_vals, members):
         print('loading resnet results')
@@ -140,6 +146,7 @@ class Analysis():
             members,
             y_truth,
             z_bilin,
+            z_input,
             z_resnet,
             z_esnc,
     ):
@@ -164,6 +171,7 @@ class Analysis():
                 {
                     f'bilin_cf{cf}': {
                         'data': np.nan_to_num(z_bilin[cf]),
+                        'input': np.nan_to_num(z_input[cf]),
                         'time': time,
                         'cf': cf,
                         'plotkwargs': {
@@ -216,16 +224,16 @@ class Analysis():
 
 analyzer = Analysis()
 members = range(10)
-# members = [0, 1, 2]
-#cfrange = [4, 8, 16, 32]
+# cfrange = [4, 8, 16, 32]
 cfrange = [8, 16, 32]
-cfrange = [32]
+members = [0, 4, 7]
+# cfrange = [32]
 
 plot_legend = True
 for cf in cfrange:
     plt.close('all')
     y_truth = analyzer.load_reference()
-    z_bilin = analyzer.load_bilin([cf])
+    z_bilin, z_input = analyzer.load_bilin([cf])
     z_resnet = analyzer.load_resnet([cf], members)
     z_esnc = analyzer.load_esnc([cf], members)
     data_dict = analyzer.create_data_dict(
@@ -233,24 +241,34 @@ for cf in cfrange:
         members,
         y_truth,
         z_bilin,
+        z_input,
         z_resnet,
         z_esnc)
 
-    # plot vorticity snapshots + transects (in truth plot)
+    # 2d coarse input plots
+    analyzer.plot_machine.plot_coarse_input(
+        data_dict, field_type='uo')
+
+    # 2d overview plots
+    analyzer.plot_machine.plot_2d_fields(
+        data_dict, field_type='uo', overview=True)
     analyzer.plot_machine.plot_2d_fields(
         data_dict, field_type='energy', overview=True)
     analyzer.plot_machine.plot_2d_fields(
         data_dict, field_type='vorticity', overview=True)
-    analyzer.plot_machine.plot_2d_fields(
-        data_dict, field_type='uo', overview=True)
+
+    # plot 2d fields
     analyzer.plot_machine.plot_2d_fields(
         data_dict, field_type='energy', overview=False)
     analyzer.plot_machine.plot_2d_fields(
         data_dict, field_type='vorticity', overview=False)
     analyzer.plot_machine.plot_2d_fields(
         data_dict, field_type='uo', overview=False)
-    breakpoint()
 
+    # RMSE and other statistics
+    analyzer.metrics.compute_RMSE(data_dict)
+
+    # plot spectra
     for direction in ['temporal', 'spatial']:
         for spectrum_type in ['energy', 'enstrophy', 'ssh']:
             plt.figure(figsize=(5, 3.5))

@@ -227,8 +227,8 @@ analyzer = Analysis()
 members = range(10)
 cfrange = [8, 16, 32]
 
-# members = [0, 4, 7]
-# cfrange = [32]
+members = [0]
+cfrange = [32]
 
 plot_legend = True
 for cf in cfrange:
@@ -246,6 +246,12 @@ for cf in cfrange:
         z_resnet,
         z_esnc)
 
+    analyzer.plot_machine.plot_hovmöller(data_dict,
+                                         compute=True,
+                                         plot_type='vorticity',
+                                         transect='along_flow')
+    continue
+
     # RMSE and other statistics
     ftypes = ['uo', 'ssh', 'all', 'vorticity', 'energy']
     metrics = ['RMSE', 'correlation']
@@ -255,8 +261,6 @@ for cf in cfrange:
                 data_dict,
                 metric=metric,
                 field_type=field_type)
-
-    continue
 
     # 2d coarse input plots
     analyzer.plot_machine.plot_coarse_input(
@@ -279,12 +283,13 @@ for cf in cfrange:
         data_dict, field_type='uo', overview=False)
 
     # plot spectra
+    transect = 'along_flow'
     for direction in ['temporal', 'spatial']:
         for spectrum_type in ['energy', 'enstrophy', 'ssh']:
             plt.figure(figsize=(5, 3.5))
             S, T = analyzer.plot_machine.plot_spectrum(
                 data_dict,
-                transect_name='along_flow',
+                transect_name=transect,
                 spectrum_type=spectrum_type,
                 direction=direction,
                 add_powerlaws=False,
@@ -297,8 +302,8 @@ for cf in cfrange:
     del y_truth, z_bilin, z_resnet, z_esnc, data_dict
 
 # manipulate metrics dict
-metric = 'correlation'
-field_type = 'ssh'
+metric = 'RMSE'
+field_type = 'all'
 
 mdict = analyzer.metrics.metrics_dict[metric]
 keys = mdict.keys()
@@ -308,7 +313,7 @@ all_runs = normal_runs + [key
                           for key in ensembles.keys()]
 
 d = {}
-plt.close('all')
+
 plt.figure()
 for key, value in ensembles.items():
     d[key.replace('8', '08')] = [mdict[mem][field_type] for mem in value]

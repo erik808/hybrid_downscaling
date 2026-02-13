@@ -309,25 +309,60 @@ class PlotMachine():
             print(fig_name)
             plt.savefig(fig_name, bbox_inches='tight', dpi=200)
 
-    def plot_hovmöller(self, T, plot_type, transect):
-        # plt.close('all')
+    def plot_hovmöller(
+            self,
+            data_dict,
+            compute=False,
+            scaler=None,
+            plot_type='vorticity',
+            transect='along_flow',
+    ):
+        plt.close('all')
+        if compute:
+            d = {}
+            for key, value in data_dict.items():
+                data = value['data']
+                d[key] = self.ct.hovmöller_along_transect(
+                    data,
+                    scaler=None,
+                    transect_name=transect,
+                    spectrum_type=plot_type,
+                    detide=False,
+                )
+            T = d
+        else:
+            T = data_dict
+
         if plot_type == 'energy':
             for key, value in T.items():
                 # take only first 2 variables uo, vo
                 T[key] = 0.5 * np.sum(np.square(value[..., :2]), axis=2)
 
-        plt.figure(figsize=(8, 10))
-        for i, key in enumerate(T.keys()):
-            plt.subplot(len(T.values()), 1, i + 1)
-            a = plt.pcolormesh(T[key].transpose())
-            plt.colorbar(a)
-            plt.gca().set_title(key)
+        vmin = None
+        vmax = None
+        cmap = 'viridis'
 
-        plt.suptitle(f'Hovmöller diagrams: {plot_type}, {transect}')
-        fig_name = (f'{self.results_dir}/Hovmöller_'
-                    f'{plot_type}_{transect}.png')
-        plt.tight_layout()
-        plt.savefig(fig_name, bbox_inches='tight')
+        if plot_type == 'vorticity':
+            cmap = 'RdBu'
+            vmin = -12
+            vmax = 12
+
+        for i, key in enumerate(T.keys()):
+            plt.figure()
+            a = plt.pcolormesh(
+                T[key].transpose(),
+                vmin=vmin,
+                vmax=vmax,
+                cmap=cmap)
+
+            plt.colorbar(a)
+            runid = key.split('/')[0]
+            fig_name = (f'{self.results_dir}/Hovmöller_'
+                        f'{runid}_{plot_type}_{transect}.png')
+            print(fig_name)
+            plt.savefig(fig_name, bbox_inches='tight')
+            plt.pause(1)
+            breakpoint()
 
     def spectra_wrapper(self, x, y, z, t):
         scaler_list = ['LR', 'HR', 'HR']

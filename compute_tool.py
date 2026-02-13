@@ -136,7 +136,8 @@ class ComputeTool():
         if spectrum_type == 'energy':
             transect_data = self.invert_and_regrid(data, scaler)
 
-        elif spectrum_type == 'enstrophy':
+        elif (spectrum_type == 'enstrophy' or
+              spectrum_type == 'vorticity'):
             zeta = self.vorticity(data, scaler, crop=False)
             transect_data = self.do_regridding(zeta)
 

@@ -381,3 +381,19 @@ def input_handling(argv, default_id='test/member_0', default_seed=123):
         member = 'member_0'
 
     return experiment_id, seed, member
+
+
+def split_ensembles(keys):
+    # check whether key is member of an ensemble, store member names
+    ensembles = {}
+    normal_runs = []
+    for key in keys:
+        ksplit = key.split('/')
+        kbase = ksplit[0]
+
+        if len(ksplit) > 1:
+            ensembles[kbase] = [key] if kbase not in ensembles else \
+                ensembles[kbase] + [key]
+        else:
+            normal_runs += [kbase]
+    return ensembles, normal_runs

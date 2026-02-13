@@ -12,6 +12,7 @@ import matplotlib.pyplot as plt
 importlib.reload(data_manager_cmems)
 importlib.reload(plot_utils)
 importlib.reload(stats_tool)
+importlib.reload(tools)
 plt.switch_backend('qtagg')
 
 
@@ -39,7 +40,7 @@ class Analysis():
                 base_dir=".",
             )
         self.plot_machine = plot_utils.PlotMachine(dm=self.dmgr_cmems)
-        self.metrics = stats_tool.Metrics()
+        self.metrics = stats_tool.Metrics(dm=self.dmgr_cmems)
         results_dir_org = self.plot_machine.results_dir
         results_dir = results_dir_org + '/merge'
         self.plot_machine.set_results_dir(results_dir)
@@ -224,9 +225,9 @@ class Analysis():
 
 analyzer = Analysis()
 members = range(10)
-# cfrange = [4, 8, 16, 32]
 cfrange = [8, 16, 32]
-members = [0, 4, 7]
+
+# members = [0, 4, 7]
 # cfrange = [32]
 
 plot_legend = True
@@ -244,6 +245,18 @@ for cf in cfrange:
         z_input,
         z_resnet,
         z_esnc)
+
+    # RMSE and other statistics
+    ftypes = ['uo', 'ssh', 'all', 'vorticity', 'energy']
+    metrics = ['RMSE', 'correlation']
+    for metric in metrics:
+        for field_type in ftypes:
+            analyzer.metrics.compute_metric(
+                data_dict,
+                metric=metric,
+                field_type=field_type)
+
+    continue
 
     # 2d coarse input plots
     analyzer.plot_machine.plot_coarse_input(
@@ -265,9 +278,6 @@ for cf in cfrange:
     analyzer.plot_machine.plot_2d_fields(
         data_dict, field_type='uo', overview=False)
 
-    # RMSE and other statistics
-    analyzer.metrics.compute_RMSE(data_dict)
-
     # plot spectra
     for direction in ['temporal', 'spatial']:
         for spectrum_type in ['energy', 'enstrophy', 'ssh']:
@@ -285,6 +295,35 @@ for cf in cfrange:
     plot_legend = False
     # cleanup
     del y_truth, z_bilin, z_resnet, z_esnc, data_dict
+
+# manipulate metrics dict
+metric = 'correlation'
+field_type = 'ssh'
+
+mdict = analyzer.metrics.metrics_dict[metric]
+keys = mdict.keys()
+ensembles, normal_runs = \
+    tools.split_ensembles(keys)
+all_runs = normal_runs + [key
+                          for key in ensembles.keys()]
+
+d = {}
+plt.close('all')
+plt.figure()
+for key, value in ensembles.items():
+    d[key.replace('8', '08')] = [mdict[mem][field_type] for mem in value]
+
+for run in normal_runs:
+    d[run.replace('8', '08')] = [mdict[run][field_type]]
+
+sorted_keys = sorted(d.keys())
+
+plt.boxplot([d[key] for key in sorted_keys],
+            tick_labels=[key for key in sorted_keys],
+            vert=False,
+            )
+plt.gca().set_title(f'{metric}, {field_type}')
+plt.pause(1)
 
 
 raise Exception('que')

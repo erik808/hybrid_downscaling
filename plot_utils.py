@@ -79,7 +79,7 @@ class PlotMachine():
             field_type='uo'
     ):
         plt.close('all')
-        ensembles, normal_runs = self.split_ensembles(data_dict.keys())
+        ensembles, normal_runs = tools.split_ensembles(data_dict.keys())
         time = data_dict[normal_runs[0]]['time']
         t_idx = np.where(time > np.datetime64(target_date))[0][0]
 
@@ -151,8 +151,6 @@ class PlotMachine():
                         f'{target_date}.png')
             print(fig_name)
             plt.savefig(fig_name, bbox_inches='tight', dpi=200)
-            # plt.pause(1)
-            # breakpoint()
 
     def plot_2d_fields(
             self,
@@ -164,7 +162,7 @@ class PlotMachine():
     ):
 
         plt.close('all')
-        ensembles, normal_runs = self.split_ensembles(data_dict.keys())
+        ensembles, normal_runs = tools.split_ensembles(data_dict.keys())
         # field_type = 'vorticity'
         # get time index
         # target_date = '2025-06-01'
@@ -749,27 +747,12 @@ class PlotMachine():
 
         return S, T
 
-    def split_ensembles(self, keys):
-        # check whether key is member of an ensemble, store member names
-        ensembles = {}
-        normal_runs = []
-        for key in keys:
-            ksplit = key.split('/')
-            kbase = ksplit[0]
-
-            if len(ksplit) > 1:
-                ensembles[kbase] = [key] if kbase not in ensembles else \
-                    ensembles[kbase] + [key]
-            else:
-                normal_runs += [kbase]
-        return ensembles, normal_runs
-
     def combine_ensemble_members(self, S, k, data, combine_members):
         # combine ensemble members
         if combine_members == 'disabled':
             return {}, {}
 
-        ensembles, normal_runs = self.split_ensembles(S.keys())
+        ensembles, normal_runs = tools.split_ensembles(S.keys())
         S_stacked = {}
         S_combined = {}
 

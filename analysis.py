@@ -1,6 +1,7 @@
-# compare runs
 import plot_utils
 import importlib
+import os
+import time
 import keras
 import dill
 import numpy as np
@@ -39,13 +40,59 @@ class Analysis():
                 force_rebuild=False,
                 base_dir=".",
             )
+
         self.plot_machine = plot_utils.PlotMachine(dm=self.dmgr_cmems)
-        self.metrics = stats_tool.Metrics(dm=self.dmgr_cmems)
+
         results_dir_org = self.plot_machine.results_dir
-        results_dir = results_dir_org + '/merge'
-        self.plot_machine.set_results_dir(results_dir)
+        self.results_dir = results_dir_org + '/merge'
+        self.plot_machine.set_results_dir(self.results_dir)
 
         self.HR_scaler = self.dmgr_cmems.scalers['HR']
+
+        self.y_truth = self.load_reference()
+        modes = self.get_modes()
+        self.metrics = stats_tool.Metrics(
+            dm=self.dmgr_cmems, modes=modes)
+
+    def get_modes(self, force_compute=False):
+        self.modes_file = f'{self.results_dir}/modes.dill'
+        if os.path.exists(self.modes_file) and not force_compute:
+            print('modes file exists, loading')
+            with open(self.modes_file, 'rb') as file:
+                modes = dill.load(file)
+        else:
+            print('computing modes...')
+            modes = self.compute_modes()
+        return modes
+
+    def compute_modes(self):
+
+        print('computing SVD... ', end="")
+        tdim = self.y_truth.shape[0]
+
+        tic = time.time()
+
+        X = np.nan_to_num(self.y_truth.reshape(tdim, -1).T)
+        # mean center
+        X = (X - np.mean(X, axis=0)) / np.sqrt(tdim - 1)
+
+        U, s, Vt = np.linalg.svd(
+            X,
+            full_matrices=False,
+            compute_uv=True)
+
+        print('done', end="")
+        toc = time.time()
+        print(f' {toc-tic}')
+
+        modes = {'U': (U.T).reshape(self.y_truth.shape),
+                 's': s,
+                 'Vt': Vt}
+
+        with open(self.modes_file, 'wb') as file:
+            dill.dump(modes, file)
+
+        return modes
 
     def load_reference(self):
         print('loading reference')
@@ -145,7 +192,6 @@ class Analysis():
             self,
             cf_vals,
             members,
-            y_truth,
             z_bilin,
             z_input,
             z_resnet,
@@ -155,7 +201,7 @@ class Analysis():
         cmap = plt.get_cmap('tab10')
         data = {
             'truth': {
-                'data': np.nan_to_num(y_truth),
+                'data': np.nan_to_num(self.y_truth),
                 'time': time,
                 'plotkwargs': {
                     'label': 'reference',
@@ -227,30 +273,23 @@ analyzer = Analysis()
 members = range(10)
 cfrange = [8, 16, 32]
 
-members = [0]
-cfrange = [32]
+# members = [0]
+# cfrange = [32]
 
 plot_legend = True
+
 for cf in cfrange:
     plt.close('all')
-    y_truth = analyzer.load_reference()
     z_bilin, z_input = analyzer.load_bilin([cf])
     z_resnet = analyzer.load_resnet([cf], members)
     z_esnc = analyzer.load_esnc([cf], members)
     data_dict = analyzer.create_data_dict(
         [cf],
         members,
-        y_truth,
         z_bilin,
         z_input,
         z_resnet,
         z_esnc)
-
-    analyzer.plot_machine.plot_hovmöller(data_dict,
-                                         compute=True,
-                                         plot_type='vorticity',
-                                         transect='along_flow')
-    continue
 
     # RMSE and other statistics
     ftypes = ['uo', 'ssh', 'all', 'vorticity', 'energy']
@@ -261,26 +300,34 @@ for cf in cfrange:
                 data_dict,
                 metric=metric,
                 field_type=field_type)
+    continue
 
-    # 2d coarse input plots
-    analyzer.plot_machine.plot_coarse_input(
-        data_dict, field_type='uo')
+    # only case to do reconstruction plotting
+    if members == [0] and cf == 32:
+        analyzer.plot_machine.plot_hovmöller(data_dict,
+                                             compute=True,
+                                             plot_type='energy',
+                                             transect='along_flow')
 
-    # 2d overview plots
-    analyzer.plot_machine.plot_2d_fields(
-        data_dict, field_type='uo', overview=True)
-    analyzer.plot_machine.plot_2d_fields(
-        data_dict, field_type='energy', overview=True)
-    analyzer.plot_machine.plot_2d_fields(
-        data_dict, field_type='vorticity', overview=True)
+        # 2d coarse input plots
+        analyzer.plot_machine.plot_coarse_input(
+            data_dict, field_type='uo')
 
-    # plot 2d fields
-    analyzer.plot_machine.plot_2d_fields(
-        data_dict, field_type='energy', overview=False)
-    analyzer.plot_machine.plot_2d_fields(
-        data_dict, field_type='vorticity', overview=False)
-    analyzer.plot_machine.plot_2d_fields(
-        data_dict, field_type='uo', overview=False)
+        # 2d overview plots
+        analyzer.plot_machine.plot_2d_fields(
+            data_dict, field_type='uo', overview=True)
+        analyzer.plot_machine.plot_2d_fields(
+            data_dict, field_type='energy', overview=True)
+        analyzer.plot_machine.plot_2d_fields(
+            data_dict, field_type='vorticity', overview=True)
+
+        # plot 2d fields
+        analyzer.plot_machine.plot_2d_fields(
+            data_dict, field_type='energy', overview=False)
+        analyzer.plot_machine.plot_2d_fields(
+            data_dict, field_type='vorticity', overview=False)
+        analyzer.plot_machine.plot_2d_fields(
+            data_dict, field_type='uo', overview=False)
 
     # plot spectra
     transect = 'along_flow'
@@ -299,7 +346,7 @@ for cf in cfrange:
 
     plot_legend = False
     # cleanup
-    del y_truth, z_bilin, z_resnet, z_esnc, data_dict
+    del z_bilin, z_resnet, z_esnc, data_dict
 
 # manipulate metrics dict
 metric = 'RMSE'
@@ -323,12 +370,47 @@ for run in normal_runs:
 
 sorted_keys = sorted(d.keys())
 
-plt.boxplot([d[key] for key in sorted_keys],
-            tick_labels=[key for key in sorted_keys],
-            vert=False,
-            )
-plt.gca().set_title(f'{metric}, {field_type}')
-plt.pause(1)
+cfs = [key[-2:] for key in sorted_keys]
+grouped = {}
+for (cf, key) in zip(cfs, sorted_keys):
+    grouped[cf] = grouped[cf]+[key] if cf in grouped else [key]
+
+cmap = plt.get_cmap('tab10')
+colors = [cmap(0), cmap(2), cmap(1)]
+if metric == 'correlation':
+    data = [np.asarray(d[key]) for key in sorted_keys]
+    for (value, key, col) in zip(data, sorted_keys, colors):
+        q1 = np.quantile(value, 0.25, axis=0)
+        q2 = np.quantile(value, 0.5, axis=0)
+        q3 = np.quantile(value, 0.75, axis=0)
+        plt.fill_between(range(10), q1, q3, color=col, zorder=0, alpha=0.5)
+        plt.plot(range(10), q2, label=key, color=col, linewidth=2)
+    plt.legend()
+
+else:
+
+    plt.figure()
+    plt.boxplot([d[key] for key in sorted_keys],
+                tick_labels=sorted_keys,
+                vert=False)
+    plt.gca().set_title(f'{metric}, {field_type}')
+    plt.pause(1)
+
+    q1 = [np.quantile(d[key], 0.25) for key in sorted_keys]
+    q2 = [np.quantile(d[key], 0.50) for key in sorted_keys]
+    q3 = [np.quantile(d[key], 0.75) for key in sorted_keys]
+
+    plt.figure()
+    plt.fill_between(range(9), q1, q3, zorder=0, alpha=0.5)
+    plt.plot(range(9), q2, '.-')
+    plt.pause(1)
+
+
+
+
+
+
+
 
 
 raise Exception('que')

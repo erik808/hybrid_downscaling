@@ -317,6 +317,7 @@ class PlotMachine():
             plot_type='vorticity',
             transect='along_flow',
     ):
+
         plt.close('all')
         if compute:
             d = {}
@@ -333,36 +334,64 @@ class PlotMachine():
         else:
             T = data_dict
 
-        if plot_type == 'energy':
-            for key, value in T.items():
+        for key, value in T.items():
+            if plot_type == 'energy':
                 # take only first 2 variables uo, vo
                 T[key] = 0.5 * np.sum(np.square(value[..., :2]), axis=2)
+            elif plot_type == 'uo':
+                T[key] = value[..., 0]
 
         vmin = None
         vmax = None
         cmap = 'viridis'
+        label = None
 
         if plot_type == 'vorticity':
             cmap = 'RdBu'
             vmin = -12
             vmax = 12
+            label = 'vorticity (cycles/day)'
 
+        if plot_type == 'uo':
+            cmap = 'RdBu'
+            vmin = -0.6
+            vmax = 0.6
+            label = 'horizontal velocity ($m/s$)'
+
+        if plot_type == 'energy':
+            cmap = 'YlGnBu'
+            vmin = 0
+            vmax = 0.7
+            label = 'kinetic energy ($m^2/s^2$)'
+
+        if 'time' in data_dict['truth']:
+            t_array = data_dict['truth']['time']
+        else:
+            t_array = np.arange(T['truth'].shape[0])
+
+        x_array = np.arange(T['truth'].shape[1])
+
+        plt.close('all')
         for i, key in enumerate(T.keys()):
-            plt.figure()
+            plt.figure(figsize=(10, 2.5))
             a = plt.pcolormesh(
+                t_array,
+                x_array,
                 T[key].transpose(),
                 vmin=vmin,
                 vmax=vmax,
                 cmap=cmap)
 
-            plt.colorbar(a)
+            plt.colorbar(a, label=label, aspect=10)
+            plt.xticks(rotation=45, ha='right')
+            plt.yticks([])
+            # plt.ylabel('distance along transect')
             runid = key.split('/')[0]
             fig_name = (f'{self.results_dir}/Hovmöller_'
                         f'{runid}_{plot_type}_{transect}.png')
             print(fig_name)
-            plt.savefig(fig_name, bbox_inches='tight')
+            plt.savefig(fig_name, bbox_inches='tight', dpi=200)
             plt.pause(1)
-            breakpoint()
 
     def spectra_wrapper(self, x, y, z, t):
         scaler_list = ['LR', 'HR', 'HR']

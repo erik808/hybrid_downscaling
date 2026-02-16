@@ -4,8 +4,9 @@ import compute_tool
 
 class Metrics():
 
-    def __init__(self, dm):
+    def __init__(self, dm, modes):
         self.dm = dm
+        self.modes = modes
         self.ct = compute_tool.ComputeTool(dm=self.dm)
         self.metrics_dict = {}
         self.metrics_dict['RMSE'] = {}
@@ -28,6 +29,7 @@ class Metrics():
 
     def compute_metric(self, data, metric='RMSE', field_type='all'):
         truth = self.field_manip(data['truth']['data'], field_type)
+        self.modes_U = self.field_manip(self.modes['U'], field_type)
 
         for key, value in data.items():
             if key == 'truth':
@@ -58,18 +60,26 @@ class Metrics():
 
     def compute_correlation(self, truth, prediction, key, field_type):
         shape = truth.shape
-        mid_lat = int(shape[1]/2)-1
-        mid_lon = int(shape[2]/2)-1
-        pred = prediction[self.trunc_time:, mid_lat, mid_lon]
-        true = truth[self.trunc_time:, mid_lat, mid_lon]
-        pred_std = np.std(pred)
-        true_std = np.std(true)
-        cov = np.cov(pred, true, rowvar=False)[1, 0]
-        correlation = cov / (pred_std * true_std)
+
+        correlations = []
+        for mode in range(10):
+            U = (self.modes_U.reshape(-1, np.prod(shape[1:])))[mode]
+            # truncate, ignore first t steps
+            pred = prediction[self.trunc_time:, ]\
+                .reshape(-1, np.prod(shape[1:]))
+            true = truth[self.trunc_time:, ]\
+                .reshape(-1, np.prod(shape[1:]))
+
+            pred_proj = U @ pred.T
+            true_proj = U @ true.T
+
+            correlations.append(
+                np.corrcoef(np.vstack([pred_proj, true_proj]))[1, 0]
+            )
 
         if key in self.metrics_dict['correlation']:
             self.metrics_dict['correlation'][key]\
-                .update({field_type: correlation})
+                .update({field_type: correlations})
         else:
             self.metrics_dict['correlation'][key] = \
-                {field_type: correlation}
+                {field_type: correlations}

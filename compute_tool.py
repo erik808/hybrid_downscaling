@@ -133,7 +133,10 @@ class ComputeTool():
     ):
         self.get_regridder(transect_name)
 
-        if spectrum_type == 'energy':
+        if (
+                spectrum_type == 'energy' or
+                spectrum_type == 'uo'
+        ):
             transect_data = self.invert_and_regrid(data, scaler)
 
         elif (spectrum_type == 'enstrophy' or

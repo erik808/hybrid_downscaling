@@ -3,6 +3,7 @@ import matplotlib.pyplot as plt
 import numpy as np
 import cartopy.crs as ccrs
 import os
+import cmocean
 import tools
 from multiprocess import Pool
 import importlib
@@ -197,6 +198,7 @@ class PlotMachine():
                 cmap = 'RdBu'
                 vmin = -12
                 vmax = 12
+                extend = 'both'
 
             elif field_type == 'ssh':
                 values = values[..., -1]
@@ -204,6 +206,7 @@ class PlotMachine():
                 cmap = 'RdBu'
                 vmin = None
                 vmax = None
+                extend = None
 
             elif field_type == 'energy':
                 values = np.sum(np.square(values[..., :2]), axis=-1)
@@ -211,6 +214,7 @@ class PlotMachine():
                 cmap = 'coolwarm'
                 vmin = 0
                 vmax = 0.6
+                extend = 'max'
 
             elif field_type == 'uo':
                 values = values[..., 0]
@@ -218,6 +222,7 @@ class PlotMachine():
                 cmap = 'RdBu'
                 vmin = -0.6
                 vmax = 0.6
+                extend = 'both'
 
             elif field_type == 'vo':
                 values = values[..., 1]
@@ -225,6 +230,7 @@ class PlotMachine():
                 cmap = 'RdBu'
                 vmin = -0.6
                 vmax = 0.6
+                extend = 'both'
 
             mask = self.dm.mask.values[0,]
 
@@ -269,7 +275,8 @@ class PlotMachine():
             else:
                 plt.colorbar(mesh, orientation='horizontal',
                              label=label,
-                             pad=0.05)
+                             pad=0.05,
+                             extend=extend)
 
             if run == 'truth' and not overview:
                 _, tr_along = self.ct.get_transect('along_flow')
@@ -279,14 +286,14 @@ class PlotMachine():
                         'k-',
                         linewidth=2.6,
                         transform=ccrs.PlateCarree(),
-                        label='along flow transect',
+                        label='along-flow transect',
                         )
                 ax.plot([tr_across['lon_start'], tr_across['lon_end']],
                         [tr_across['lat_start'], tr_across['lat_end']],
                         'k--',
                         linewidth=2.6,
                         transform=ccrs.PlateCarree(),
-                        label='across flow transect',
+                        label='across-flow transect',
                         )
                 ax.legend(loc='lower left', fontsize='large')
                 fig_name = (f'{self.results_dir}/'
@@ -318,7 +325,6 @@ class PlotMachine():
             transect='along_flow',
     ):
 
-        plt.close('all')
         if compute:
             d = {}
             for key, value in data_dict.items():
@@ -340,29 +346,44 @@ class PlotMachine():
                 T[key] = 0.5 * np.sum(np.square(value[..., :2]), axis=2)
             elif plot_type == 'uo':
                 T[key] = value[..., 0]
+            elif plot_type == 'enstrophy':
+                T[key] = np.square(value / (self.ct.tdim / 3600))
 
         vmin = None
         vmax = None
         cmap = 'viridis'
         label = None
+        extend = None
 
         if plot_type == 'vorticity':
             cmap = 'RdBu'
             vmin = -12
             vmax = 12
             label = 'vorticity (cycles/day)'
+            extend = 'both'
+
+        if plot_type == 'enstrophy':
+            cmap = 'YlGnBu'
+            cmap = cmocean.cm.tempo
+            vmin = 0
+            vmax = 0.7
+            label = 'enstrophy ($h^{-2}$)'
+            extend = 'max'
 
         if plot_type == 'uo':
             cmap = 'RdBu'
             vmin = -0.6
             vmax = 0.6
             label = 'horizontal velocity ($m/s$)'
+            extend = 'both'
 
         if plot_type == 'energy':
             cmap = 'YlGnBu'
+            cmap = cmocean.cm.tempo
             vmin = 0
             vmax = 0.7
-            label = 'kinetic energy ($m^2/s^2$)'
+            label = 'energy $(m/s)^2$'
+            extend = 'max'
 
         if 'time' in data_dict['truth']:
             t_array = data_dict['truth']['time']
@@ -371,9 +392,8 @@ class PlotMachine():
 
         x_array = np.arange(T['truth'].shape[1])
 
-        plt.close('all')
         for i, key in enumerate(T.keys()):
-            plt.figure(figsize=(10, 2.5))
+            plt.figure(figsize=(7, 2))
             a = plt.pcolormesh(
                 t_array,
                 x_array,
@@ -382,7 +402,7 @@ class PlotMachine():
                 vmax=vmax,
                 cmap=cmap)
 
-            plt.colorbar(a, label=label, aspect=10)
+            plt.colorbar(a, label=label, aspect=10, extend=extend)
             plt.xticks(rotation=45, ha='right')
             plt.yticks([])
             # plt.ylabel('distance along transect')
@@ -391,7 +411,6 @@ class PlotMachine():
                         f'{runid}_{plot_type}_{transect}.png')
             print(fig_name)
             plt.savefig(fig_name, bbox_inches='tight', dpi=200)
-            plt.pause(1)
 
     def spectra_wrapper(self, x, y, z, t):
         scaler_list = ['LR', 'HR', 'HR']
@@ -686,7 +705,7 @@ class PlotMachine():
                       add_powerlaws=False,
                       detide=False,
                       combine_members='quantiles',
-                      make_title=True,
+                      make_title=False,
                       plot_legend=True,
                       ):
         k = {}

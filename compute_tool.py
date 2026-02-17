@@ -241,7 +241,13 @@ class ComputeTool():
 
         # reorder such that the dimension along which we compute a
         # spectrum is first always
-        specdim = 1 if direction == 'spatial' else 0
+        if direction == 'spatial':
+            specdim = 1
+        elif direction == 'temporal':
+            specdim = 0
+        else:
+            raise Exception('invalid fft direction')
+
         remdim = (specdim + 1) % 2
         reorder = (specdim, remdim) + tuple(range(2, len(data.shape)))
         data = data.transpose(reorder)
@@ -273,11 +279,14 @@ class ComputeTool():
                 S[i,] = mult * np.abs(H[i,])**2 / Npad
 
         elif method == 'welch':
+            nperseg = data_detrend.shape[0] \
+                if data_detrend.shape[0] < 256 else None
 
             f, S = scipy.signal.welch(
                 data_detrend,
                 axis=0,
                 scaling='density',
+                nperseg=nperseg,
             )
 
         if S.ndim == 3:

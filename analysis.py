@@ -52,7 +52,10 @@ class Analysis():
         self.y_truth = self.load_reference()
         modes = self.get_modes()
         self.metrics = stats_tool.Metrics(
-            dm=self.dmgr_cmems, modes=modes)
+            dm=self.dmgr_cmems,
+            ct=self.plot_machine.ct,
+            modes=modes
+        )
 
     def get_modes(self, force_compute=False):
         self.modes_file = f'{self.results_dir}/modes.dill'
@@ -273,10 +276,12 @@ analyzer = Analysis()
 members = range(10)
 cfrange = [8, 16, 32]
 
-# members = [0]
-# cfrange = [32]
+members = [0]
+cfrange = [32]
 
 plot_legend = True
+compute_metrics = True
+plot_reconstructions = True
 
 for cf in cfrange:
     plt.close('all')
@@ -292,23 +297,45 @@ for cf in cfrange:
         z_esnc)
 
     # RMSE and other statistics
-    ftypes = ['uo', 'ssh', 'all', 'vorticity', 'energy']
-    metrics = ['RMSE', 'correlation']
-    for metric in metrics:
-        for field_type in ftypes:
+    if compute_metrics:
+        # ftypes = ['uo', 'ssh', 'all', 'vorticity', 'energy']
+        # metrics = ['RMSE', 'correlation']
+        # for metric in metrics:
+        #     for field_type in ftypes:
+        #         analyzer.metrics.compute_metric(
+        #             data_dict,
+        #             metric=metric,
+        #             field_type=field_type)
+
+        tuples = []
+        for transect in ['along_flow', 'across_flow']:
+            for direction in ['spatial', 'temporal']:
+                for field_type in ['energy', 'enstrophy', 'ssh']:
+                    tuples.append(
+                        ('SAM', field_type, {'transect': transect,
+                                             'direction': direction}))
+
+        for (metric, field_type, kwargs) in tuples:
             analyzer.metrics.compute_metric(
                 data_dict,
                 metric=metric,
-                field_type=field_type)
-    continue
+                field_type=field_type,
+                **kwargs)
 
     # only case to do reconstruction plotting
-    if members == [0] and cf == 32:
+    if plot_reconstructions and members == [0] and cf == 32:
         analyzer.plot_machine.plot_hovmöller(data_dict,
                                              compute=True,
                                              plot_type='energy',
                                              transect='along_flow')
 
+        analyzer.plot_machine.plot_hovmöller(data_dict,
+                                             compute=True,
+                                             plot_type='enstrophy',
+                                             transect='along_flow',
+                                             )
+        plt.pause(1)
+        breakpoint()
         # 2d coarse input plots
         analyzer.plot_machine.plot_coarse_input(
             data_dict, field_type='uo')
@@ -348,22 +375,21 @@ for cf in cfrange:
     # cleanup
     del z_bilin, z_resnet, z_esnc, data_dict
 
+
 # plot metrics dict contents
+if compute_metrics:
+    tuples = [('RMSE', 'all'),
+              ('RMSE', 'uo'),
+              ('RMSE', 'ssh'),
+              ('correlation', 'all')]
 
-importlib.reload(stats_tool)
-tuples = [('RMSE', 'all'),
-          ('RMSE', 'uo'),
-          ('RMSE', 'ssh'),
-          ('correlation', 'all')]
-
-for (metric, field_type) in tuples:
-    print(metric, field_type)
-    stats_tool.make_plots(
-        analyzer.metrics.metrics_dict,
-        metric,
-        field_type,
-        base_dir=analyzer.results_dir,
-    )
+    for (metric, field_type) in tuples:
+        stats_tool.make_plots(
+            analyzer.metrics.metrics_dict,
+            metric,
+            field_type,
+            base_dir=analyzer.results_dir,
+        )
 
 
 

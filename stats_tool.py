@@ -7,13 +7,15 @@ import matplotlib.pyplot as plt
 
 class Metrics():
 
-    def __init__(self, dm, modes):
+    def __init__(self, dm, ct, modes):
         self.dm = dm
+        self.ct = ct
         self.modes = modes
         self.ct = compute_tool.ComputeTool(dm=self.dm)
         self.metrics_dict = {}
         self.metrics_dict['RMSE'] = {}
         self.metrics_dict['correlation'] = {}
+        self.metrics_dict['SAM'] = {}
         self.trunc_time = 24*7
 
     def field_manip(self, data, field_type='all'):
@@ -25,12 +27,20 @@ class Metrics():
             return data
         elif field_type == 'vorticity':
             return self.ct.vorticity(data, None)
+        elif field_type == 'enstrophy':
+            return np.square(self.ct.vorticity(data, None))
         elif field_type == 'energy':
             return np.sum(np.square(data[..., :2]), axis=-1)
         else:
             raise Exception('invalid field_type')
 
-    def compute_metric(self, data, metric='RMSE', field_type='all'):
+    def compute_metric(
+            self,
+            data,
+            metric='RMSE',
+            field_type='all',
+            **kwargs,
+    ):
         truth = self.field_manip(data['truth']['data'], field_type)
         self.modes_U = self.field_manip(self.modes['U'], field_type)
 
@@ -44,6 +54,42 @@ class Metrics():
                 self.compute_RMSE(truth, prediction, key, field_type)
             elif metric == 'correlation':
                 self.compute_correlation(truth, prediction, key, field_type)
+
+        # we're treating spectral angle a bit different
+        if metric == 'SAM':
+            self.compute_SAM(data, field_type, **kwargs)
+
+    def compute_SAM(self, data, field_type, **kwargs):
+
+        # get true spectrum
+        k = {}
+        S = {}
+        transect = kwargs['transect']
+        direction = kwargs['direction']
+        for key, value in data.items():
+            k[key], S[key], _ = self.ct.compute_spectrum_along_transect(
+                value['data'],
+                transect_name=kwargs['transect'],
+                spectrum_type=field_type,
+                direction=kwargs['direction']
+            )
+
+        # mean over space or time
+        S = {key: np.mean(value, axis=-1) for key, value in S.items()}
+
+        field_type = '_'.join([field_type, transect, direction])
+        for key, value in S.items():
+            if key == 'truth':
+                continue
+
+            num = np.dot(S[key], S['truth'])
+            denom = np.linalg.norm(S[key]) * np.linalg.norm(S['truth'])
+            angle = np.arccos(num / denom)
+            print(field_type, key, angle)
+            if key in self.metrics_dict['SAM']:
+                self.metrics_dict['SAM'][key].update({field_type: angle})
+            else:
+                self.metrics_dict['SAM'][key] = {field_type: angle}
 
     def compute_RMSE(self, truth, prediction, key, field_type):
         shape = truth.shape
@@ -165,7 +211,7 @@ def make_plots(metrics_dict, metric, field_type, base_dir):
         fig_name = f'{base_dir}/correlations_{field_type}.png'
         print(fig_name)
         plt.savefig(fig_name, bbox_inches='tight', dpi=200)
-        
+
     elif metric == 'RMSE':
 
         q1 = [np.quantile(subset[key], 0.25) for key in sorted_keys]
@@ -173,7 +219,7 @@ def make_plots(metrics_dict, metric, field_type, base_dir):
         q3 = [np.quantile(subset[key], 0.75) for key in sorted_keys]
         all_vals = [subset[key] for key in sorted_keys]
 
-        plt.figure()
+        plt.figure(figsize=(3.5, 4.8))
         for i, col, label in zip(range(Nmodels), colors,
                                  ['bilinear interpolation',
                                   'CAE-ESNc',

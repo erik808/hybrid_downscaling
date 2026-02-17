@@ -1,7 +1,6 @@
 import plot_utils
 import importlib
 import os
-import itertools
 import time
 import keras
 import dill
@@ -349,123 +348,22 @@ for cf in cfrange:
     # cleanup
     del z_bilin, z_resnet, z_esnc, data_dict
 
-# manipulate metrics dict
-metric = 'correlation'
-field_type = 'all'
+# plot metrics dict contents
 
-mdict = analyzer.metrics.metrics_dict[metric]
-keys = mdict.keys()
-ensembles, normal_runs = \
-    tools.split_ensembles(keys)
-all_runs = normal_runs + [key
-                          for key in ensembles.keys()]
+importlib.reload(stats_tool)
+tuples = [('RMSE', 'all'),
+          ('RMSE', 'uo'),
+          ('RMSE', 'ssh'),
+          ('correlation', 'all')]
 
-d = {}
-
-for key, value in ensembles.items():
-    d[key.replace('8', '08')] = [mdict[mem][field_type] for mem in value]
-
-for run in normal_runs:
-    d[run.replace('8', '08')] = [mdict[run][field_type]]
-
-sorted_keys = sorted(d.keys())
-
-lstyles = ['-', ':', '-.']
-lstyles_cycler = itertools.cycle(lstyles)
-
-cfs = [key[-2:] for key in sorted_keys]
-grouped = {}
-for (cf, key) in zip(cfs, sorted_keys):
-    grouped[cf] = grouped[cf]+[key] if cf in grouped else [key]
-
-Nmodels = len(list(grouped.values())[0])
-Ncfs = len(list(grouped.keys()))
-cmap = plt.get_cmap('tab10')
-colors = [*[cmap(0)]*Ncfs, *[cmap(2)]*Ncfs, *[cmap(1)]*Ncfs]
-
-labels = {}
-for key in sorted_keys:
-    key_orig = key
-    if 'bilin' in key:
-        key = key.replace('bilin_', 'bilin')
-    if 'esnc' in key:
-        key = key.replace('pred_esnc_', 'CAE-ESNc')
-    if 'resnet' in key:
-        key = key.replace('pred_resnet_', 'SRResNet')
-    if '08' in key:
-        key = key.replace('cf08', ' $CF=8$')
-    if '16' in key:
-        key = key.replace('cf16', ' $CF=16$')
-    if '32' in key:
-        key = key.replace('cf32', ' $CF=32$')
-    labels[key_orig] = key
-
-if metric == 'correlation':
-    plt.figure(figsize=(8, 6))
-    data = [np.asarray(d[key]) for key in sorted_keys]
-    for (value, key, col) in zip(data, sorted_keys, colors):
-        lstyle = next(lstyles_cycler)
-        q1 = np.quantile(value, 0.25, axis=0)
-        q2 = np.quantile(value, 0.5, axis=0)
-        q3 = np.quantile(value, 0.75, axis=0)
-        if not np.all(q1 == q3):
-            plt.fill_between(range(10), q1, q3, color=col,
-                             zorder=0, alpha=0.5, linestyle=lstyle)
-
-        plt.plot(range(10), q2, label=labels[key],
-                 color=col, linewidth=2,
-                 ncol=2,
-                 linestyle=lstyle)
-
-    plt.legend()
-    plt.ylabel('correlation')
-    plt.xlabel('PC')
-    plt.grid(which='both')
-    fig_name = f'{analyzer.results_dir}/correlations.png'
-    print(fig_name)
-    plt.savefig(fig_name, bbox_inches='tight', dpi=200)
-    plt.pause(1)
-
-elif metric == 'RMSE':
-    plt.figure()
-    plt.boxplot([d[key] for key in sorted_keys],
-                tick_labels=sorted_keys,
-                vert=False)
-    plt.gca().set_title(f'{metric}, {field_type}')
-    plt.pause(1)
-
-    q0 = [np.quantile(d[key], 0.0) for key in sorted_keys]
-    q1 = [np.quantile(d[key], 0.25) for key in sorted_keys]
-    q2 = [np.quantile(d[key], 0.50) for key in sorted_keys]
-    q3 = [np.quantile(d[key], 0.75) for key in sorted_keys]
-    q4 = [np.quantile(d[key], 1.0) for key in sorted_keys]
-
-    all_vals = [d[key] for key in sorted_keys]
-
-    plt.figure()
-    for i, col, label in zip(range(Nmodels), colors,
-                             ['bilinear interpolation',
-                              'CAE-ESNc',
-                              'SRResNet']):
-        r = slice(i*Ncfs, i*Ncfs+Ncfs)
-        print(r)
-        plt.fill_between(range(Ncfs), q1[r], q3[r],
-                         color=col,
-                         zorder=0, alpha=0.5,
-                         label=label)
-        pos = range(Ncfs)
-        plt.plot(pos, q2[r], '.-',
-                 color=col,
-                 linewidth=2
-                 )
-        plt.boxplot(all_vals[r], positions=pos)
-    plt.ylabel('RMSE')
-    plt.xlabel('CF')
-    plt.xticks([8, 16, 32])
-    plt.legend()
-    plt.pause(1)
-
-
+for (metric, field_type) in tuples:
+    print(metric, field_type)
+    stats_tool.make_plots(
+        analyzer.metrics.metrics_dict,
+        metric,
+        field_type,
+        base_dir=analyzer.results_dir,
+    )
 
 
 

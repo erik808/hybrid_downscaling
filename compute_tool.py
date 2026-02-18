@@ -135,9 +135,10 @@ class ComputeTool():
 
         if (
                 spectrum_type == 'energy' or
-                spectrum_type == 'uo'
+                spectrum_type == 'uo' or
+                spectrum_type == 'vo'
         ):
-            transect_data = self.invert_and_regrid(data, scaler)
+            transect_data = self.invert_and_regrid(data, scaler)[..., :2]
 
         elif (spectrum_type == 'enstrophy' or
               spectrum_type == 'vorticity'):

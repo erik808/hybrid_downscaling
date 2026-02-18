@@ -15,6 +15,7 @@ importlib.reload(plot_utils)
 importlib.reload(stats_tool)
 importlib.reload(tools)
 plt.switch_backend('qtagg')
+plt.rcdefaults()
 
 
 class Analysis():
@@ -56,7 +57,7 @@ class Analysis():
             dm=self.dmgr_cmems,
             ct=self.plot_machine.ct,
             modes=modes,
-            metrics_file=self.metrics_file,            
+            metrics_file=self.metrics_file,
         )
 
     def get_modes(self, force_compute=False):
@@ -279,29 +280,37 @@ members = range(10)
 cfrange = [8, 16, 32]
 
 plot_legend = True
+
 compute_metrics = True
 plot_reconstructions = False
-plot_spectra = True
+plot_spectra = False
 
 # reconstructions are only done for first member and CF=32
 if plot_reconstructions:
-    members == [0]
-    cfrange == [32]
+    members = [0]
+    cfrange = [32]
     compute_metrics = False
 
-for cf in cfrange:
+# testing
+members = [0]
 
+for cf in cfrange:
     # assemble data in data_dict
-    z_bilin, z_input = analyzer.load_bilin([cf])
-    z_resnet = analyzer.load_resnet([cf], members)
-    z_esnc = analyzer.load_esnc([cf], members)
-    data_dict = analyzer.create_data_dict(
-        [cf],
-        members,
-        z_bilin,
-        z_input,
-        z_resnet,
-        z_esnc)
+    if np.any([compute_metrics,
+               plot_reconstructions,
+               plot_spectra]):
+        z_bilin, z_input = analyzer.load_bilin([cf])
+        z_resnet = analyzer.load_resnet([cf], members)
+        z_esnc = analyzer.load_esnc([cf], members)
+        data_dict = analyzer.create_data_dict(
+            [cf],
+            members,
+            z_bilin,
+            z_input,
+            z_resnet,
+            z_esnc)
+    else:
+        break
 
     # compute metrics
     if compute_metrics:
@@ -311,12 +320,12 @@ for cf in cfrange:
                   ('RMSE', 'all'),
                   ('correlation', 'all')]
 
-        for (metric, field_type) in tuples:
-            print(f'computing {metric} {field_type}')
-            analyzer.metrics.compute_metric(
-                data_dict,
-                metric=metric,
-                field_type=field_type)
+        # for (metric, field_type) in tuples:
+        #     print(f'computing {metric} {field_type}')
+        #     analyzer.metrics.compute_metric(
+        #         data_dict,
+        #         metric=metric,
+        #         field_type=field_type)
 
         # log-spectral distance (LSD)
         tuples = []
@@ -327,6 +336,21 @@ for cf in cfrange:
                         ('LSD', field_type, {'transect': transect,
                                              'direction': direction}))
 
+        # for (metric, field_type, kwargs) in tuples:
+        #     print(f'computing {metric} {field_type} {kwargs}')
+        #     analyzer.metrics.compute_metric(
+        #         data_dict,
+        #         metric=metric,
+        #         field_type=field_type,
+        #         **kwargs)
+
+        tuples = []
+        for transect in ['along_flow', 'across_flow']:
+            for direction in ['spatial', 'temporal']:
+                for field_type in ['MKE', 'TKE', 'enstrophy', 'ssh']:
+                    tuples.append(
+                        ('DKL', field_type, {'transect': transect}))
+
         for (metric, field_type, kwargs) in tuples:
             print(f'computing {metric} {field_type} {kwargs}')
             analyzer.metrics.compute_metric(
@@ -334,6 +358,8 @@ for cf in cfrange:
                 metric=metric,
                 field_type=field_type,
                 **kwargs)
+
+        analyzer.metrics.save_metrics_dict()
 
     # do reconstruction plotting
     if plot_reconstructions:
@@ -387,29 +413,81 @@ for cf in cfrange:
     # cleanup data_dict
     del z_bilin, z_resnet, z_esnc, data_dict
 
-breakpoint()
 
 # plot metrics dict contents
-if compute_metrics:
-    tuples = [('RMSE', 'all'),
-              ('RMSE', 'uo'),
-              ('RMSE', 'ssh'),
-              ('correlation', 'all')]
+analyzer.metrics.load_metrics_dict()
+plt.close('all')
 
-    for (metric, field_type) in tuples:
+tuples = [('RMSE', 'all'),
+          ('RMSE', 'uo'),
+          ('RMSE', 'ssh'),
+          ('correlation', 'all')]
+
+for (metric, field_type) in tuples:
+    stats_tool.make_plots(
+        analyzer.metrics.metrics_dict,
+        metric,
+        field_type,
+        base_dir=analyzer.results_dir,
+        plot_legend=True
+    )
+
+
+def tuple_list(field_type):
+    return [
+        ('LSD', field_type, {'transect': 'along_flow',
+                             'direction': 'spatial'}),
+        ('LSD', field_type, {'transect': 'along_flow',
+                             'direction': 'temporal'}),
+        ('LSD', field_type, {'transect': 'across_flow',
+                             'direction': 'spatial'}),
+        ('LSD', field_type, {'transect': 'across_flow',
+                             'direction': 'temporal'}),
+    ]
+
+
+for tuples in [
+        tuple_list('energy'),
+        tuple_list('enstrophy'),
+        tuple_list('ssh'),
+]:
+    fig, axs = plt.subplots(1, 4,
+                            sharey=True,
+                            figsize=(8, 3))
+    for i, (metric, field_type, kwargs) in enumerate(tuples):
+        plot_legend = False if i < len(tuples)-1 else True
+        plt.sca(axs[i])
         stats_tool.make_plots(
             analyzer.metrics.metrics_dict,
             metric,
             field_type,
             base_dir=analyzer.results_dir,
+            plot_legend=False,
+            save_fig=False,
+            **kwargs,
         )
 
+        transect = kwargs['transect']
+        direction = kwargs['direction']
 
+        plt.title(f"{direction} spectr.\n{transect.replace('_', '-')}",
+                  loc='left',
+                  ha='left',
+                  )
 
+        if i > 0:
+            plt.ylabel('')
+        else:
+            field = 'SSH' if field_type == 'ssh' else field_type
+            plt.ylabel('$D_{LS}$, ' + field)
+        if i == len(tuples)-1:
+            plt.legend(loc='center', bbox_to_anchor=(0.5, 0.6))
 
+    fig_name = f'{analyzer.results_dir}/{metric}_{field_type}.png'
+    print(fig_name)
+    plt.savefig(fig_name, bbox_inches='tight', dpi=200)
 
-
-
+plt.pause(1)
 raise Exception('que')
 
 TKE = {}
@@ -506,7 +584,6 @@ bins = 1000
 ref_vals = reduce(input_dict[ref_key], operation)
 
 # setup interval, 2*sigma outside of reference domain
-ref_mn = np.mean(ref_vals)
 ref_std = np.std(ref_vals)
 ref_x = np.linspace(np.min(ref_vals) - 2 * ref_std,
                     np.max(ref_vals) + 2 * ref_std,

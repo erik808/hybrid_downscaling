@@ -5,6 +5,7 @@ import os
 import dill
 import itertools
 import matplotlib.pyplot as plt
+from sklearn.neighbors import KernelDensity
 
 
 class Metrics():
@@ -28,7 +29,9 @@ class Metrics():
         self.trunc_time = 24*7
 
     def load_metrics_dict(self, reset=False):
+
         if not reset and os.path.exists(self.metrics_file):
+            print('loading metrics dict')
             with open(self.metrics_file, 'rb') as file:
                 self.metrics_dict = dill.load(file)
         else:
@@ -71,25 +74,145 @@ class Metrics():
             field_type='all',
             **kwargs,
     ):
-        truth = self.field_manip(data['truth']['data'], field_type)
-        self.modes_U = self.field_manip(self.modes['U'], field_type)
-
-        for key, value in data.items():
-            if key == 'truth':
-                continue
-
-            prediction = self.field_manip(value['data'], field_type)
-
-            if metric == 'RMSE':
-                self.compute_RMSE(truth, prediction, key, field_type)
-            elif metric == 'correlation':
-                self.compute_correlation(truth, prediction, key, field_type)
-
-        # we're treating log-spectral distance a bit different
-        if metric == 'LSD':
+        if metric == 'LSD':  # log-spectrum distance
             self.compute_LSD(data, field_type, **kwargs)
+        elif metric == 'DKL':  # KL distance
+            self.compute_DKL(data, field_type, **kwargs)
+        else:
+            truth = self.field_manip(data['truth']['data'], field_type)
+            self.modes_U = self.field_manip(self.modes['U'], field_type)
+            for key, value in data.items():
+                if key == 'truth':
+                    continue
+
+                prediction = self.field_manip(value['data'], field_type)
+
+                if metric == 'RMSE':
+                    self.compute_RMSE(truth, prediction, key, field_type)
+                elif metric == 'correlation':
+                    self.compute_correlation(truth,
+                                             prediction,
+                                             key,
+                                             field_type)
+
+    def compute_DKL(self, data, field_type, **kwargs):
+        """ compute Kullback Leibler distance DKL """
+
+        transect = kwargs['transect']
+        T = {}  # transects
+        for key, value in data.items():
+            print(f'computing hovmöller for {key}')
+            T[key] = self.ct.hovmöller_along_transect(
+                value['data'],
+                transect_name=transect,
+                spectrum_type=field_type
+            )
+
+        operation = 'mean'
+        ref_key = 'truth'
+        bins = 500
+
+        ref_vals = self.reduce(T[ref_key], operation)
+
+        ref_std = np.std(ref_vals)
+        if field_type in ['MKE', 'TKE', 'enstrophy', 'ssh']:
+            one_sided = True,
+        else:
+            one_sided = False,
+
+        xmin = np.min(ref_vals) - 2 * ref_std
+        xmax = np.max(ref_vals) + 2 * ref_std
+        xmin = np.max([xmin, 0.0]) if one_sided else xmin
+        ref_x = np.linspace(xmin, xmax, bins + 1)
+
+        ref_pdf = self.compute_discrete_pdf(ref_vals, ref_x)
+
+        dkl = {}
+        pdf = {}
+        pdf[ref_key] = ref_pdf
+
+        # plt.close('all')
+
+        # def compute_kde(vals, ref_x):
+        #     xmin = np.min(ref_x)
+        #     xmax = np.max(ref_x)
+        #     kde = KernelDensity(
+        #         kernel='linear',
+        #         bandwidth=(xmax-xmin)/30,
+        #     ).fit(vals[:, np.newaxis])
+        #     log_densities = kde.score_samples(ref_x[:, np.newaxis])
+        #     return np.exp(log_densities)
+
+        # plt.figure()
+        # plt.plot(ref_x[1:], ref_pdf / np.diff(ref_x)[0], 'k', label=ref_key)
+        # plt.plot(ref_x, compute_kde(ref_vals, ref_x), 'r', label=ref_key)
+        # plt.pause(1)
+
+        # plt.figure()
+        # plt.plot(ref_x, compute_kde(ref_vals, ref_x), 'k', label=ref_key)
+
+        for key, value in T.items():
+            if key == ref_key:
+                continue
+            vals = self.reduce(value, operation)
+            pdf[key] = self.compute_discrete_pdf(vals, ref_x)
+            dkl[key] = self.compute_dkl(pdf[ref_key], pdf[key])
+
+            val_dict = {'dkl': dkl[key],
+                        'vals': vals}
+            if key in self.metrics_dict['DKL']:
+                self.metrics_dict['DKL'][key].update(
+                    {field_type: val_dict})
+            else:
+                self.metrics_dict['DKL'][key] = {field_type: val_dict}
+
+            # plt.plot(ref_x, compute_kde(vals, ref_x), label=key)
+            # plt.plot(ref_x[1:], pdf[key] / np.diff(ref_x)[0], label=key)
+
+
+        # plt.legend()
+        # plt.pause(1)
+        breakpoint()
+        pass
+
+    def reduce(self, mat, operation):
+        if operation == 'sum':
+            vec = np.sum(mat, -1)
+        elif operation == 'mean':
+            vec = np.mean(mat, -1)
+        elif operation == 'first':
+            vec = mat[:, 0]
+        elif operation == 'middle':
+            vec = mat[:, int(mat.shape[1] / 2)]
+        elif operation == 'last':
+            vec = mat[:, -1]
+        else:
+            raise Exception('invalid operation')
+
+        return vec
+
+    def compute_discrete_pdf(self, vals, x):
+        pdf, _ = np.histogram(vals, x, density=True)
+        return pdf * np.diff(x)
+
+    def compute_dkl(self, P, Q):
+        eps = 1e-16
+
+        # add eps
+        P += eps
+        Q += eps
+
+        # do some checks
+        assert P.shape == Q.shape, "incompatible shapes"
+        assert (np.sum(P) - 1.0) < 1e-11, "input not a pdf"
+        assert (np.sum(Q) - 1.0) < 1e-11, "input not a pdf"
+
+        out = np.sum(P * np.log(P / Q))
+        return out
+
 
     def compute_LSD(self, data, field_type, **kwargs):
+        """ compute log-spectrum distance LSD """
 
         # get true spectrum
         k = {}
@@ -97,11 +220,12 @@ class Metrics():
         transect = kwargs['transect']
         direction = kwargs['direction']
         for key, value in data.items():
+            print(f'computing hovmöller for {key}')
             k[key], S[key], _ = self.ct.compute_spectrum_along_transect(
                 value['data'],
-                transect_name=kwargs['transect'],
+                transect_name=transect,
                 spectrum_type=field_type,
-                direction=kwargs['direction']
+                direction=direction,
             )
 
         # mean over space or time
@@ -164,7 +288,13 @@ class Metrics():
                 {field_type: correlations}
 
 
-def make_plots(metrics_dict, metric, field_type, base_dir):
+def make_plots(metrics_dict,
+               metric,
+               field_type,
+               base_dir,
+               plot_legend=True,
+               save_fig=True,
+               **kwargs):
 
     mdict = metrics_dict[metric]
     keys = mdict.keys()
@@ -172,6 +302,12 @@ def make_plots(metrics_dict, metric, field_type, base_dir):
         tools.split_ensembles(keys)
 
     # create subset and change key name if needed
+    field_type_orig = field_type
+    if metric == 'LSD':
+        transect = kwargs['transect']
+        direction = kwargs['direction']
+        field_type = '_'.join([field_type, transect, direction])
+
     subset = {}
     for key, value in ensembles.items():
         subset[key.replace('8', '08')] = \
@@ -197,7 +333,7 @@ def make_plots(metrics_dict, metric, field_type, base_dir):
     cmap = plt.get_cmap('tab10')
     if metric == 'correlation':
         colors = [*[cmap(0)]*Ncfs, *[cmap(2)]*Ncfs, *[cmap(1)]*Ncfs]
-    elif metric == 'RMSE':
+    elif metric in ['RMSE', 'LSD']:
         colors = [cmap(0), cmap(2), cmap(1)]
 
     labels = {}
@@ -242,16 +378,20 @@ def make_plots(metrics_dict, metric, field_type, base_dir):
         print(fig_name)
         plt.savefig(fig_name, bbox_inches='tight', dpi=200)
 
-    elif metric == 'RMSE':
+    elif metric in ['RMSE', 'LSD']:
 
         q1 = [np.quantile(subset[key], 0.25) for key in sorted_keys]
         q2 = [np.quantile(subset[key], 0.50) for key in sorted_keys]
         q3 = [np.quantile(subset[key], 0.75) for key in sorted_keys]
         all_vals = [subset[key] for key in sorted_keys]
 
-        plt.figure(figsize=(3.5, 4.8))
+        if metric == 'RMSE':
+            plt.figure(figsize=(3.5, 4.8))
+        elif metric == 'LSD' and save_fig:
+            plt.figure(figsize=(2.5, 4.8))
+
         for i, col, label in zip(range(Nmodels), colors,
-                                 ['bilinear interpolation',
+                                 ['bilin. interp.',
                                   'CAE-ESNc',
                                   'SRResNet']):
             r = slice(i*Ncfs, i*Ncfs+Ncfs)
@@ -273,16 +413,30 @@ def make_plots(metrics_dict, metric, field_type, base_dir):
                             showfliers=False,
                             )
 
-        ylabel = {'all': 'RMSE, total',
-                  'uo': 'RMSE, zonal velocity',
-                  'ssh': 'RMSE, SSH',
-                  }
-        plt.ylabel(ylabel[field_type])
+                field_type_orig = 'SSH' \
+                    if field_type_orig == 'ssh' else field_type_orig
+
+                ylabel = {
+                    'all': f'{metric}, total',
+                    'uo': f'{metric}, zonal velocity',
+                    'ssh': f'{metric}, SSH'
+                }
+        if field_type in ylabel:
+            plt.ylabel(ylabel[field_type])
+
         labels = ['$CF=8$', '$CF=16$', '$CF=32$']
         plt.gca().set_xticks([0, 1, 2])
-        plt.gca().set_xticklabels(labels)
-        plt.legend()
+        rotation = 0 if metric == 'RMSE' else 45
+        plt.gca().set_xticklabels(labels, rotation=rotation)
+        if metric == 'LSD':
+            plt.yscale('log')
+
         plt.grid(which='both')
-        fig_name = f'{base_dir}/RMSE_{field_type}.png'
-        print(fig_name)
-        plt.savefig(fig_name, bbox_inches='tight', dpi=200)
+
+        if plot_legend:
+            plt.legend()
+
+        if save_fig:
+            fig_name = f'{base_dir}/{metric}_{field_type}.png'
+            print(fig_name)
+            plt.savefig(fig_name, bbox_inches='tight', dpi=200)

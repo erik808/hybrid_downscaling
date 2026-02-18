@@ -1,22 +1,52 @@
 import numpy as np
 import compute_tool
 import tools
+import os
+import dill
 import itertools
 import matplotlib.pyplot as plt
 
 
 class Metrics():
 
-    def __init__(self, dm, ct, modes):
+    def __init__(
+            self,
+            dm,
+            ct,
+            modes,
+            metrics_file,
+            reset=False,
+    ):
         self.dm = dm
         self.ct = ct
         self.modes = modes
+        self.metrics_file = metrics_file
         self.ct = compute_tool.ComputeTool(dm=self.dm)
-        self.metrics_dict = {}
-        self.metrics_dict['RMSE'] = {}
-        self.metrics_dict['correlation'] = {}
-        self.metrics_dict['LSD'] = {}
+
+        self.load_metrics_dict(reset=reset)
+
         self.trunc_time = 24*7
+
+    def load_metrics_dict(self, reset=False):
+        if not reset and os.path.exists(self.metrics_file):
+            with open(self.metrics_file, 'rb') as file:
+                self.metrics_dict = dill.load(file)
+        else:
+            self.metrics_dict = {}
+
+        # initialize keys if needed
+        if 'RMSE' not in self.metrics_dict:
+            self.metrics_dict['RMSE'] = {}
+        if 'correlation' not in self.metrics_dict:
+            self.metrics_dict['correlation'] = {}
+        if 'LSD' not in self.metrics_dict:
+            self.metrics_dict['LSD'] = {}
+        if 'DKL' not in self.metrics_dict:
+            self.metrics_dict['DKL'] = {}
+
+    def save_metrics_dict(self):
+        with open(self.metrics_file, 'wb') as file:
+            dill.dump(self.metrics.metrics_dict, file)
 
     def field_manip(self, data, field_type='all'):
         if field_type == 'uo':
@@ -55,7 +85,7 @@ class Metrics():
             elif metric == 'correlation':
                 self.compute_correlation(truth, prediction, key, field_type)
 
-        # we're treating spectral angle a bit different
+        # we're treating log-spectral distance a bit different
         if metric == 'LSD':
             self.compute_LSD(data, field_type, **kwargs)
 

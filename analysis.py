@@ -51,10 +51,12 @@ class Analysis():
 
         self.y_truth = self.load_reference()
         modes = self.get_modes()
+        self.metrics_file = f'{self.results_dir}/metrics.dill'
         self.metrics = stats_tool.Metrics(
             dm=self.dmgr_cmems,
             ct=self.plot_machine.ct,
-            modes=modes
+            modes=modes,
+            metrics_file=self.metrics_file,            
         )
 
     def get_modes(self, force_compute=False):
@@ -278,10 +280,18 @@ cfrange = [8, 16, 32]
 
 plot_legend = True
 compute_metrics = True
-plot_reconstructions = True
+plot_reconstructions = False
+plot_spectra = True
+
+# reconstructions are only done for first member and CF=32
+if plot_reconstructions:
+    members == [0]
+    cfrange == [32]
+    compute_metrics = False
 
 for cf in cfrange:
-    plt.close('all')
+
+    # assemble data in data_dict
     z_bilin, z_input = analyzer.load_bilin([cf])
     z_resnet = analyzer.load_resnet([cf], members)
     z_esnc = analyzer.load_esnc([cf], members)
@@ -293,7 +303,7 @@ for cf in cfrange:
         z_resnet,
         z_esnc)
 
-    # RMSE and other statistics
+    # compute metrics
     if compute_metrics:
         # RMSE and correlation
         tuples = [('RMSE', 'uo'),
@@ -325,8 +335,8 @@ for cf in cfrange:
                 field_type=field_type,
                 **kwargs)
 
-    # only case to do reconstruction plotting
-    if plot_reconstructions and members == [0] and cf == 32:
+    # do reconstruction plotting
+    if plot_reconstructions:
         analyzer.plot_machine.plot_hovmöller(data_dict,
                                              compute=True,
                                              plot_type='energy',
@@ -337,8 +347,6 @@ for cf in cfrange:
                                              plot_type='enstrophy',
                                              transect='along_flow',
                                              )
-        plt.pause(1)
-        breakpoint()
         # 2d coarse input plots
         analyzer.plot_machine.plot_coarse_input(
             data_dict, field_type='uo')
@@ -360,27 +368,26 @@ for cf in cfrange:
             data_dict, field_type='uo', overview=False)
 
     # plot spectra
-    transect = 'along_flow'
-    for direction in ['temporal', 'spatial']:
-        for spectrum_type in ['energy', 'enstrophy', 'ssh']:
-            plt.figure(figsize=(5, 3.5))
-            S, T = analyzer.plot_machine.plot_spectrum(
-                data_dict,
-                transect_name=transect,
-                spectrum_type=spectrum_type,
-                direction=direction,
-                add_powerlaws=False,
-                make_title=False,
-                plot_legend=plot_legend)
-            plt.close('all')
+    if plot_spectra:
+        transect = 'along_flow'
+        for direction in ['temporal', 'spatial']:
+            for spectrum_type in ['energy', 'enstrophy', 'ssh']:
+                plt.figure(figsize=(5, 3.5))
+                S, T = analyzer.plot_machine.plot_spectrum(
+                    data_dict,
+                    transect_name=transect,
+                    spectrum_type=spectrum_type,
+                    direction=direction,
+                    add_powerlaws=False,
+                    make_title=False,
+                    plot_legend=plot_legend)
+                plt.close('all')
+        plot_legend = False
 
-    plot_legend = False
-    # cleanup
+    # cleanup data_dict
     del z_bilin, z_resnet, z_esnc, data_dict
 
-if compute_metrics:
-    with open(f'{analyzer.results_dir}/metrics.dill', 'wb') as file:
-        dill.dump(analyzer.metrics.metrics_dict, file)
+breakpoint()
 
 # plot metrics dict contents
 if compute_metrics:

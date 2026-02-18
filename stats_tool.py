@@ -15,7 +15,7 @@ class Metrics():
         self.metrics_dict = {}
         self.metrics_dict['RMSE'] = {}
         self.metrics_dict['correlation'] = {}
-        self.metrics_dict['SAM'] = {}
+        self.metrics_dict['LSD'] = {}
         self.trunc_time = 24*7
 
     def field_manip(self, data, field_type='all'):
@@ -56,10 +56,10 @@ class Metrics():
                 self.compute_correlation(truth, prediction, key, field_type)
 
         # we're treating spectral angle a bit different
-        if metric == 'SAM':
-            self.compute_SAM(data, field_type, **kwargs)
+        if metric == 'LSD':
+            self.compute_LSD(data, field_type, **kwargs)
 
-    def compute_SAM(self, data, field_type, **kwargs):
+    def compute_LSD(self, data, field_type, **kwargs):
 
         # get true spectrum
         k = {}
@@ -82,14 +82,14 @@ class Metrics():
             if key == 'truth':
                 continue
 
-            num = np.dot(S[key], S['truth'])
-            denom = np.linalg.norm(S[key]) * np.linalg.norm(S['truth'])
-            angle = np.arccos(num / denom)
-            print(field_type, key, angle)
-            if key in self.metrics_dict['SAM']:
-                self.metrics_dict['SAM'][key].update({field_type: angle})
+            # discrete log-spectral distance LSD
+            p = 2
+            LSD = (np.sum((np.log(S[key]/S['truth']))**p) / len(S[key]))**(1/p)
+
+            if key in self.metrics_dict['LSD']:
+                self.metrics_dict['LSD'][key].update({field_type: LSD})
             else:
-                self.metrics_dict['SAM'][key] = {field_type: angle}
+                self.metrics_dict['LSD'][key] = {field_type: LSD}
 
     def compute_RMSE(self, truth, prediction, key, field_type):
         shape = truth.shape

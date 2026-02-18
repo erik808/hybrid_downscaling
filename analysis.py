@@ -276,9 +276,6 @@ analyzer = Analysis()
 members = range(10)
 cfrange = [8, 16, 32]
 
-members = [0]
-cfrange = [32]
-
 plot_legend = True
 compute_metrics = True
 plot_reconstructions = True
@@ -298,24 +295,30 @@ for cf in cfrange:
 
     # RMSE and other statistics
     if compute_metrics:
-        # ftypes = ['uo', 'ssh', 'all', 'vorticity', 'energy']
-        # metrics = ['RMSE', 'correlation']
-        # for metric in metrics:
-        #     for field_type in ftypes:
-        #         analyzer.metrics.compute_metric(
-        #             data_dict,
-        #             metric=metric,
-        #             field_type=field_type)
+        # RMSE and correlation
+        tuples = [('RMSE', 'uo'),
+                  ('RMSE', 'ssh'),
+                  ('RMSE', 'all'),
+                  ('correlation', 'all')]
 
+        for (metric, field_type) in tuples:
+            print(f'computing {metric} {field_type}')
+            analyzer.metrics.compute_metric(
+                data_dict,
+                metric=metric,
+                field_type=field_type)
+
+        # log-spectral distance (LSD)
         tuples = []
         for transect in ['along_flow', 'across_flow']:
             for direction in ['spatial', 'temporal']:
                 for field_type in ['energy', 'enstrophy', 'ssh']:
                     tuples.append(
-                        ('SAM', field_type, {'transect': transect,
+                        ('LSD', field_type, {'transect': transect,
                                              'direction': direction}))
 
         for (metric, field_type, kwargs) in tuples:
+            print(f'computing {metric} {field_type} {kwargs}')
             analyzer.metrics.compute_metric(
                 data_dict,
                 metric=metric,
@@ -375,6 +378,9 @@ for cf in cfrange:
     # cleanup
     del z_bilin, z_resnet, z_esnc, data_dict
 
+if compute_metrics:
+    with open(f'{analyzer.results_dir}/metrics.dill', 'wb') as file:
+        dill.dump(analyzer.metrics.metrics_dict, file)
 
 # plot metrics dict contents
 if compute_metrics:

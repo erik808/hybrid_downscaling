@@ -58,6 +58,7 @@ class Analysis():
             ct=self.plot_machine.ct,
             modes=modes,
             metrics_file=self.metrics_file,
+            reset=False,
         )
 
     def get_modes(self, force_compute=False):
@@ -292,7 +293,7 @@ if plot_reconstructions:
     compute_metrics = False
 
 # testing
-members = [0]
+# members = [0]
 
 for cf in cfrange:
     # assemble data in data_dict
@@ -346,10 +347,9 @@ for cf in cfrange:
 
         tuples = []
         for transect in ['along_flow', 'across_flow']:
-            for direction in ['spatial', 'temporal']:
-                for field_type in ['MKE', 'TKE', 'enstrophy', 'ssh']:
-                    tuples.append(
-                        ('DKL', field_type, {'transect': transect}))
+            for field_type in ['MKE', 'TKE', 'enstrophy', 'ssh']:
+                tuples.append(
+                    ('DKL', field_type, {'transect': transect}))
 
         for (metric, field_type, kwargs) in tuples:
             print(f'computing {metric} {field_type} {kwargs}')

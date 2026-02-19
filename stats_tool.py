@@ -5,7 +5,7 @@ import os
 import dill
 import itertools
 import matplotlib.pyplot as plt
-from sklearn.neighbors import KernelDensity
+# from sklearn.neighbors import KernelDensity
 
 
 class Metrics():
@@ -49,7 +49,7 @@ class Metrics():
 
     def save_metrics_dict(self):
         with open(self.metrics_file, 'wb') as file:
-            dill.dump(self.metrics.metrics_dict, file)
+            dill.dump(self.metrics_dict, file)
 
     def field_manip(self, data, field_type='all'):
         if field_type == 'uo':
@@ -101,7 +101,7 @@ class Metrics():
         transect = kwargs['transect']
         T = {}  # transects
         for key, value in data.items():
-            print(f'computing hovmöller for {key}')
+            print(f'computing hovmöller {transect}, {field_type}, {key}')
             T[key] = self.ct.hovmöller_along_transect(
                 value['data'],
                 transect_name=transect,
@@ -151,6 +151,7 @@ class Metrics():
         # plt.figure()
         # plt.plot(ref_x, compute_kde(ref_vals, ref_x), 'k', label=ref_key)
 
+        field_key = '_'.join([field_type, transect])
         for key, value in T.items():
             if key == ref_key:
                 continue
@@ -160,20 +161,18 @@ class Metrics():
 
             val_dict = {'dkl': dkl[key],
                         'vals': vals}
+
             if key in self.metrics_dict['DKL']:
                 self.metrics_dict['DKL'][key].update(
-                    {field_type: val_dict})
+                    {field_key: val_dict})
             else:
-                self.metrics_dict['DKL'][key] = {field_type: val_dict}
+                self.metrics_dict['DKL'][key] = {field_key: val_dict}
 
             # plt.plot(ref_x, compute_kde(vals, ref_x), label=key)
             # plt.plot(ref_x[1:], pdf[key] / np.diff(ref_x)[0], label=key)
 
-
         # plt.legend()
         # plt.pause(1)
-        breakpoint()
-        pass
 
     def reduce(self, mat, operation):
         if operation == 'sum':
@@ -209,7 +208,6 @@ class Metrics():
 
         out = np.sum(P * np.log(P / Q))
         return out
-
 
     def compute_LSD(self, data, field_type, **kwargs):
         """ compute log-spectrum distance LSD """

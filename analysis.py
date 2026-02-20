@@ -282,7 +282,7 @@ cfrange = [8, 16, 32]
 
 plot_legend = True
 
-compute_metrics = True
+compute_metrics = False
 plot_reconstructions = False
 plot_spectra = False
 
@@ -291,9 +291,6 @@ if plot_reconstructions:
     members = [0]
     cfrange = [32]
     compute_metrics = False
-
-# testing
-# members = [0]
 
 for cf in cfrange:
     # assemble data in data_dict
@@ -321,12 +318,12 @@ for cf in cfrange:
                   ('RMSE', 'all'),
                   ('correlation', 'all')]
 
-        # for (metric, field_type) in tuples:
-        #     print(f'computing {metric} {field_type}')
-        #     analyzer.metrics.compute_metric(
-        #         data_dict,
-        #         metric=metric,
-        #         field_type=field_type)
+        for (metric, field_type) in tuples:
+            print(f'computing {metric} {field_type}')
+            analyzer.metrics.compute_metric(
+                data_dict,
+                metric=metric,
+                field_type=field_type)
 
         # log-spectral distance (LSD)
         tuples = []
@@ -337,14 +334,15 @@ for cf in cfrange:
                         ('LSD', field_type, {'transect': transect,
                                              'direction': direction}))
 
-        # for (metric, field_type, kwargs) in tuples:
-        #     print(f'computing {metric} {field_type} {kwargs}')
-        #     analyzer.metrics.compute_metric(
-        #         data_dict,
-        #         metric=metric,
-        #         field_type=field_type,
-        #         **kwargs)
+        for (metric, field_type, kwargs) in tuples:
+            print(f'computing {metric} {field_type} {kwargs}')
+            analyzer.metrics.compute_metric(
+                data_dict,
+                metric=metric,
+                field_type=field_type,
+                **kwargs)
 
+        # Kullback Leibler distances DKL
         tuples = []
         for transect in ['along_flow', 'across_flow']:
             for field_type in ['MKE', 'TKE', 'enstrophy', 'ssh']:
@@ -486,137 +484,3 @@ for tuples in [
     fig_name = f'{analyzer.results_dir}/{metric}_{field_type}.png'
     print(fig_name)
     plt.savefig(fig_name, bbox_inches='tight', dpi=200)
-
-plt.pause(1)
-raise Exception('que')
-
-TKE = {}
-MKE = {}
-KE = {}
-SSH = {}
-Zens = {}
-for key, value in data.items():
-    TKE[key] = \
-        plot_machine.ct.hovmöller_along_transect(value['data'],
-                                                 spectrum_type='TKE')
-    SSH[key] = \
-        plot_machine.ct.hovmöller_along_transect(value['data'],
-                                                 spectrum_type='ssh')
-    KE[key] = \
-        plot_machine.ct.hovmöller_along_transect(value['data'],
-                                                 spectrum_type='energy')
-    MKE[key] = \
-        plot_machine.ct.hovmöller_along_transect(value['data'],
-                                                 spectrum_type='MKE')
-    Zens[key] = \
-        plot_machine.ct.hovmöller_along_transect(value['data'],
-                                                 spectrum_type='enstrophy')**2
-
-
-def hist_plot(vec, color, label):
-    n, bins, _ = plt.hist(vec, bins=100, density=True, color=color, alpha=0.5)
-    plt.plot(bins[1:] - (bins[1]-bins[0])/2,
-             n,
-             color=color,
-             linewidth=2,
-             label=label)
-
-
-def reduce(mat, operation):
-
-    if operation == 'sum':
-        vec = np.sum(mat, -1)
-    elif operation == 'mean':
-        vec = np.mean(mat, -1)
-    elif operation == 'first':
-        vec = mat[:, 0]
-    elif operation == 'middle':
-        vec = mat[:, int(mat.shape[1] / 2)]
-    elif operation == 'last':
-        vec = mat[:, -1]
-    else:
-        raise Exception('invalid operation')
-
-    return vec
-
-
-def plot_histograms(input_dict, hist_type='hist', operation='sum'):
-    plt.figure()
-    cmap = plt.get_cmap('tab10')
-
-    minval = 0
-    maxval = 0
-
-    for key, value in input_dict.items():
-        vec = np.sum(value, -1)
-        minval = np.min([np.min(vec), minval])
-        maxval = np.max([np.max(vec), maxval])
-
-    for idx, (key, value) in enumerate(input_dict.items()):
-        # vec = (np.sum(value, -1) - minval) / (maxval - minval)
-
-        color = cmap(idx)
-
-        if hist_type == 'kde':
-            datavec = vec[:, np.newaxis]
-
-            kde = \
-                KernelDensity(kernel='gaussian',
-                              bandwidth=(maxval-minval)/100).fit(datavec)
-
-            x_plot = np.linspace(np.min(datavec),
-                                 np.max(datavec),
-                                 1000)[:, np.newaxis]
-
-            y = kde.score_samples(x_plot)
-            plt.plot(x_plot, np.exp(y), label=key, color=color)
-        elif hist_type == 'hist':
-            hist_plot(vec, color, key)
-
-    plt.legend()
-
-
-input_dict = MKE
-operation = 'sum'
-ref_key = 'truth'
-bins = 1000
-
-ref_vals = reduce(input_dict[ref_key], operation)
-
-# setup interval, 2*sigma outside of reference domain
-ref_std = np.std(ref_vals)
-ref_x = np.linspace(np.min(ref_vals) - 2 * ref_std,
-                    np.max(ref_vals) + 2 * ref_std,
-                    bins + 1)
-
-
-def compute_discrete_pdf(vals, x):
-    pdf, _ = np.histogram(vals, x, density=True)
-    return pdf * np.diff(x)
-
-
-ref_pdf = compute_discrete_pdf(ref_vals, ref_x)
-
-
-def compute_dkl(P, Q):
-    eps = 1e-16
-
-    # add eps
-    P += eps
-    Q += eps
-
-    # do some checks
-    assert P.shape == Q.shape, "incompatible shapes"
-    assert (np.sum(P) - 1.0) < 1e-11, "input not a pdf"
-    assert (np.sum(Q) - 1.0) < 1e-11, "input not a pdf"
-
-    out = np.sum(P * np.log(P / Q))
-    return out
-
-
-for key, value in input_dict.items():
-
-    vals = reduce(value, operation)
-    pdf = compute_discrete_pdf(vals, ref_x)
-    dkl = compute_dkl(ref_pdf, pdf)
-    print(key, dkl)

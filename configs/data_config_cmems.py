@@ -50,4 +50,4 @@ scaling_range = (0, 1)
 scaling_type = 'minmax'
 
 # analysis parameters
-window_size = 10 * 24
+window_size = 10 * 24  # 10-day window to separate TKE and MKE

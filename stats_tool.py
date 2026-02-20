@@ -5,7 +5,7 @@ import os
 import dill
 import itertools
 import matplotlib.pyplot as plt
-# from sklearn.neighbors import KernelDensity
+from sklearn.neighbors import KernelDensity
 
 
 class Metrics():
@@ -46,8 +46,11 @@ class Metrics():
             self.metrics_dict['LSD'] = {}
         if 'DKL' not in self.metrics_dict:
             self.metrics_dict['DKL'] = {}
+        if 'DKL_vals' not in self.metrics_dict:
+            self.metrics_dict['DKL_vals'] = {}
 
     def save_metrics_dict(self):
+        print('saving metrics dict')
         with open(self.metrics_file, 'wb') as file:
             dill.dump(self.metrics_dict, file)
 
@@ -107,6 +110,8 @@ class Metrics():
                 transect_name=transect,
                 spectrum_type=field_type
             )
+            if field_type == 'enstrophy':
+                T[key] = np.square(T[key])
 
         operation = 'mean'
         ref_key = 'truth'
@@ -115,7 +120,7 @@ class Metrics():
         ref_vals = self.reduce(T[ref_key], operation)
 
         ref_std = np.std(ref_vals)
-        if field_type in ['MKE', 'TKE', 'enstrophy', 'ssh']:
+        if field_type in ['MKE', 'TKE', 'enstrophy']:
             one_sided = True,
         else:
             one_sided = False,
@@ -127,21 +132,22 @@ class Metrics():
 
         ref_pdf = self.compute_discrete_pdf(ref_vals, ref_x)
 
+        # store reference values
+        field_key = '_'.join([field_type, transect])
+        if 'DKL_ref' in self.metrics_dict:
+            self.metrics_dict['DKL_ref'].update(
+                {'vals_' + field_key: ref_vals,
+                 'x_' + field_key: ref_x})
+        else:
+            self.metrics_dict['DKL_ref'] = \
+                {'vals_' + field_key: ref_vals,
+                 'x_' + field_key: ref_x}
+
         dkl = {}
         pdf = {}
         pdf[ref_key] = ref_pdf
 
         # plt.close('all')
-
-        # def compute_kde(vals, ref_x):
-        #     xmin = np.min(ref_x)
-        #     xmax = np.max(ref_x)
-        #     kde = KernelDensity(
-        #         kernel='linear',
-        #         bandwidth=(xmax-xmin)/30,
-        #     ).fit(vals[:, np.newaxis])
-        #     log_densities = kde.score_samples(ref_x[:, np.newaxis])
-        #     return np.exp(log_densities)
 
         # plt.figure()
         # plt.plot(ref_x[1:], ref_pdf / np.diff(ref_x)[0], 'k', label=ref_key)
@@ -151,7 +157,6 @@ class Metrics():
         # plt.figure()
         # plt.plot(ref_x, compute_kde(ref_vals, ref_x), 'k', label=ref_key)
 
-        field_key = '_'.join([field_type, transect])
         for key, value in T.items():
             if key == ref_key:
                 continue
@@ -159,14 +164,15 @@ class Metrics():
             pdf[key] = self.compute_discrete_pdf(vals, ref_x)
             dkl[key] = self.compute_dkl(pdf[ref_key], pdf[key])
 
-            val_dict = {'dkl': dkl[key],
-                        'vals': vals}
-
             if key in self.metrics_dict['DKL']:
-                self.metrics_dict['DKL'][key].update(
-                    {field_key: val_dict})
+                self.metrics_dict['DKL'][key].update({field_key: dkl[key]})
             else:
-                self.metrics_dict['DKL'][key] = {field_key: val_dict}
+                self.metrics_dict['DKL'][key] = {field_key: dkl[key]}
+
+            if key in self.metrics_dict['DKL_vals']:
+                self.metrics_dict['DKL_vals'][key].update({field_key: vals})
+            else:
+                self.metrics_dict['DKL_vals'][key] = {field_key: vals}
 
             # plt.plot(ref_x, compute_kde(vals, ref_x), label=key)
             # plt.plot(ref_x[1:], pdf[key] / np.diff(ref_x)[0], label=key)
@@ -226,7 +232,7 @@ class Metrics():
                 direction=direction,
             )
 
-        # mean over space or time
+        # mean over space ortime
         S = {key: np.mean(value, axis=-1) for key, value in S.items()}
 
         field_type = '_'.join([field_type, transect, direction])
@@ -245,7 +251,7 @@ class Metrics():
 
     def compute_RMSE(self, truth, prediction, key, field_type):
         shape = truth.shape
-        # put spatial dim in vector form
+        # put spatial dim invector form
         error = (truth - prediction).reshape(shape[0], -1)
         # truncate first week to get rid of startup effects
         error = error[self.trunc_time:,]
@@ -286,34 +292,119 @@ class Metrics():
                 {field_type: correlations}
 
 
-def make_plots(metrics_dict,
-               metric,
-               field_type,
-               base_dir,
-               plot_legend=True,
-               save_fig=True,
-               **kwargs):
+def make_kdeplots(metrics_dict,
+                  metric,
+                  field_type,
+                  base_dir,
+                  **kwargs):
 
     mdict = metrics_dict[metric]
     keys = mdict.keys()
-    ensembles, normal_runs = \
+    ensembles, normal_runs =\
         tools.split_ensembles(keys)
 
     # create subset and change key name if needed
-    field_type_orig = field_type
-    if metric == 'LSD':
+    if metric == 'DKL_vals':
         transect = kwargs['transect']
-        direction = kwargs['direction']
-        field_type = '_'.join([field_type, transect, direction])
+        field_key = '_'.join([field_type, transect])
+        ref_vals = metrics_dict['DKL_ref']['vals_' + field_key]
+        ref_x = metrics_dict['DKL_ref']['x_' + field_key]
+    else:
+        ref_vals = []
+        ref_x = []
+        raise Exception('Not implemented')
 
     subset = {}
     for key, value in ensembles.items():
         subset[key.replace('8', '08')] = \
-            [mdict[mem][field_type] for mem in value]
+            [mdict[mem][field_key] for mem in value]
 
     for run in normal_runs:
         subset[run.replace('8', '08')] = \
-            [mdict[run][field_type]]
+            [mdict[run][field_key]]
+
+    plt.figure(figsize=(6, 4))
+    kd_est_ref = compute_kde(ref_vals, ref_x)
+    plt.fill_between(ref_x,
+                     kd_est_ref,
+                     kd_est_ref * 0.0,
+                     color='k',
+                     alpha=0.3)
+
+    plt.plot(ref_x, kd_est_ref, 'k', label='reference')
+    labels = {'pred_resnet_cf32': 'SRResNet',
+              'pred_esnc_cf32': 'CAE-ESNc',
+              'bilin_cf32': 'bilinear interpolation'}
+    cmap = plt.get_cmap('tab10')
+    colors = {
+        'pred_resnet_cf32': cmap(1),
+        'pred_esnc_cf32': cmap(2),
+        'bilin_cf32': cmap(0)}
+
+    for key, value in subset.items():
+        if '32' not in key:
+            continue
+        vals = value[0]
+        kd_est = compute_kde(vals, ref_x)
+        plt.fill_between(ref_x,
+                         kd_est,
+                         kd_est * 0.0,
+                         color=colors[key],
+                         alpha=0.3)
+        plt.plot(ref_x,
+                 kd_est,
+                 color=colors[key],
+                 label=labels[key],
+                 linewidth=2)
+
+    plt.xlabel(field_type)
+    plt.yticks([])
+    plt.legend()
+    plt.pause(1)
+
+
+def compute_kde(vals, ref_x):
+    xmin = np.min(ref_x)
+    xmax = np.max(ref_x)
+    kde = KernelDensity(
+        kernel='linear',
+        bandwidth=(xmax-xmin)/20,
+    ).fit(vals[:, np.newaxis])
+    log_densities = kde.score_samples(ref_x[:, np.newaxis])
+    return np.exp(log_densities)
+
+
+def make_boxplots(metrics_dict,
+                  metric,
+                  field_type,
+                  base_dir,
+                  plot_legend=True,
+                  save_fig=True,
+                  **kwargs):
+
+    mdict = metrics_dict[metric]
+    keys = mdict.keys()
+    ensembles, normal_runs =\
+        tools.split_ensembles(keys)
+
+    # create subset and change key name if needed
+    field_key = field_type
+    if metric == 'LSD':
+        transect = kwargs['transect']
+        direction = kwargs['direction']
+        field_key = '_'.join([field_type, transect, direction])
+    elif metric == 'DKL':
+        transect = kwargs['transect']
+        field_key = '_'.join([field_type, transect])
+
+    subset = {}
+    for key, value in ensembles.items():
+        subset[key.replace('8', '08')] = \
+            [mdict[mem][field_key] for mem in value]
+
+    for run in normal_runs:
+        subset[run.replace('8', '08')] = \
+            [mdict[run][field_key]]
 
     sorted_keys = sorted(subset.keys())
 
@@ -331,7 +422,7 @@ def make_plots(metrics_dict,
     cmap = plt.get_cmap('tab10')
     if metric == 'correlation':
         colors = [*[cmap(0)]*Ncfs, *[cmap(2)]*Ncfs, *[cmap(1)]*Ncfs]
-    elif metric in ['RMSE', 'LSD']:
+    elif metric in ['RMSE', 'LSD', 'DKL']:
         colors = [cmap(0), cmap(2), cmap(1)]
 
     labels = {}
@@ -372,12 +463,11 @@ def make_plots(metrics_dict,
         plt.ylabel('correlation')
         plt.xlabel('PC')
         plt.grid(which='both')
-        fig_name = f'{base_dir}/correlations_{field_type}.png'
+        fig_name = f'{base_dir}/correlations_{field_key}.png'
         print(fig_name)
         plt.savefig(fig_name, bbox_inches='tight', dpi=200)
 
-    elif metric in ['RMSE', 'LSD']:
-
+    elif metric in ['RMSE', 'LSD', 'DKL']:
         q1 = [np.quantile(subset[key], 0.25) for key in sorted_keys]
         q2 = [np.quantile(subset[key], 0.50) for key in sorted_keys]
         q3 = [np.quantile(subset[key], 0.75) for key in sorted_keys]
@@ -410,10 +500,6 @@ def make_plots(metrics_dict,
                             positions=pos,
                             showfliers=False,
                             )
-
-                field_type_orig = 'SSH' \
-                    if field_type_orig == 'ssh' else field_type_orig
-
                 ylabel = {
                     'all': f'{metric}, total',
                     'uo': f'{metric}, zonal velocity',
@@ -426,7 +512,7 @@ def make_plots(metrics_dict,
         plt.gca().set_xticks([0, 1, 2])
         rotation = 0 if metric == 'RMSE' else 45
         plt.gca().set_xticklabels(labels, rotation=rotation)
-        if metric == 'LSD':
+        if metric in ['LSD', 'DKL']:
             plt.yscale('log')
 
         plt.grid(which='both')
@@ -435,6 +521,6 @@ def make_plots(metrics_dict,
             plt.legend()
 
         if save_fig:
-            fig_name = f'{base_dir}/{metric}_{field_type}.png'
+            fig_name = f'{base_dir}/{metric}_{field_key}.png'
             print(fig_name)
             plt.savefig(fig_name, bbox_inches='tight', dpi=200)

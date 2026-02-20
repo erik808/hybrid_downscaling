@@ -8,7 +8,7 @@ import numpy as np
 import tools
 import stats_tool
 import data_manager_cmems
-from sklearn.neighbors import KernelDensity
+# from sklearn.neighbors import KernelDensity
 import matplotlib.pyplot as plt
 importlib.reload(data_manager_cmems)
 importlib.reload(plot_utils)
@@ -280,9 +280,9 @@ analyzer = Analysis()
 members = range(10)
 cfrange = [8, 16, 32]
 
-plot_legend = True
 
 compute_metrics = False
+plot_metrics = True
 plot_reconstructions = False
 plot_spectra = False
 
@@ -292,6 +292,10 @@ if plot_reconstructions:
     cfrange = [32]
     compute_metrics = False
 
+# members = [0]
+# cfrange = [32]
+
+plot_legend = True
 for cf in cfrange:
     # assemble data in data_dict
     if np.any([compute_metrics,
@@ -393,94 +397,147 @@ for cf in cfrange:
 
     # plot spectra
     if plot_spectra:
-        transect = 'along_flow'
-        for direction in ['temporal', 'spatial']:
-            for spectrum_type in ['energy', 'enstrophy', 'ssh']:
-                plt.figure(figsize=(5, 3.5))
-                S, T = analyzer.plot_machine.plot_spectrum(
-                    data_dict,
-                    transect_name=transect,
-                    spectrum_type=spectrum_type,
-                    direction=direction,
-                    add_powerlaws=False,
-                    make_title=False,
-                    plot_legend=plot_legend)
-                plt.close('all')
-        plot_legend = False
+        for transect in ['along_flow', 'across_flow']:
+            for direction in ['temporal', 'spatial']:
+                for spectrum_type in ['energy', 'enstrophy', 'ssh']:
+                    plt.figure(figsize=(5, 3.5))
+                    S, T = analyzer.plot_machine.plot_spectrum(
+                        data_dict,
+                        transect_name=transect,
+                        spectrum_type=spectrum_type,
+                        direction=direction,
+                        add_powerlaws=False,
+                        make_title=False,
+                        plot_legend=plot_legend)
+                    plt.close('all')
+            plot_legend = False
 
     # cleanup data_dict
     del z_bilin, z_resnet, z_esnc, data_dict
 
 
-# plot metrics dict contents
-analyzer.metrics.load_metrics_dict()
-plt.close('all')
+if plot_metrics:
+    # plot metrics dict contents
+    analyzer.metrics.load_metrics_dict()
 
-tuples = [('RMSE', 'all'),
-          ('RMSE', 'uo'),
-          ('RMSE', 'ssh'),
-          ('correlation', 'all')]
+    plt.close('all')
 
-for (metric, field_type) in tuples:
-    stats_tool.make_plots(
-        analyzer.metrics.metrics_dict,
-        metric,
-        field_type,
-        base_dir=analyzer.results_dir,
-        plot_legend=True
-    )
+    tuples = [('RMSE', 'all'),
+              ('RMSE', 'uo'),
+              ('RMSE', 'ssh'),
+              ('correlation', 'all')]
 
-
-def tuple_list(field_type):
-    return [
-        ('LSD', field_type, {'transect': 'along_flow',
-                             'direction': 'spatial'}),
-        ('LSD', field_type, {'transect': 'along_flow',
-                             'direction': 'temporal'}),
-        ('LSD', field_type, {'transect': 'across_flow',
-                             'direction': 'spatial'}),
-        ('LSD', field_type, {'transect': 'across_flow',
-                             'direction': 'temporal'}),
-    ]
-
-
-for tuples in [
-        tuple_list('energy'),
-        tuple_list('enstrophy'),
-        tuple_list('ssh'),
-]:
-    fig, axs = plt.subplots(1, 4,
-                            sharey=True,
-                            figsize=(8, 3))
-    for i, (metric, field_type, kwargs) in enumerate(tuples):
-        plot_legend = False if i < len(tuples)-1 else True
-        plt.sca(axs[i])
-        stats_tool.make_plots(
+    for (metric, field_type) in tuples:
+        stats_tool.make_boxplots(
             analyzer.metrics.metrics_dict,
             metric,
             field_type,
             base_dir=analyzer.results_dir,
-            plot_legend=False,
-            save_fig=False,
-            **kwargs,
+            plot_legend=True
         )
 
-        transect = kwargs['transect']
-        direction = kwargs['direction']
+    def tuple_list(field_type):
+        return [
+            ('LSD', field_type, {'transect': 'along_flow',
+                                 'direction': 'spatial'}),
+            ('LSD', field_type, {'transect': 'along_flow',
+                                 'direction': 'temporal'}),
+            ('LSD', field_type, {'transect': 'across_flow',
+                                 'direction': 'spatial'}),
+            ('LSD', field_type, {'transect': 'across_flow',
+                                 'direction': 'temporal'}),
+        ]
 
-        plt.title(f"{direction} spectr.\n{transect.replace('_', '-')}",
-                  loc='left',
-                  ha='left',
-                  )
+    for tuples in [
+            tuple_list('energy'),
+            tuple_list('enstrophy'),
+            tuple_list('ssh'),
+    ]:
+        fig, axs = plt.subplots(1, 4,
+                                sharey=True,
+                                figsize=(8, 3))
+        for i, (metric, field_type, kwargs) in enumerate(tuples):
+            plot_legend = False if i < len(tuples)-1 else True
+            plt.sca(axs[i])
+            stats_tool.make_boxplots(
+                analyzer.metrics.metrics_dict,
+                metric,
+                field_type,
+                base_dir=analyzer.results_dir,
+                plot_legend=False,
+                save_fig=False,
+                **kwargs,
+            )
 
-        if i > 0:
-            plt.ylabel('')
-        else:
-            field = 'SSH' if field_type == 'ssh' else field_type
-            plt.ylabel('$D_{LS}$, ' + field)
-        if i == len(tuples)-1:
-            plt.legend(loc='center', bbox_to_anchor=(0.5, 0.6))
+            transect = kwargs['transect']
+            direction = kwargs['direction']
 
-    fig_name = f'{analyzer.results_dir}/{metric}_{field_type}.png'
-    print(fig_name)
-    plt.savefig(fig_name, bbox_inches='tight', dpi=200)
+            plt.title(f"{direction} spectr.\n{transect.replace('_', '-')}",
+                      loc='left',
+                      ha='left',
+                      )
+
+            if i > 0:
+                plt.ylabel('')
+            else:
+                field = 'SSH' if field_type == 'ssh' else field_type
+                plt.ylabel('$D_{LS}$, ' + field)
+            if i == len(tuples)-1:
+                plt.legend(loc='center', bbox_to_anchor=(0.5, 0.6))
+
+        fig_name = f'{analyzer.results_dir}/{metric}_{field_type}.png'
+        print(fig_name)
+        plt.savefig(fig_name, bbox_inches='tight', dpi=200)
+
+    def tuple_list(field_type):
+        return [
+            ('DKL', field_type, {'transect': 'along_flow'}),
+            ('DKL', field_type, {'transect': 'across_flow'}),
+        ]
+
+    plt.close('all')
+    for tuples in [
+            tuple_list('MKE'),
+            tuple_list('TKE'),
+            tuple_list('enstrophy'),
+            tuple_list('ssh'),
+    ]:
+        fig, axs = plt.subplots(1, 2,
+                                sharey=True,
+                                figsize=(4, 3))
+        for i, (metric, field_type, kwargs) in enumerate(tuples):
+            plt.sca(axs[i])
+            stats_tool.make_boxplots(
+                analyzer.metrics.metrics_dict,
+                metric,
+                field_type,
+                base_dir=analyzer.results_dir,
+                plot_legend=False,
+                save_fig=False,
+                **kwargs,
+            )
+            if i > 0:
+                plt.ylabel('')
+            else:
+                plt.ylabel('$D_{KL}$, ' + field_type)
+
+            transect = kwargs['transect']
+            plt.title(f"{transect.replace('_', '-')}")
+        fig_name = f'{analyzer.results_dir}/{metric}_{field_type}.png'
+        print(fig_name)
+        plt.savefig(fig_name, bbox_inches='tight', dpi=200)
+
+    tuples = [
+        ('DKL_vals', 'MKE', {'transect': 'along_flow'}),
+        ('DKL_vals', 'TKE', {'transect': 'along_flow'}),
+        ('DKL_vals', 'enstrophy', {'transect': 'along_flow'}),
+        ('DKL_vals', 'ssh', {'transect': 'along_flow'})
+    ]
+    for i, (metric, field_type, kwargs) in enumerate(tuples):
+        stats_tool.make_kdeplots(
+            analyzer.metrics.metrics_dict,
+            metric,
+            field_type,
+            base_dir=analyzer.results_dir,
+            **kwargs,
+        )

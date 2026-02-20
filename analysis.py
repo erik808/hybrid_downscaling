@@ -534,6 +534,7 @@ if plot_metrics:
         ('DKL_vals', 'ssh', {'transect': 'along_flow'})
     ]
     for i, (metric, field_type, kwargs) in enumerate(tuples):
+        transect = kwargs['transect']
         stats_tool.make_kdeplots(
             analyzer.metrics.metrics_dict,
             metric,
@@ -541,3 +542,6 @@ if plot_metrics:
             base_dir=analyzer.results_dir,
             **kwargs,
         )
+        fig_name = f'{analyzer.results_dir}/KDE_{field_type}_{transect}.png'
+        print(fig_name)
+        plt.savefig(fig_name, bbox_inches='tight', dpi=200)

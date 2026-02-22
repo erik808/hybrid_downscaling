@@ -120,14 +120,14 @@ class Metrics():
         ref_vals = self.reduce(T[ref_key], operation)
 
         ref_std = np.std(ref_vals)
-        if field_type in ['MKE', 'TKE', 'enstrophy']:
-            one_sided = True,
-        else:
-            one_sided = False,
+        # if field_type in ['MKE', 'TKE', 'enstrophy']:
+        #     one_sided = True,
+        # else:
+        #     one_sided = False,
 
         xmin = np.min(ref_vals) - 2 * ref_std
         xmax = np.max(ref_vals) + 2 * ref_std
-        xmin = np.max([xmin, 0.0]) if one_sided else xmin
+        # xmin = np.max([xmin, 0.0]) if one_sided else xmin
         ref_x = np.linspace(xmin, xmax, bins + 1)
 
         ref_pdf = self.compute_discrete_pdf(ref_vals, ref_x)
@@ -323,15 +323,17 @@ def make_kdeplots(metrics_dict,
         subset[run.replace('8', '08')] = \
             [mdict[run][field_key]]
 
-    plt.figure(figsize=(6, 4))
     kd_est_ref = compute_kde(ref_vals, ref_x)
     plt.fill_between(ref_x,
                      kd_est_ref,
                      kd_est_ref * 0.0,
                      color='k',
-                     alpha=0.3)
+                     alpha=0.7,
+                     zorder=0)
 
-    plt.plot(ref_x, kd_est_ref, 'k', label='reference')
+    plt.plot(ref_x, kd_est_ref,
+             'k', label='reference',
+             linewidth=2)
     labels = {'pred_resnet_cf32': 'SRResNet',
               'pred_esnc_cf32': 'CAE-ESNc',
               'bilin_cf32': 'bilinear interpolation'}
@@ -350,14 +352,22 @@ def make_kdeplots(metrics_dict,
                          kd_est,
                          kd_est * 0.0,
                          color=colors[key],
-                         alpha=0.3)
+                         alpha=0.4,
+                         zorder=0)
         plt.plot(ref_x,
                  kd_est,
                  color=colors[key],
                  label=labels[key],
                  linewidth=2)
 
-    plt.xlabel(field_type)
+    plt.xlabel('PDF, ' + field_type)
+    if field_type == 'ssh':
+        plt.xlim(None, None)
+    elif field_type == 'enstrophy':
+        plt.xlim(0, 50)
+    else:
+        plt.xlim(0, None)
+
     plt.yticks([])
     plt.legend()
     plt.pause(1)
@@ -368,7 +378,7 @@ def compute_kde(vals, ref_x):
     xmax = np.max(ref_x)
     kde = KernelDensity(
         kernel='linear',
-        bandwidth=(xmax-xmin)/20,
+        bandwidth=(xmax-xmin)/30,
     ).fit(vals[:, np.newaxis])
     log_densities = kde.score_samples(ref_x[:, np.newaxis])
     return np.exp(log_densities)

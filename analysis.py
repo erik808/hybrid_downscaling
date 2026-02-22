@@ -284,13 +284,15 @@ cfrange = [8, 16, 32]
 compute_metrics = False
 plot_metrics = True
 plot_reconstructions = False
-plot_spectra = False
+plot_spectra = True
 
 # reconstructions are only done for first member and CF=32
 if plot_reconstructions:
     members = [0]
     cfrange = [32]
     compute_metrics = False
+    plot_spectra = False
+    plot_metrics = False
 
 # members = [0]
 # cfrange = [32]
@@ -534,6 +536,7 @@ if plot_metrics:
         ('DKL_vals', 'ssh', {'transect': 'along_flow'})
     ]
     for i, (metric, field_type, kwargs) in enumerate(tuples):
+        plt.figure(figsize=(6, 3))
         transect = kwargs['transect']
         stats_tool.make_kdeplots(
             analyzer.metrics.metrics_dict,

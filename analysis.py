@@ -280,7 +280,7 @@ analyzer = Analysis()
 members = range(10)
 cfrange = [8, 16, 32]
 
-compute_metrics = True
+compute_metrics = False
 plot_metrics = True
 
 plot_reconstructions = False
@@ -421,22 +421,33 @@ if plot_metrics:
     # plot metrics dict contents
     analyzer.metrics.load_metrics_dict()
 
+    # RMSE
     plt.close('all')
+    tuples = [
+        ('RMSE', 'uo'),
+        ('RMSE', 'vo'),
+        ('RMSE', 'ssh'),
+    ]
 
-    tuples = [('RMSE', 'all'),
-              ('RMSE', 'uo'),
-              ('RMSE', 'vo'),
-              ('RMSE', 'ssh'),
-              ('correlation', 'all')]
-
+    plot_legend = True
     for (metric, field_type) in tuples:
         stats_tool.make_boxplots(
             analyzer.metrics.metrics_dict,
             metric,
             field_type,
             base_dir=analyzer.results_dir,
-            plot_legend=True
+            plot_legend=plot_legend,
         )
+        plot_legend = False
+
+    # Correlation
+    stats_tool.make_boxplots(
+        analyzer.metrics.metrics_dict,
+        'correlation',
+        'all',
+        base_dir=analyzer.results_dir,
+        plot_legend=True,
+    )
 
     def tuple_list(field_type):
         return [

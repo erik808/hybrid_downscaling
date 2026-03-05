@@ -149,16 +149,6 @@ class Metrics():
         pdf = {}
         pdf[ref_key] = ref_pdf
 
-        # plt.close('all')
-
-        # plt.figure()
-        # plt.plot(ref_x[1:], ref_pdf / np.diff(ref_x)[0], 'k', label=ref_key)
-        # plt.plot(ref_x, compute_kde(ref_vals, ref_x), 'r', label=ref_key)
-        # plt.pause(1)
-
-        # plt.figure()
-        # plt.plot(ref_x, compute_kde(ref_vals, ref_x), 'k', label=ref_key)
-
         for key, value in T.items():
             if key == ref_key:
                 continue
@@ -175,12 +165,6 @@ class Metrics():
                 self.metrics_dict['DKL_vals'][key].update({field_key: vals})
             else:
                 self.metrics_dict['DKL_vals'][key] = {field_key: vals}
-
-            # plt.plot(ref_x, compute_kde(vals, ref_x), label=key)
-            # plt.plot(ref_x[1:], pdf[key] / np.diff(ref_x)[0], label=key)
-
-        # plt.legend()
-        # plt.pause(1)
 
     def reduce(self, mat, operation):
         if operation == 'sum':
@@ -372,7 +356,6 @@ def make_kdeplots(metrics_dict,
 
     plt.yticks([])
     plt.legend()
-    plt.pause(1)
 
 
 def compute_kde(vals, ref_x):
@@ -455,7 +438,7 @@ def make_boxplots(metrics_dict,
         labels[key_orig] = key
 
     if metric == 'correlation':
-        plt.figure()
+        plt.figure(figsize=(9, 5))
         data = [np.asarray(subset[key]) for key in sorted_keys]
         PCrange = np.arange(10)+1
         for (value, key, col) in zip(data, sorted_keys, colors):
@@ -475,7 +458,7 @@ def make_boxplots(metrics_dict,
                    loc='lower center', borderaxespad=0)
         plt.ylabel('Pearson correlation')
         plt.xlabel('principal component')
-        plt.gca().set_xticks([1, 3, 5, 7, 9])
+        plt.gca().set_xticks(PCrange)
         plt.grid(which='both')
         fig_name = f'{base_dir}/correlations_{field_key}.png'
         print(fig_name)
@@ -488,7 +471,7 @@ def make_boxplots(metrics_dict,
         all_vals = [subset[key] for key in sorted_keys]
 
         if metric == 'RMSE':
-            plt.figure(figsize=(3.5, 4.8))
+            plt.figure(figsize=(2.5, 4.8))
         elif metric == 'LSD' and save_fig:
             plt.figure(figsize=(2.5, 4.8))
 

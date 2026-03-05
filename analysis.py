@@ -280,22 +280,20 @@ analyzer = Analysis()
 members = range(10)
 cfrange = [8, 16, 32]
 
-
-compute_metrics = False
+compute_metrics = True
 plot_metrics = True
+
 plot_reconstructions = False
-plot_spectra = True
+plot_spectra = False
 
 # reconstructions are only done for first member and CF=32
 if plot_reconstructions:
     members = [0]
     cfrange = [32]
+    print('WARNING disabling everything except reconstruction plots')
     compute_metrics = False
     plot_spectra = False
     plot_metrics = False
-
-# members = [0]
-# cfrange = [32]
 
 plot_legend = True
 for cf in cfrange:
@@ -320,6 +318,7 @@ for cf in cfrange:
     if compute_metrics:
         # RMSE and correlation
         tuples = [('RMSE', 'uo'),
+                  ('RMSE', 'vo'),
                   ('RMSE', 'ssh'),
                   ('RMSE', 'all'),
                   ('correlation', 'all')]
@@ -426,6 +425,7 @@ if plot_metrics:
 
     tuples = [('RMSE', 'all'),
               ('RMSE', 'uo'),
+              ('RMSE', 'vo'),
               ('RMSE', 'ssh'),
               ('correlation', 'all')]
 

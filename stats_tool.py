@@ -57,6 +57,8 @@ class Metrics():
     def field_manip(self, data, field_type='all'):
         if field_type == 'uo':
             return data[..., 0]
+        if field_type == 'vo':
+            return data[..., 1]
         elif field_type == 'ssh':
             return data[..., 2]
         elif field_type == 'all':
@@ -270,7 +272,7 @@ class Metrics():
 
         correlations = []
         for mode in range(10):
-            U = (self.modes_U.reshape(-1, np.prod(shape[1:])))[mode]
+            U = (self.modes_U.reshape(-1, np.prod(shape[1:])))[mode, :]
             # truncate, ignore first t steps
             pred = prediction[self.trunc_time:, ]\
                 .reshape(-1, np.prod(shape[1:]))
@@ -455,23 +457,25 @@ def make_boxplots(metrics_dict,
     if metric == 'correlation':
         plt.figure()
         data = [np.asarray(subset[key]) for key in sorted_keys]
+        PCrange = np.arange(10)+1
         for (value, key, col) in zip(data, sorted_keys, colors):
             lstyle = next(lstyles_cycler)
             q1 = np.quantile(value, 0.25, axis=0)
             q2 = np.quantile(value, 0.5, axis=0)
             q3 = np.quantile(value, 0.75, axis=0)
             if not np.all(q1 == q3):
-                plt.fill_between(range(10), q1, q3, color=col,
+                plt.fill_between(PCrange, q1, q3, color=col,
                                  zorder=0, alpha=0.5, linestyle=lstyle)
 
-            plt.plot(range(10), q2, label=labels[key],
+            plt.plot(PCrange, q2, label=labels[key],
                      color=col, linewidth=2.5,
                      linestyle=lstyle)
 
         plt.legend(ncol=3, bbox_to_anchor=(0.5, 1.02),
                    loc='lower center', borderaxespad=0)
-        plt.ylabel('correlation')
-        plt.xlabel('PC')
+        plt.ylabel('Pearson correlation')
+        plt.xlabel('principal component')
+        plt.gca().set_xticks([1, 3, 5, 7, 9])
         plt.grid(which='both')
         fig_name = f'{base_dir}/correlations_{field_key}.png'
         print(fig_name)
@@ -513,6 +517,7 @@ def make_boxplots(metrics_dict,
                 ylabel = {
                     'all': f'{metric}, total',
                     'uo': f'{metric}, zonal velocity',
+                    'vo': f'{metric}, meridional velocity',
                     'ssh': f'{metric}, SSH'
                 }
         if field_type in ylabel:

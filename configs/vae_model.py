@@ -7,7 +7,7 @@ beta = 0.0  # 1e-4
 # weight on reconstruction loss
 gamma = 1
 
-# weight on latent space size
+# weight on latent space size (gamma in paper)
 alpha_ls = 1e-4
 
 # 'bilinear', 'subpixel'

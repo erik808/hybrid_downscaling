@@ -404,6 +404,8 @@ class PlotMachine():
 
             plt.colorbar(a, label=label, aspect=10, extend=extend)
             plt.xticks(rotation=45, ha='right')
+            ax = plt.gca()
+            ax.set_xticks(ax.get_xticks()[1:])
             plt.yticks([])
             # plt.ylabel('distance along transect')
             runid = key.split('/')[0]

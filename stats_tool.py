@@ -438,7 +438,7 @@ def make_boxplots(metrics_dict,
         labels[key_orig] = key
 
     if metric == 'correlation':
-        plt.figure(figsize=(9, 5))
+        plt.figure(figsize=(8.2, 5))
         data = [np.asarray(subset[key]) for key in sorted_keys]
         PCrange = np.arange(10)+1
         for (value, key, col) in zip(data, sorted_keys, colors):

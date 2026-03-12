@@ -283,8 +283,8 @@ cfrange = [8, 16, 32]
 compute_metrics = False
 plot_metrics = False
 
-plot_reconstructions = True
-plot_spectra = False
+plot_reconstructions = False
+plot_spectra = True
 
 # reconstructions are only done for first member and CF=32
 if plot_reconstructions:
@@ -294,6 +294,9 @@ if plot_reconstructions:
     compute_metrics = False
     plot_spectra = False
     plot_metrics = False
+
+members = [0]
+cfrange = [32]
 
 plot_legend = True
 for cf in cfrange:
@@ -400,7 +403,7 @@ for cf in cfrange:
     if plot_spectra:
         for transect in ['along_flow', 'across_flow']:
             for direction in ['temporal', 'spatial']:
-                for spectrum_type in ['energy', 'enstrophy', 'ssh']:
+                for spectrum_type in ['ssh', 'energy', 'enstrophy']:
                     plt.figure(figsize=(5, 3.5))
                     S, T = analyzer.plot_machine.plot_spectrum(
                         data_dict,

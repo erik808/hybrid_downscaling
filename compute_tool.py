@@ -4,6 +4,9 @@ import tools
 import scipy
 import matplotlib.pyplot as plt
 import dill
+from sklearn.metrics.pairwise import haversine_distances
+from math import radians
+
 
 from transectpicker.transectpicker import TransectPicker
 
@@ -23,12 +26,16 @@ class ComputeTool():
         self.e2 = self.grid.e2t.data  # in m
         self.tdim = 60 * 60 * 24  # seconds to days
         self.transect_regridders = {}
+        self.transect_distance = {}
 
     def get_regridder(self, transect_name):
 
         if transect_name not in self.transect_regridders:
             tpicker, transect = self.get_transect(transect_name)
             transect_res = len(tpicker.x_trans)
+            distance = self.get_transect_distance(transect,
+                                                  resolution=transect_res)
+            self.transect_distance.update({transect_name: distance})
             regridder = \
                 self.regrid_to_transect(tpicker,
                                         transect,
@@ -36,6 +43,18 @@ class ComputeTool():
             self.transect_regridders.update({transect_name: regridder})
 
         self.regridder = self.transect_regridders[transect_name]
+
+    def get_transect_distance(self, transect, resolution):
+        # add distance over transect
+        start = [radians(transect['lat_start']),
+                 radians(transect['lon_start'])]
+        end = [radians(transect['lat_end']),
+               radians(transect['lon_end'])]
+
+        # distance between points on globe in kms
+        dist = haversine_distances([start, end]) * 6371000/1000
+        dist = dist[0, 1]
+        return dist, dist / resolution
 
     def get_transect(self, transect_name):
         dill_file = f'{self.dm.transect_dir}/{transect_name}.dill'
@@ -281,7 +300,7 @@ class ComputeTool():
 
         elif method == 'welch':
             nperseg = data_detrend.shape[0] \
-                if data_detrend.shape[0] < 256 else None
+                if data_detrend.shape[0] < 512 else 512
 
             f, S = scipy.signal.welch(
                 data_detrend,

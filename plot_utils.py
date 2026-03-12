@@ -709,11 +709,15 @@ class PlotMachine():
                       combine_members='quantiles',
                       make_title=False,
                       plot_legend=True,
+                      add_xylabels=True,
+                      use_frequency=True,
                       ):
         k = {}
         S = {}
         T = {}
+        print('computing spectra')
         for key, value in data.items():
+            print(key, ' ', end='')
             k[key], S[key], T[key] = \
                 self.ct.compute_spectrum_along_transect(
                     value['data'],
@@ -730,6 +734,15 @@ class PlotMachine():
             data,
             combine_members,
         )
+
+        plt.close('all')
+        use_frequency = False
+        if not use_frequency:
+            for key in k.keys():
+                if spectrum_type == 'temporal':
+                    k[key] = 512 / np.arange(len(k[key]))
+                else:
+                    k[key] = np.arange(len(k[key]))
 
         # first do the normal runs (not ensembles)
         for key in normal_runs:
@@ -826,9 +839,18 @@ class PlotMachine():
 
         plt.grid()
 
+        if add_xylabels:
+            if spectrum_type == 'temporal':
+                plt.xlabel('period (h)')
+            else:
+                plt.xlabel('period (h)')
+
+
         print(fig_name)
         plt.tight_layout()
         plt.savefig(fig_name, dpi=200)
+        plt.pause(1)
+        breakpoint()
 
         return S, T
 

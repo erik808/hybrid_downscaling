@@ -735,14 +735,14 @@ class PlotMachine():
             combine_members,
         )
 
-        plt.close('all')
         use_frequency = False
         if not use_frequency:
             for key in k.keys():
-                if spectrum_type == 'temporal':
+                if direction == 'temporal':
                     k[key] = 512 / np.arange(len(k[key]))
                 else:
-                    k[key] = np.arange(len(k[key]))
+                    d = self.ct.transect_distance[transect_name][0]
+                    k[key] = d / np.arange(len(k[key]))
 
         # first do the normal runs (not ensembles)
         for key in normal_runs:
@@ -795,6 +795,7 @@ class PlotMachine():
                     f'{self.results_dir}/'
                     f'energy_spectrum_{postfix}'
                 )
+            ylabel = 'E(k)'
         elif spectrum_type == 'enstrophy':
             tstring = \
                 (f'Mean enstrophy spectrum,'
@@ -803,7 +804,7 @@ class PlotMachine():
                 (f'{self.results_dir}/'
                  f'enstrophy_spectrum_'
                  f'{postfix}')
-
+            ylabel = 'Z(k)'
         elif spectrum_type == 'ssh':
             tstring = \
                 (f'Mean ssh spectrum,'
@@ -812,6 +813,7 @@ class PlotMachine():
                 (f'{self.results_dir}/'
                  f'ssh_spectrum_'
                  f'{postfix}')
+            ylabel = 'SSH(k)'
         elif spectrum_type == 'TKE':
             tstring = \
                 (f'TKE spectrum,'
@@ -820,6 +822,7 @@ class PlotMachine():
                 (f'{self.results_dir}/'
                  f'TKE_spectrum_'
                  f'{postfix}')
+            ylabel = 'TKE(k)'
         elif spectrum_type == 'MKE':
             tstring = \
                 (f'MKE spectrum,'
@@ -828,6 +831,7 @@ class PlotMachine():
                 (f'{self.results_dir}/'
                  f'MKE_spectrum_'
                  f'{postfix}')
+            ylabel = 'MKE(k)'
         else:
             raise Exception('unknown spectrum type')
 
@@ -840,17 +844,16 @@ class PlotMachine():
         plt.grid()
 
         if add_xylabels:
-            if spectrum_type == 'temporal':
-                plt.xlabel('period (h)')
+            plt.ylabel(ylabel)
+            if direction == 'temporal':
+                plt.xlabel('$L / k$ (h)')
             else:
-                plt.xlabel('period (h)')
-
-
+                plt.xlabel('$L / k$ (km)')
+                
         print(fig_name)
+        plt.gca().invert_xaxis()
         plt.tight_layout()
         plt.savefig(fig_name, dpi=200)
-        plt.pause(1)
-        breakpoint()
 
         return S, T
 

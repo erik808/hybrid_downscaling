@@ -295,8 +295,6 @@ if plot_reconstructions:
     plot_spectra = False
     plot_metrics = False
 
-members = [0]
-cfrange = [32]
 
 plot_legend = True
 for cf in cfrange:
@@ -402,8 +400,8 @@ for cf in cfrange:
     # plot spectra
     if plot_spectra:
         for transect in ['along_flow', 'across_flow']:
-            for direction in ['temporal', 'spatial']:
-                for spectrum_type in ['ssh', 'energy', 'enstrophy']:
+            for direction in ['spatial', 'temporal']:
+                for spectrum_type in ['energy', 'enstrophy', 'ssh']:
                     plt.figure(figsize=(5, 3.5))
                     S, T = analyzer.plot_machine.plot_spectrum(
                         data_dict,

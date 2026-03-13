@@ -43,7 +43,7 @@ class ComputeTool():
             self.transect_regridders.update({transect_name: regridder})
 
         self.regridder = self.transect_regridders[transect_name]
-
+        
     def get_transect_distance(self, transect, resolution):
         # add distance over transect
         start = [radians(transect['lat_start']),

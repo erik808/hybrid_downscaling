@@ -407,6 +407,7 @@ class PlotMachine():
             ax = plt.gca()
             ax.set_xticks(ax.get_xticks()[1:])
             plt.yticks([])
+            # ax.invert_yaxis() # check ordering first
             # plt.ylabel('distance along transect')
             runid = key.split('/')[0]
             fig_name = (f'{self.results_dir}/Hovmöller_'

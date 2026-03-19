@@ -283,8 +283,8 @@ cfrange = [8, 16, 32]
 compute_metrics = False
 plot_metrics = False
 
-plot_reconstructions = False
-plot_spectra = True
+plot_reconstructions = True
+plot_spectra = False
 
 # reconstructions are only done for first member and CF=32
 if plot_reconstructions:

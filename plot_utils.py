@@ -406,9 +406,15 @@ class PlotMachine():
             plt.xticks(rotation=45, ha='right')
             ax = plt.gca()
             ax.set_xticks(ax.get_xticks()[1:])
+            ax.invert_yaxis()
             plt.yticks([])
-            # ax.invert_yaxis() # check ordering first
-            # plt.ylabel('distance along transect')
+            if transect == 'along_flow':
+                y_min, y_max = ax.get_ylim()
+                offset = 7
+                ax.set_yticks([y_min-offset, y_max+offset])
+                ax.tick_params(axis='y', length=0)
+                ax.set_yticklabels(['SE', 'NW'])
+
             runid = key.split('/')[0]
             fig_name = (f'{self.results_dir}/Hovmöller_'
                         f'{runid}_{plot_type}_{transect}.png')
@@ -850,7 +856,7 @@ class PlotMachine():
                 plt.xlabel('$L / k$ (h)')
             else:
                 plt.xlabel('$L / k$ (km)')
-                
+
         print(fig_name)
         plt.gca().invert_xaxis()
         plt.tight_layout()

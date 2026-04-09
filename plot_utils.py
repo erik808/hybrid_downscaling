@@ -805,8 +805,11 @@ class PlotMachine():
             M2 = 12.42
             ylm = plt.gca().get_ylim()
             plt.loglog([M2, M2], ylm, 'k--', zorder=0)
-            plt.text(M2, ylm[1], '\n M2 ', va='top',
-                     ha='right', fontsize='large')
+
+            # only add M2 text label in energy plots
+            if spectrum_type == 'energy':
+                plt.text(M2, ylm[1], '\n M2 ', va='top',
+                         ha='right', fontsize='large')
 
         postfix = f'{transect_name}_{direction}_cf{cf}.png'
 

@@ -295,6 +295,9 @@ if plot_reconstructions:
     plot_spectra = False
     plot_metrics = False
 
+# members = [0, 1]
+# cfrange = [8]
+
 plot_legend = True
 add_powerlaws = True
 add_M2 = True

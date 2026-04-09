@@ -803,12 +803,19 @@ class PlotMachine():
 
         if (add_M2 and direction == 'temporal'):
             M2 = 12.42
+            f_inert = 14.15
             ylm = plt.gca().get_ylim()
-            plt.loglog([M2, M2], ylm, 'k--', zorder=0)
+            plt.loglog([M2, M2], ylm, '--',
+                       color='gray', zorder=0, alpha=0.7)
+            if spectrum_type == 'energy' or spectrum_type == 'enstrophy':
+                plt.loglog([f_inert, f_inert], ylm, '--',
+                           color='gray', zorder=0, alpha=0.4)
 
             # only add M2 text label in energy plots
             if spectrum_type == 'energy':
-                plt.text(M2, ylm[1], '\n M2 ', va='top',
+                plt.text(M2, ylm[1], '\n $M_2$ ', va='top',
+                         ha='left', fontsize='large')
+                plt.text(f_inert, ylm[1], '\n $T_f$  ', va='top',
                          ha='right', fontsize='large')
 
         postfix = f'{transect_name}_{direction}_cf{cf}.png'
@@ -880,6 +887,7 @@ class PlotMachine():
         print(fig_name)
         plt.gca().invert_xaxis()
         plt.tight_layout()
+        # breakpoint()
         plt.savefig(fig_name, dpi=200)
 
         return S, T

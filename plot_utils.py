@@ -806,10 +806,10 @@ class PlotMachine():
             f_inert = 14.15
             ylm = plt.gca().get_ylim()
             plt.loglog([M2, M2], ylm, '--',
-                       color='gray', zorder=0, alpha=0.7)
+                       color='black', zorder=0, alpha=1.0)
             if spectrum_type == 'energy' or spectrum_type == 'enstrophy':
                 plt.loglog([f_inert, f_inert], ylm, '--',
-                           color='gray', zorder=0, alpha=0.4)
+                           color='black', zorder=0, alpha=0.5)
 
             # only add M2 text label in energy plots
             if spectrum_type == 'energy':

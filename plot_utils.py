@@ -624,7 +624,7 @@ class PlotMachine():
                           masking,
                           add_name='',
                           ):
-        plt.close('all')
+
         results_HR = np.concatenate([r['HR_data'] for r in results], 0)
         truths_HR = np.concatenate([t['HR_data'] for t in truths], 0)
         time_arr = [r['time'] for r in results]
@@ -712,6 +712,7 @@ class PlotMachine():
                       spectrum_type='energy',
                       direction='spatial',
                       add_powerlaws=False,
+                      add_M2=False,
                       detide=False,
                       combine_members='quantiles',
                       make_title=False,
@@ -742,14 +743,15 @@ class PlotMachine():
             combine_members,
         )
 
+        plt.clf()
         use_frequency = False
         if not use_frequency:
             for key in k.keys():
                 if direction == 'temporal':
-                    k[key] = 512 / np.arange(len(k[key]))
+                    L = 512
                 else:
-                    d = self.ct.transect_distance[transect_name][0]
-                    k[key] = d / np.arange(len(k[key]))
+                    L = self.ct.transect_distance[transect_name][0]
+                k[key] = L / np.arange(len(k[key]))
 
         # first do the normal runs (not ensembles)
         for key in normal_runs:
@@ -785,11 +787,26 @@ class PlotMachine():
             ymin = np.floor(np.log10(np.min(S_mn['truth'])))
             plt.gca().set_ylim([10**ymin, 10**ymax])
 
-        if add_powerlaws:
+        if (add_powerlaws and direction == 'spatial'):
             ks = k['truth']
-            plt.loglog(ks, 1e-4 * ks**(-3), ':', label='$k^{-3}$')
-            plt.loglog(ks, 1e-4 * ks**(-4), '--', label='$k^{-4}$')
-            plt.loglog(ks, 1e-4 * ks**(-5), '--', label='$k^{-5}$')
+            power = -3
+            magn = 5e2
+            plt.loglog(ks[5:-32],
+                       magn * (L / ks[5:-32])**(power),
+                       'k--')
+            plt.text(ks[-32], magn * (L / ks[-32])**(power),
+                     '$k^{-3}$',
+                     va='bottom',
+                     fontsize=12,
+                     )
+            plt.pause(1)
+
+        if (add_M2 and direction == 'temporal'):
+            M2 = 12.42
+            ylm = plt.gca().get_ylim()
+            plt.loglog([M2, M2], ylm, 'k--', zorder=0)
+            plt.text(M2, ylm[1], '\n M2 ', va='top',
+                     ha='right', fontsize='large')
 
         postfix = f'{transect_name}_{direction}_cf{cf}.png'
 

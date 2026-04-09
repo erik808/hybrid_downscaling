@@ -283,8 +283,8 @@ cfrange = [8, 16, 32]
 compute_metrics = False
 plot_metrics = False
 
-plot_reconstructions = True
-plot_spectra = False
+plot_reconstructions = False
+plot_spectra = True
 
 # reconstructions are only done for first member and CF=32
 if plot_reconstructions:
@@ -295,8 +295,9 @@ if plot_reconstructions:
     plot_spectra = False
     plot_metrics = False
 
-
 plot_legend = True
+add_powerlaws = True
+add_M2 = True
 for cf in cfrange:
     # assemble data in data_dict
     if np.any([compute_metrics,
@@ -400,7 +401,7 @@ for cf in cfrange:
     # plot spectra
     if plot_spectra:
         for transect in ['along_flow', 'across_flow']:
-            for direction in ['spatial', 'temporal']:
+            for direction in ['temporal', 'spatial']:
                 for spectrum_type in ['energy', 'enstrophy', 'ssh']:
                     plt.figure(figsize=(5, 3.5))
                     S, T = analyzer.plot_machine.plot_spectrum(
@@ -408,10 +409,12 @@ for cf in cfrange:
                         transect_name=transect,
                         spectrum_type=spectrum_type,
                         direction=direction,
-                        add_powerlaws=False,
+                        add_powerlaws=add_powerlaws,
+                        add_M2=add_M2,
                         make_title=False,
                         plot_legend=plot_legend)
                     plt.close('all')
+                    add_powerlaws = False
             plot_legend = False
 
     # cleanup data_dict

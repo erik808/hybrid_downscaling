@@ -10,6 +10,7 @@ import stats_tool
 import data_manager_cmems
 # from sklearn.neighbors import KernelDensity
 import matplotlib.pyplot as plt
+import matplotlib.ticker as ticker
 importlib.reload(data_manager_cmems)
 importlib.reload(plot_utils)
 importlib.reload(stats_tool)
@@ -280,11 +281,11 @@ analyzer = Analysis()
 members = range(10)
 cfrange = [8, 16, 32]
 
-compute_metrics = False
-plot_metrics = False
+compute_metrics = True
+plot_metrics = True
 
 plot_reconstructions = False
-plot_spectra = True
+plot_spectra = False
 
 # reconstructions are only done for first member and CF=32
 if plot_reconstructions:
@@ -294,9 +295,6 @@ if plot_reconstructions:
     compute_metrics = False
     plot_spectra = False
     plot_metrics = False
-
-# members = [0, 1]
-# cfrange = [8]
 
 plot_legend = True
 add_powerlaws = True
@@ -404,7 +402,7 @@ for cf in cfrange:
     # plot spectra
     if plot_spectra:
         for transect in ['along_flow', 'across_flow']:
-            for direction in ['temporal', 'spatial']:
+            for direction in ['spatial', 'temporal']:
                 for spectrum_type in ['energy', 'enstrophy', 'ssh']:
                     plt.figure(figsize=(5, 3.5))
                     S, T = analyzer.plot_machine.plot_spectrum(
@@ -523,7 +521,7 @@ if plot_metrics:
             tuple_list('ssh'),
     ]:
         fig, axs = plt.subplots(1, 2,
-                                sharey=True,
+                                sharey=False,
                                 figsize=(4, 3))
         for i, (metric, field_type, kwargs) in enumerate(tuples):
             plt.sca(axs[i])
@@ -538,20 +536,27 @@ if plot_metrics:
             )
             if i > 0:
                 plt.ylabel('')
+                axs[i].yaxis.set_ticks_position('right')
             else:
                 plt.ylabel('$D_{KL}$, ' + field_type)
-
+            axs[i].yaxis.set_minor_locator(ticker.MaxNLocator(nbins=4,
+                                                              min_n_ticks=2))
             transect = kwargs['transect']
             plt.title(f"{transect.replace('_', '-')}")
         fig_name = f'{analyzer.results_dir}/{metric}_{field_type}.png'
         print(fig_name)
         plt.savefig(fig_name, bbox_inches='tight', dpi=200)
+        # plt.savefig(fig_name, dpi=200)
 
     tuples = [
         ('DKL_vals', 'MKE', {'transect': 'along_flow'}),
+        ('DKL_vals', 'MKE', {'transect': 'across_flow'}),
         ('DKL_vals', 'TKE', {'transect': 'along_flow'}),
+        ('DKL_vals', 'TKE', {'transect': 'across_flow'}),
         ('DKL_vals', 'enstrophy', {'transect': 'along_flow'}),
-        ('DKL_vals', 'ssh', {'transect': 'along_flow'})
+        ('DKL_vals', 'enstrophy', {'transect': 'across_flow'}),
+        ('DKL_vals', 'ssh', {'transect': 'along_flow'}),
+        ('DKL_vals', 'ssh', {'transect': 'across_flow'}),
     ]
     for i, (metric, field_type, kwargs) in enumerate(tuples):
         plt.figure(figsize=(6, 3))

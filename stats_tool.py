@@ -7,7 +7,6 @@ import itertools
 import matplotlib.pyplot as plt
 from sklearn.neighbors import KernelDensity
 
-
 class Metrics():
 
     def __init__(
@@ -115,21 +114,21 @@ class Metrics():
             if field_type == 'enstrophy':
                 T[key] = np.square(T[key])
 
-        operation = 'mean'
+        operation = 'integrate'
         ref_key = 'truth'
         bins = 500
 
-        ref_vals = self.reduce(T[ref_key], operation)
+        # get integration increment
+        ds = self.ct.transect_distance[transect][1]  # (in m)
 
+        # integrate
+        ref_vals = self.reduce(T[ref_key], operation, ds)
         ref_std = np.std(ref_vals)
-        # if field_type in ['MKE', 'TKE', 'enstrophy']:
-        #     one_sided = True,
-        # else:
-        #     one_sided = False,
+        ref_vals = ref_vals / ref_std
 
-        xmin = np.min(ref_vals) - 2 * ref_std
-        xmax = np.max(ref_vals) + 2 * ref_std
-        # xmin = np.max([xmin, 0.0]) if one_sided else xmin
+        xmin = np.min(ref_vals) - 2
+        xmax = np.max(ref_vals) + 2
+
         ref_x = np.linspace(xmin, xmax, bins + 1)
 
         ref_pdf = self.compute_discrete_pdf(ref_vals, ref_x)
@@ -152,7 +151,7 @@ class Metrics():
         for key, value in T.items():
             if key == ref_key:
                 continue
-            vals = self.reduce(value, operation)
+            vals = self.reduce(value, operation) / ref_std
             pdf[key] = self.compute_discrete_pdf(vals, ref_x)
             dkl[key] = self.compute_dkl(pdf[ref_key], pdf[key])
 
@@ -166,9 +165,11 @@ class Metrics():
             else:
                 self.metrics_dict['DKL_vals'][key] = {field_key: vals}
 
-    def reduce(self, mat, operation):
+    def reduce(self, mat, operation, ds=1):
         if operation == 'sum':
             vec = np.sum(mat, -1)
+        elif operation == 'integrate':
+            vec = np.sum(mat * ds, -1)
         elif operation == 'mean':
             vec = np.mean(mat, -1)
         elif operation == 'first':
@@ -350,7 +351,11 @@ def make_kdeplots(metrics_dict,
     if field_type == 'ssh':
         plt.xlim(None, None)
     elif field_type == 'enstrophy':
-        plt.xlim(0, 50)
+        plt.xlim(0, 6)
+    elif field_type == 'TKE':
+        plt.xlim(0, 7)
+    elif field_type == 'MKE':
+        plt.xlim(0, 5)
     else:
         plt.xlim(0, None)
 
@@ -496,6 +501,7 @@ def make_boxplots(metrics_dict,
                 plt.boxplot(all_vals[r],
                             positions=pos,
                             showfliers=False,
+                            medianprops=dict(color='black')
                             )
                 ylabel = {
                     'all': f'{metric}, total',

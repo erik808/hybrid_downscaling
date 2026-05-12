@@ -347,7 +347,13 @@ def make_kdeplots(metrics_dict,
                  label=labels[key],
                  linewidth=2)
 
-    plt.xlabel('PDF, ' + field_type)
+    field_naming = {'ssh': 'SSH',
+                    'TKE': 'TKE',
+                    'MKE': 'MKE',
+                    'enstrophy': 'Z'}
+
+    plt.xlabel('PDF: normalized ' + field_naming[field_type])
+    plt.ylabel('density')
     if field_type == 'ssh':
         plt.xlim(None, None)
     elif field_type == 'enstrophy':

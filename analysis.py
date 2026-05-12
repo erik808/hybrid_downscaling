@@ -15,7 +15,7 @@ importlib.reload(data_manager_cmems)
 importlib.reload(plot_utils)
 importlib.reload(stats_tool)
 importlib.reload(tools)
-plt.switch_backend('qtagg')
+# plt.switch_backend('qtagg')
 plt.rcdefaults()
 
 
@@ -281,7 +281,7 @@ analyzer = Analysis()
 members = range(10)
 cfrange = [8, 16, 32]
 
-compute_metrics = True
+compute_metrics = False
 plot_metrics = True
 
 plot_reconstructions = False
@@ -495,11 +495,13 @@ if plot_metrics:
                       ha='left',
                       )
 
+            field_naming = {'ssh': 'SSH',
+                            'energy': 'KE',
+                            'enstrophy': 'Z'}
             if i > 0:
                 plt.ylabel('')
             else:
-                field = 'SSH' if field_type == 'ssh' else field_type
-                plt.ylabel('$D_{LS}$, ' + field)
+                plt.ylabel('$D_{LS}$: ' + field_naming[field_type])
             if i == len(tuples)-1:
                 plt.legend(loc='center', bbox_to_anchor=(0.5, 0.6))
 
@@ -534,11 +536,16 @@ if plot_metrics:
                 save_fig=False,
                 **kwargs,
             )
+            field_naming = {'ssh': 'SSH',
+                            'TKE': 'TKE',
+                            'MKE': 'MKE',
+                            'enstrophy': 'Z'}
+
             if i > 0:
                 plt.ylabel('')
                 axs[i].yaxis.set_ticks_position('right')
             else:
-                plt.ylabel('$D_{KL}$, ' + field_type)
+                plt.ylabel('$D_{KL}$, ' + field_naming[field_type])
             axs[i].yaxis.set_minor_locator(ticker.MaxNLocator(nbins=4,
                                                               min_n_ticks=2))
             transect = kwargs['transect']

@@ -210,7 +210,7 @@ class PlotMachine():
 
             elif field_type == 'energy':
                 values = np.sum(np.square(values[..., :2]), axis=-1)
-                label = 'kinetic energy ($m^2/s^2$)'
+                label = 'KE ($m^2/s^2$)'
                 cmap = 'coolwarm'
                 vmin = 0
                 vmax = 0.6
@@ -367,7 +367,7 @@ class PlotMachine():
             cmap = cmocean.cm.tempo
             vmin = 0
             vmax = 0.7
-            label = 'enstrophy ($h^{-2}$)'
+            label = 'Z ($h^{-2}$)'
             extend = 'max'
 
         if plot_type == 'uo':
@@ -382,7 +382,7 @@ class PlotMachine():
             cmap = cmocean.cm.tempo
             vmin = 0
             vmax = 0.7
-            label = 'energy $(m/s)^2$'
+            label = 'KE $(m/s)^2$'
             extend = 'max'
 
         if 'time' in data_dict['truth']:
@@ -799,7 +799,7 @@ class PlotMachine():
                      va='bottom',
                      fontsize=12,
                      )
-            plt.pause(1)
+            # plt.pause(1)
 
         if (add_M2 and direction == 'temporal'):
             M2 = 12.42
@@ -829,7 +829,7 @@ class PlotMachine():
                     f'{self.results_dir}/'
                     f'energy_spectrum_{postfix}'
                 )
-            ylabel = 'E(k)'
+            ylabel = 'KE(k)'
         elif spectrum_type == 'enstrophy':
             tstring = \
                 (f'Mean enstrophy spectrum,'

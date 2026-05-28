@@ -276,6 +276,7 @@ class ComputeTool():
         data_detrend = scipy.signal.detrend(data, axis=0)
         # detrend along the other dim as well
         data_detrend = scipy.signal.detrend(data_detrend, axis=1)
+
         if method == 'fft':  # pad data for fft
             dshape = data_detrend.shape
             N = dshape[0]

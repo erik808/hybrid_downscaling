@@ -357,9 +357,9 @@ class PlotMachine():
 
         if plot_type == 'vorticity':
             cmap = 'RdBu'
-            vmin = -12
-            vmax = 12
-            label = 'vorticity (cycles/day)'
+            vmin = -20
+            vmax = 20
+            label = '$\zeta$ (cycles/day)'
             extend = 'both'
 
         if plot_type == 'enstrophy':
@@ -367,7 +367,7 @@ class PlotMachine():
             cmap = cmocean.cm.tempo
             vmin = 0
             vmax = 0.7
-            label = 'Z ($h^{-2}$)'
+            label = '$\zeta^2$ ($h^{-2}$)'
             extend = 'max'
 
         if plot_type == 'uo':
@@ -838,7 +838,7 @@ class PlotMachine():
                 (f'{self.results_dir}/'
                  f'enstrophy_spectrum_'
                  f'{postfix}')
-            ylabel = 'Z(k)'
+            ylabel = '$\zeta^2$(k)'
         elif spectrum_type == 'ssh':
             tstring = \
                 (f'Mean ssh spectrum,'

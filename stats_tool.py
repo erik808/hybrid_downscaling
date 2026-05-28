@@ -350,7 +350,7 @@ def make_kdeplots(metrics_dict,
     field_naming = {'ssh': 'SSH',
                     'TKE': 'TKE',
                     'MKE': 'MKE',
-                    'enstrophy': 'Z'}
+                    'enstrophy': '$\widehat{Z}$'}
 
     plt.xlabel('PDF: normalized ' + field_naming[field_type])
     plt.ylabel('density')

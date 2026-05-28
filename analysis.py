@@ -15,7 +15,7 @@ importlib.reload(data_manager_cmems)
 importlib.reload(plot_utils)
 importlib.reload(stats_tool)
 importlib.reload(tools)
-# plt.switch_backend('qtagg')
+plt.switch_backend('agg')
 plt.rcdefaults()
 
 
@@ -285,7 +285,7 @@ compute_metrics = False
 plot_metrics = True
 
 plot_reconstructions = False
-plot_spectra = False
+plot_spectra = True
 
 # reconstructions are only done for first member and CF=32
 if plot_reconstructions:
@@ -497,7 +497,7 @@ if plot_metrics:
 
             field_naming = {'ssh': 'SSH',
                             'energy': 'KE',
-                            'enstrophy': 'Z'}
+                            'enstrophy': '$\zeta^2$'}
             if i > 0:
                 plt.ylabel('')
             else:
@@ -539,7 +539,7 @@ if plot_metrics:
             field_naming = {'ssh': 'SSH',
                             'TKE': 'TKE',
                             'MKE': 'MKE',
-                            'enstrophy': 'Z'}
+                            'enstrophy': '$\widehat{Z}$'}
 
             if i > 0:
                 plt.ylabel('')
